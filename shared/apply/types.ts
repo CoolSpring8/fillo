@@ -28,14 +28,24 @@ export interface ScannedField {
   frameUrl: string;
 }
 
+import type { FieldSlot } from './slots';
+
+export interface PromptOption {
+  slot: FieldSlot;
+  label: string;
+  value: string;
+}
+
 export interface PromptFillRequest {
   requestId: string;
   fieldId: string;
   frameId: number;
-  value: string;
-  preview: string;
   label: string;
   mode: 'fill' | 'click';
+  value?: string;
+  preview?: string;
+  options?: PromptOption[];
+  defaultSlot?: FieldSlot | null;
 }
 
 export type FillResultStatus = 'filled' | 'skipped' | 'failed';

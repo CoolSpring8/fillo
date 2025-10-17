@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import type { FillResultStatus } from '../../shared/apply/types';
+import type { FillResultStatus, PromptFillRequest } from '../../shared/apply/types';
 import { fillField, triggerClick } from './fill';
 import type { InternalField } from './fields';
 import { scanFields } from './fields';
@@ -11,15 +11,7 @@ type ContentInboundMessage =
       kind: 'SCAN_FIELDS';
       requestId: string;
     }
-  | {
-      kind: 'PROMPT_FILL';
-      requestId: string;
-      fieldId: string;
-      value: string;
-      preview: string;
-      label: string;
-      mode: 'fill' | 'click';
-    }
+  | ({ kind: 'PROMPT_FILL' } & PromptFillRequest)
   | {
       kind: 'HIGHLIGHT_FIELD';
       fieldId: string;
@@ -155,8 +147,23 @@ export default defineContentScript({
       showPrompt(element, {
         label: message.label || meta.label,
         preview: message.preview,
-        onFill: () => {
-          const filled = fillField(message.fieldId, message.value);
+        options: message.options,
+        defaultSlot: message.defaultSlot ?? null,
+        defaultValue: message.value,
+        onFill: (selectedValue) => {
+          const value = selectedValue && selectedValue.trim().length > 0 ? selectedValue : message.value ?? '';
+          if (!value) {
+            send({
+              kind: 'FILL_RESULT',
+              requestId: message.requestId,
+              fieldId: message.fieldId,
+              status: 'failed',
+              reason: 'no-selection',
+            });
+            clearOverlay();
+            return;
+          }
+          const filled = fillField(message.fieldId, value);
           send({
             kind: 'FILL_RESULT',
             requestId: message.requestId,

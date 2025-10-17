@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import type { FieldKind, FillResultMessage, PromptFillRequest, ScannedField } from '../shared/apply/types';
+import type { FieldKind, FillResultMessage, PromptFillRequest, PromptOption, ScannedField } from '../shared/apply/types';
 
 type BrowserApi = typeof browser;
 type RuntimePort = ReturnType<BrowserApi['runtime']['connect']>;
@@ -188,10 +188,27 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
   const requestId = typeof payload.requestId === 'string' ? payload.requestId : null;
   const fieldId = typeof payload.fieldId === 'string' ? payload.fieldId : null;
   const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
-  const value = typeof payload.value === 'string' ? payload.value : '';
-  const preview = typeof payload.preview === 'string' ? payload.preview : '';
+  const value = typeof payload.value === 'string' ? payload.value : undefined;
+  const preview = typeof payload.preview === 'string' ? payload.preview : undefined;
   const label = typeof payload.label === 'string' ? payload.label : '';
   const mode = payload.mode === 'click' ? 'click' : 'fill';
+  const options = Array.isArray(payload.options)
+    ? (payload.options as Record<string, unknown>[])
+        .map((entry) => {
+          const slot = typeof entry.slot === 'string' ? (entry.slot as PromptOption['slot']) : null;
+          const optionLabel = typeof entry.label === 'string' ? entry.label : null;
+          const optionValue = typeof entry.value === 'string' ? entry.value : null;
+          if (!slot || !optionLabel || !optionValue) {
+            return null;
+          }
+          return { slot, label: optionLabel, value: optionValue } satisfies PromptOption;
+        })
+        .filter((entry): entry is PromptOption => entry !== null)
+    : undefined;
+  const defaultSlot =
+    typeof payload.defaultSlot === 'string' && options?.some((option) => option.slot === payload.defaultSlot)
+      ? (payload.defaultSlot as PromptOption['slot'])
+      : null;
   if (!requestId || !fieldId) {
     return;
   }
@@ -225,11 +242,19 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
     requestId,
     fieldId,
     frameId,
-    value,
-    preview,
     label,
     mode,
   };
+  if (typeof value === 'string') {
+    message.value = value;
+  }
+  if (typeof preview === 'string') {
+    message.preview = preview;
+  }
+  if (options && options.length > 0) {
+    message.options = options;
+    message.defaultSlot = defaultSlot;
+  }
   framePort.postMessage({ kind: 'PROMPT_FILL', ...message });
 }
 

@@ -1,11 +1,16 @@
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
+import type { PromptOption } from '../../shared/apply/types';
+import type { FieldSlot } from '../../shared/apply/slots';
 
 type OverlayMode = 'highlight' | 'prompt';
 
 interface PromptOptions {
-  preview: string;
   label: string;
-  onFill: () => void;
+  preview?: string;
+  options?: PromptOption[];
+  defaultSlot?: FieldSlot | null;
+  defaultValue?: string;
+  onFill: (value: string, slot: FieldSlot | null) => void;
   onSkip: () => void;
 }
 
@@ -88,18 +93,100 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
 
   const body = document.createElement('div');
   body.className = 'overlay-body';
-  body.textContent = options.preview;
+  popover.append(heading);
+
+  const controls = document.createElement('div');
+  controls.className = 'overlay-controls';
+
+  let currentSlot: FieldSlot | null = options.defaultSlot ?? null;
+  let currentValue = options.defaultValue ?? options.preview ?? '';
+
+  const updatePreview = () => {
+    if (currentValue && currentValue.trim().length > 0) {
+      body.textContent = currentValue;
+    } else if (options.preview && options.preview.trim().length > 0) {
+      body.textContent = options.preview;
+    } else {
+      body.textContent = 'Select a value to continue.';
+    }
+  };
+
+  let select: HTMLSelectElement | null = null;
+  let fill!: HTMLButtonElement;
+
+  const normalizeOptions = options.options ?? [];
+  if (normalizeOptions.length > 0) {
+    select = document.createElement('select');
+    select.className = 'overlay-select';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a value…';
+    select.append(placeholder);
+
+    for (const option of normalizeOptions) {
+      const optionEl = document.createElement('option');
+      optionEl.value = option.slot;
+      optionEl.textContent = `${option.label} · ${truncate(option.value)}`;
+      optionEl.dataset.value = option.value;
+      select.append(optionEl);
+    }
+
+    if (currentSlot && normalizeOptions.some((opt) => opt.slot === currentSlot)) {
+      select.value = currentSlot;
+      currentValue = normalizeOptions.find((opt) => opt.slot === currentSlot)?.value ?? currentValue;
+    } else {
+      select.value = '';
+      if (!currentValue && normalizeOptions.length === 1) {
+        currentSlot = normalizeOptions[0].slot;
+        currentValue = normalizeOptions[0].value;
+        select.value = currentSlot;
+      }
+    }
+
+    select.addEventListener('change', (event) => {
+      const target = event.target as HTMLSelectElement;
+      const slot = target.value as FieldSlot | '';
+      if (!slot) {
+        currentSlot = null;
+        currentValue = '';
+      } else {
+        const selected = normalizeOptions.find((opt) => opt.slot === slot);
+        currentSlot = selected?.slot ?? null;
+        currentValue = selected?.value ?? '';
+      }
+      updatePreview();
+      fill.disabled = normalizeOptions.length > 0 && currentValue.trim().length === 0;
+    });
+
+    const helper = document.createElement('div');
+    helper.className = 'overlay-helper';
+    helper.textContent = 'Pick the data to use for this field.';
+
+    controls.append(select, helper);
+  } else {
+    currentSlot = null;
+  }
+
+  if (controls.childElementCount > 0) {
+    popover.append(controls);
+  }
+  popover.append(body);
 
   const actions = document.createElement('div');
   actions.className = 'overlay-actions';
 
-  const fill = document.createElement('button');
+  fill = document.createElement('button');
   fill.type = 'button';
   fill.className = 'overlay-btn primary';
   fill.textContent = 'Fill';
+  fill.disabled = normalizeOptions.length > 0 && (!currentValue || currentValue.trim().length === 0);
   fill.addEventListener('click', (event) => {
     event.preventDefault();
-    options.onFill();
+    if (normalizeOptions.length > 0 && (!currentValue || currentValue.trim().length === 0)) {
+      return;
+    }
+    options.onFill(currentValue ?? '', currentSlot ?? null);
   });
 
   const skip = document.createElement('button');
@@ -112,7 +199,9 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
   });
 
   actions.append(fill, skip);
-  popover.append(heading, body, actions);
+  popover.append(actions);
+
+  updatePreview();
 }
 
 function attachRepositionListeners(
@@ -218,6 +307,24 @@ function ensureElements(): OverlayElements {
       .overlay-label {
         font-weight: 500;
       }
+      .overlay-select {
+        width: 100%;
+        border: 1px solid rgba(15, 23, 42, 0.2);
+        border-radius: 6px;
+        padding: 6px 8px;
+        font: inherit;
+        background: #fff;
+      }
+      .overlay-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .overlay-helper {
+        font-size: 12px;
+        color: #475569;
+      }
     `;
     root.append(style);
   }
@@ -261,4 +368,11 @@ function updateHighlightRect(target: HTMLElement, highlight: HTMLDivElement): vo
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function truncate(value: string, limit = 80): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit - 1)}…`;
 }
