@@ -16,6 +16,8 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
+    "pdfjs-dist": "^4.7.108",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

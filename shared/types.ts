@@ -1,0 +1,57 @@
+export type ProviderKind = 'on-device' | 'openai';
+
+export interface OnDeviceProviderConfig {
+  kind: 'on-device';
+}
+
+export interface OpenAIProviderConfig {
+  kind: 'openai';
+  apiKey: string;
+  model: string;
+}
+
+export type ProviderConfig = OnDeviceProviderConfig | OpenAIProviderConfig;
+
+export type ProviderSnapshot =
+  | OnDeviceProviderConfig
+  | {
+      kind: 'openai';
+      model: string;
+    };
+
+export interface StoredFileReference {
+  name: string;
+  type: string;
+  size: number;
+  storageKey: string;
+}
+
+export interface ResumeExtractionResult {
+  resume: unknown;
+  custom: Record<string, unknown>;
+}
+
+export interface ProfileRecord {
+  id: string;
+  createdAt: string;
+  provider: ProviderSnapshot;
+  sourceFile: StoredFileReference;
+  rawText: string;
+  resume: unknown;
+  custom: Record<string, unknown>;
+  validation?: {
+    valid: boolean;
+    errors?: string[];
+  };
+}
+
+export interface AppSettings {
+  provider: ProviderConfig;
+}
+
+export type ChatMessageRole = 'system' | 'user' | 'assistant';
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  content: string;
+}

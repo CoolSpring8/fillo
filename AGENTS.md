@@ -20,6 +20,7 @@
 - Match the existing 2-space indentation, trailing commas, and double-quote JSX props produced by default Prettier settings.
 - Use `PascalCase` for components (`App.tsx`), `camelCase` for helpers, and kebab-case for folders within `entrypoints/`.
 - Keep imports path-based, favoring the WXT alias (`@/assets/...`) when referencing shared resources.
+- Call extension APIs through the `browser.*` namespace (use `Browser.*` for types) instead of `chrome.*`.
 
 ## Testing Guidelines
 - Vitest is configured in `vitest.config.ts`; author unit tests under `tests/` or beside modules as `*.test.ts[x]`.

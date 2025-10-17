@@ -1,69 +1,130 @@
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+.popup {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-width: 340px;
+  max-width: 420px;
+  padding: 16px;
+  box-sizing: border-box;
+  color: #1f2933;
+  background: #f8fafc;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+header {
+  margin-bottom: 12px;
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+p {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.profile-summary strong {
+  font-size: 14px;
+}
+
+.profile-subline {
+  color: #52606d;
+}
+
+.profile-warning {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 button {
+  border: none;
   border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+  padding: 8px 12px;
+  font-size: 13px;
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  background: #2563eb;
+  color: #ffffff;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+button.danger {
+  background: #ef4444;
+}
+
+button:hover {
+  filter: brightness(0.95);
+}
+
+.profile-details {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-details h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+pre {
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.raw-text {
+  white-space: pre-wrap;
+}
+
+.info {
+  font-size: 13px;
+  color: #52606d;
+}
+
+.error {
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+footer {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
 }
