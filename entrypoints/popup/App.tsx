@@ -45,6 +45,19 @@ export default function App() {
     await refresh();
   };
 
+  const openSidePanel = async () => {
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        return;
+      }
+      await browser.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel.html', enabled: true });
+      await browser.sidePanel.open({ tabId: tab.id });
+    } catch (error) {
+      console.error('Unable to open side panel', error);
+    }
+  };
+
   const toggleExpanded = (id: string) => {
     setExpandedId((current) => (current === id ? null : id));
   };
@@ -164,6 +177,9 @@ export default function App() {
           }
         >
           Settings
+        </button>
+        <button type="button" onClick={() => openSidePanel()}>
+          Open side panel
         </button>
       </footer>
     </div>
