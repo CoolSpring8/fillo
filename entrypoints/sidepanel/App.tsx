@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
@@ -19,6 +19,7 @@ interface FieldEntry {
   suggestion?: string;
   status: FieldStatus;
   reason?: string;
+  selectedSlot: FieldSlot | null;
 }
 
 interface ViewState {
@@ -206,17 +207,25 @@ export default function App() {
   };
 
   const handleReview = (entry: FieldEntry) => {
-    if (!entry.suggestion && entry.field.kind !== 'file') {
+    const selectedSlot = entry.selectedSlot;
+    const selectedValue = selectedSlot ? slotValuesRef.current[selectedSlot] : undefined;
+
+    if (entry.field.kind !== 'file' && (!selectedSlot || !selectedValue)) {
+      setFeedback('Select a value to continue.');
       return;
     }
+
     const requestId = crypto.randomUUID();
     sendMessage({
       kind: 'PROMPT_FILL',
       requestId,
       fieldId: entry.field.id,
       frameId: entry.field.frameId,
-      value: entry.suggestion ?? '',
-      preview: entry.suggestion ?? 'No stored value. Use manual mode or enter manually.',
+      value: entry.field.kind === 'file' ? '' : selectedValue ?? '',
+      preview:
+        entry.field.kind === 'file'
+          ? 'Open the file picker to upload your resume.'
+          : selectedValue ?? entry.suggestion ?? 'No stored value. Use manual mode or enter manually.',
       label: entry.field.label,
       mode: entry.field.kind === 'file' ? 'click' : 'fill',
     });
@@ -233,15 +242,6 @@ export default function App() {
     );
   };
 
-  const handleHighlight = (entry: FieldEntry) => {
-    sendMessage({
-      kind: 'HIGHLIGHT_FIELD',
-      fieldId: entry.field.id,
-      frameId: entry.field.frameId,
-      label: entry.field.label,
-    });
-  };
-
   const handleCopy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -252,9 +252,40 @@ export default function App() {
     }
   };
 
-  const manualValues = useMemo(() =>
-    MANUAL_SLOTS.map((slot) => ({ slot, value: slotValues[slot] ?? '' })).filter((entry) => entry.value.trim().length > 0),
-  [slotValues]);
+  const manualValues = useMemo(
+    () =>
+      MANUAL_SLOTS.map((slot) => ({ slot, value: slotValues[slot] ?? '' })).filter(
+        (entry) => entry.value.trim().length > 0,
+      ),
+    [slotValues],
+  );
+
+  const slotOptions = useMemo(
+    () =>
+      MANUAL_SLOTS.map((slot) => {
+        const value = slotValues[slot];
+        if (!value || !value.trim()) {
+          return null;
+        }
+        return { slot, value: value.trim() };
+      }).filter((entry): entry is { slot: FieldSlot; value: string } => Boolean(entry)),
+    [slotValues],
+  );
+
+  const updateSelectedSlot = (fieldId: string, slot: FieldSlot | null) => {
+    setFields((current) =>
+      current.map((entry) =>
+        entry.field.id === fieldId
+          ? {
+              ...entry,
+              selectedSlot: slot,
+              status: 'idle',
+              reason: undefined,
+            }
+          : entry,
+      ),
+    );
+  };
 
   const openProfilesPage = () => {
     browser.tabs
@@ -358,18 +389,19 @@ export default function App() {
           )}
         </header>
         <div className="field-suggestion">
-          {entry.field.kind === 'file' && 'Open the file picker to upload your resume.'}
-          {entry.field.kind !== 'file' && (entry.suggestion?.length ? entry.suggestion : 'No stored value. Use manual mode.')}
+          <FieldSuggestion
+            entry={entry}
+            selectedValue={entry.selectedSlot ? slotValues[entry.selectedSlot] ?? '' : ''}
+            options={slotOptions}
+            onChange={(slot) => updateSelectedSlot(entry.field.id, slot)}
+          />
         </div>
         {entry.reason && <div className="field-meta">{entry.reason}</div>}
         <div className="field-actions">
-          <button type="button" onClick={() => handleHighlight(entry)}>
-            Highlight
-          </button>
           <button
             type="button"
             className="primary"
-            disabled={!entry.suggestion && entry.field.kind !== 'file'}
+            disabled={entry.field.kind !== 'file' && (!entry.selectedSlot || !slotValues[entry.selectedSlot])}
             onClick={() => handleReview(entry)}
           >
             {entry.field.kind === 'file' ? 'Open picker' : 'Review & fill'}
@@ -428,6 +460,8 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
       slot,
       suggestion,
       status: 'idle',
+      reason: undefined,
+      selectedSlot: suggestion ? slot : null,
     };
   });
 
@@ -532,4 +566,61 @@ function parseFillResultMessage(value: Record<string, unknown>): FillResultMessa
 function isFillResultStatus(value: unknown): value is FillResultMessage['status'] {
   return value === 'filled' || value === 'skipped' || value === 'failed';
 }
-/// <reference types="wxt/browser" />
+
+function FieldSuggestion({
+  entry,
+  selectedValue,
+  options,
+  onChange,
+}: {
+  entry: FieldEntry;
+  selectedValue: string;
+  options: { slot: FieldSlot; value: string }[];
+  onChange: (slot: FieldSlot | null) => void;
+}) {
+  if (entry.field.kind === 'file') {
+    return <span>Open the file picker to upload your resume.</span>;
+  }
+
+  if (options.length === 0) {
+    return <span>No stored values available. Populate profile data to enable autofill.</span>;
+  }
+
+  const selectId = `slot-select-${entry.field.id}`;
+
+  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    onChange(value ? (value as FieldSlot) : null);
+  };
+
+  const hasSelected = entry.selectedSlot && options.some(({ slot }) => slot === entry.selectedSlot);
+  const currentValue = hasSelected ? entry.selectedSlot ?? '' : '';
+
+  return (
+    <div className="field-suggestion-content">
+      <label className="field-suggestion-label" htmlFor={selectId}>
+        Choose data to use
+      </label>
+      <select id={selectId} value={currentValue} onChange={handleChange}>
+        <option value="">Select a value…</option>
+        {options.map(({ slot, value }) => (
+          <option key={slot} value={slot}>
+            {formatSlotLabel(slot)} · {truncate(value)}
+          </option>
+        ))}
+      </select>
+      {hasSelected && selectedValue && (
+        <div className="field-selected-value">
+          <strong>Preview:</strong> {selectedValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function truncate(value: string, limit = 80): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit - 1)}…`;
+}
