@@ -67,6 +67,7 @@ export default function App() {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'extract' | 'parse' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -152,6 +153,7 @@ export default function App() {
       return;
     }
     setBusy(true);
+    setBusyAction('extract');
     setErrorDetails(null);
     setValidationErrors([]);
 
@@ -197,6 +199,7 @@ export default function App() {
       console.error(error);
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -210,6 +213,7 @@ export default function App() {
       return;
     }
     setBusy(true);
+    setBusyAction('parse');
     setErrorDetails(null);
     setValidationErrors([]);
 
@@ -241,7 +245,7 @@ export default function App() {
         ...currentProfile,
         provider: providerSnapshot,
         parsedAt: new Date().toISOString(),
-        resume: result.resume,
+        resume: result.resume ?? {},
         custom: result.custom ?? {},
         validation: {
           valid: validation.valid,
@@ -272,6 +276,7 @@ export default function App() {
       console.error(error);
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -305,7 +310,7 @@ export default function App() {
           disabled={busy || !file}
           onClick={handleExtract}
         >
-          {busy && status.phase === 'extracting' ? 'Working…' : 'Extract text'}
+          {busy && busyAction === 'extract' ? 'Working…' : 'Extract text'}
         </button>
         <p className="helper-text">
           All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
@@ -390,7 +395,7 @@ export default function App() {
           }
           onClick={handleParse}
         >
-          {busy && status.phase === 'parsing' ? 'Working…' : 'Parse resume'}
+          {busy && busyAction === 'parse' ? 'Working…' : 'Parse resume'}
         </button>
         {!currentProfile && (
           <p className="helper-text">Upload a resume above to enable parsing.</p>
@@ -401,6 +406,28 @@ export default function App() {
           </p>
         )}
       </section>
+
+      {currentProfile && (
+        <section className="card">
+          <h2>3. Preview Stored Data</h2>
+          <div className="preview-section">
+            <div className="preview-block">
+              <h3>Extracted text</h3>
+              <pre className="preview-pre preview-text">{currentProfile.rawText}</pre>
+            </div>
+            <div className="preview-block">
+              <h3>Parsed JSON Resume</h3>
+              {currentProfile.provider ? (
+                <pre className="preview-pre">{JSON.stringify(currentProfile.resume ?? {}, null, 2)}</pre>
+              ) : (
+                <p className="helper-text">
+                  Run parsing to populate structured resume data. This stays empty until you complete the optional step.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {status.message && (
         <section className={`status ${status.phase}`}>

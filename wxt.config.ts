@@ -9,11 +9,22 @@ export default defineConfig({
     version: '0.1.0',
     manifest_version: 3,
     action: {
-      default_popup: 'popup.html',
+      default_title: 'Resume Helper',
     },
     options_page: 'options.html',
-    permissions: ['storage', 'unlimitedStorage'],
-    host_permissions: ['https://api.openai.com/*'],
+    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel'],
+    host_permissions: [
+      'https://api.openai.com/*',
+      'https://*.greenhouse.io/*',
+      'https://*.lever.co/*',
+      'https://*.myworkdayjobs.com/*',
+      'https://*.ashbyhq.com/*',
+      'https://*.smartrecruiters.com/*',
+      'https://*.workable.com/*',
+    ],
+    side_panel: {
+      default_path: 'sidepanel.html',
+    },
     web_accessible_resources: [
       {
         resources: ['pdf.worker.mjs'],
