@@ -3,7 +3,12 @@ import {
   ensureOnDeviceAvailability,
   type LanguageModelAvailability,
 } from '../../shared/llm/chromePrompt';
-import { getSettings, saveSettings } from '../../shared/storage/settings';
+import {
+  createOpenAIProvider,
+  getSettings,
+  saveSettings,
+  OPENAI_DEFAULT_BASE_URL,
+} from '../../shared/storage/settings';
 import type { AppSettings } from '../../shared/types';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
@@ -18,6 +23,7 @@ export default function App() {
   const [provider, setProvider] = useState<'on-device' | 'openai'>('on-device');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
+  const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,8 +41,10 @@ export default function App() {
       setProvider('openai');
       setApiKey(settings.provider.apiKey);
       setModel(settings.provider.model);
+      setApiBaseUrl(settings.provider.apiBaseUrl);
     } else {
       setProvider('on-device');
+      setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
     }
   };
 
@@ -44,9 +52,10 @@ export default function App() {
     setBusy(true);
     setFeedback(null);
     try {
+      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const nextSettings: AppSettings =
         provider === 'openai'
-          ? { provider: { kind: 'openai', apiKey, model } }
+          ? { provider: createOpenAIProvider(apiKey, model, baseUrl) }
           : { provider: { kind: 'on-device' } };
       await saveSettings(nextSettings);
       setFeedback({ kind: 'success', message: 'Settings saved.' });
@@ -85,7 +94,10 @@ export default function App() {
             name="provider"
             value="on-device"
             checked={provider === 'on-device'}
-            onChange={() => setProvider('on-device')}
+            onChange={() => {
+              setProvider('on-device');
+              setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+            }}
           />
           Chrome on-device (Prompt API)
         </label>
@@ -102,7 +114,12 @@ export default function App() {
             name="provider"
             value="openai"
             checked={provider === 'openai'}
-            onChange={() => setProvider('openai')}
+            onChange={() => {
+              setProvider('openai');
+              if (!apiBaseUrl.trim().length) {
+                setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+              }
+            }}
           />
           OpenAI
         </label>
@@ -125,6 +142,15 @@ export default function App() {
                 type="text"
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              API base URL
+              <input
+                type="text"
+                value={apiBaseUrl}
+                onChange={(event) => setApiBaseUrl(event.target.value)}
+                placeholder="https://api.openai.com"
               />
             </label>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { deleteProfile, listProfiles } from '../../shared/storage/profiles';
+import { OPENAI_DEFAULT_BASE_URL } from '../../shared/storage/settings';
 import type { ProfileRecord } from '../../shared/types';
 
 interface ViewState {
@@ -55,7 +56,12 @@ export default function App() {
     const displayName = typeof basics.name === 'string' && basics.name.trim().length > 0 ? basics.name : 'Unnamed profile';
     const providerLabel =
       profile.provider.kind === 'openai'
-        ? `OpenAI (${profile.provider.model})`
+        ? `OpenAI (${profile.provider.model}${
+            profile.provider.apiBaseUrl &&
+            profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
+              ? ` @ ${profile.provider.apiBaseUrl}`
+              : ''
+          })`
         : 'Chrome on-device';
 
     return (

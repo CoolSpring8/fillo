@@ -9,7 +9,12 @@ import { promptOpenAI } from '../../shared/llm/openai';
 import { buildResumePrompt } from '../../shared/llm/prompt';
 import { extractTextFromPdf } from '../../shared/pdf/extractText';
 import { saveProfile, storeFile } from '../../shared/storage/profiles';
-import { getSettings, saveSettings } from '../../shared/storage/settings';
+import {
+  createOpenAIProvider,
+  getSettings,
+  saveSettings,
+  OPENAI_DEFAULT_BASE_URL,
+} from '../../shared/storage/settings';
 import { validateResume } from '../../shared/validate';
 import type {
   AppSettings,
@@ -30,14 +35,23 @@ interface StatusState {
 
 function toSnapshot(config: ProviderConfig): ProviderSnapshot {
   if (config.kind === 'openai') {
-    return { kind: 'openai', model: config.model };
+    return { kind: 'openai', model: config.model, apiBaseUrl: config.apiBaseUrl };
   }
   return { kind: 'on-device' };
 }
 
-function buildSettings(kind: 'on-device' | 'openai', apiKey: string, model: string): AppSettings {
+function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
+  return createOpenAIProvider(apiKey, model, apiBaseUrl);
+}
+
+function buildSettings(
+  kind: 'on-device' | 'openai',
+  apiKey: string,
+  model: string,
+  apiBaseUrl: string,
+): AppSettings {
   if (kind === 'openai') {
-    return { provider: { kind: 'openai', apiKey, model } };
+    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl) };
   }
   return { provider: { kind: 'on-device' } };
 }
@@ -53,6 +67,7 @@ export default function App() {
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
+  const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<StatusState>({ phase: 'idle', message: '' });
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
@@ -67,8 +82,10 @@ export default function App() {
         setSelectedProvider('openai');
         setApiKey(loaded.provider.apiKey);
         setModel(loaded.provider.model);
+        setApiBaseUrl(loaded.provider.apiBaseUrl);
       } else {
         setSelectedProvider('on-device');
+        setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
       }
     });
     ensureOnDeviceAvailability().then(setAvailability);
@@ -78,11 +95,14 @@ export default function App() {
     const value = event.target.value as 'on-device' | 'openai';
     setSelectedProvider(value);
     if (value === 'on-device') {
-      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL);
+      setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL);
       setSettings(next);
       await saveSettings(next);
     } else {
-      const next = buildSettings('openai', apiKey, model);
+      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      setApiBaseUrl(nextBase);
+      const next = buildSettings('openai', apiKey, model, nextBase);
       setSettings(next);
       await saveSettings(next);
     }
@@ -91,7 +111,8 @@ export default function App() {
   const handleApiKeyChange = (value: string) => {
     setApiKey(value);
     if (selectedProvider === 'openai') {
-      const next = buildSettings('openai', value, model);
+      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const next = buildSettings('openai', value, model, nextBase);
       setSettings(next);
       void saveSettings(next);
     }
@@ -100,7 +121,17 @@ export default function App() {
   const handleModelChange = (value: string) => {
     setModel(value);
     if (selectedProvider === 'openai') {
-      const next = buildSettings('openai', apiKey, value);
+      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const next = buildSettings('openai', apiKey, value, nextBase);
+      setSettings(next);
+      void saveSettings(next);
+    }
+  };
+
+  const handleApiBaseUrlChange = (value: string) => {
+    setApiBaseUrl(value);
+    if (selectedProvider === 'openai') {
+      const next = buildSettings('openai', apiKey, model, value);
       setSettings(next);
       void saveSettings(next);
     }
@@ -151,11 +182,12 @@ export default function App() {
         result = await promptOnDevice(messages);
         providerSnapshot = { kind: 'on-device' };
       } else {
+        const openAiBaseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
         result = await promptOpenAI(
-          { apiKey, model },
+          { apiKey, model, apiBaseUrl: openAiBaseUrl },
           messages,
         );
-        providerSnapshot = { kind: 'openai', model };
+        providerSnapshot = { kind: 'openai', model, apiBaseUrl: openAiBaseUrl };
       }
 
       setStatus({ phase: 'saving', message: 'Saving profile locally…' });
@@ -182,7 +214,12 @@ export default function App() {
 
       await saveProfile(profile);
 
-      const nextSettings = buildSettings(selectedProvider, apiKey, model);
+      const nextSettings = buildSettings(
+        selectedProvider,
+        apiKey,
+        model,
+        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
+      );
       setSettings(nextSettings);
       await saveSettings(nextSettings);
 
@@ -242,25 +279,34 @@ export default function App() {
             {providerLabels.openai}
           </label>
           {selectedProvider === 'openai' && (
-            <div className="openai-fields">
-              <label className="field">
-                API key
-                <input
-                  type="password"
+          <div className="openai-fields">
+            <label className="field">
+              API key
+              <input
+                type="password"
                   value={apiKey}
                   placeholder="sk-..."
                   onChange={(event) => handleApiKeyChange(event.target.value)}
                   autoComplete="off"
                 />
               </label>
-              <label className="field">
-                Model
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(event) => handleModelChange(event.target.value)}
-                />
-              </label>
+            <label className="field">
+              Model
+              <input
+                type="text"
+                value={model}
+                onChange={(event) => handleModelChange(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              API base URL
+              <input
+                type="text"
+                value={apiBaseUrl}
+                onChange={(event) => handleApiBaseUrlChange(event.target.value)}
+                placeholder="https://api.openai.com"
+              />
+            </label>
               <p className="helper-text">
                 We send requests directly to OpenAI from your browser. Keep API keys private; they are stored locally.
               </p>

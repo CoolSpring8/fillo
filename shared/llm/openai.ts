@@ -1,6 +1,8 @@
 import { OUTPUT_SCHEMA } from '../schema/outputSchema';
 import type { ChatMessage, ResumeExtractionResult } from '../types';
 
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com';
+
 export interface OpenAIProviderOptions {
   apiKey: string;
   model: string;
@@ -19,7 +21,9 @@ export async function promptOpenAI(
   { apiKey, model, apiBaseUrl }: OpenAIProviderOptions,
   messages: ChatMessage[],
 ): Promise<ResumeExtractionResult> {
-  const endpoint = (apiBaseUrl ?? 'https://api.openai.com') + '/v1/chat/completions';
+  const baseUrlRaw = apiBaseUrl && apiBaseUrl.trim().length ? apiBaseUrl : DEFAULT_OPENAI_BASE_URL;
+  const baseUrl = baseUrlRaw.endsWith('/') ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
+  const endpoint = `${baseUrl}/chat/completions`;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {

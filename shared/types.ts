@@ -8,6 +8,7 @@ export interface OpenAIProviderConfig {
   kind: 'openai';
   apiKey: string;
   model: string;
+  apiBaseUrl: string;
 }
 
 export type ProviderConfig = OnDeviceProviderConfig | OpenAIProviderConfig;
@@ -17,6 +18,7 @@ export type ProviderSnapshot =
   | {
       kind: 'openai';
       model: string;
+      apiBaseUrl: string;
     };
 
 export interface StoredFileReference {
