@@ -1,3 +1,4 @@
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
 import type { ProfileRecord, StoredFileReference } from '../types';
 
 const INDEX_KEY = 'profiles:index';
@@ -48,12 +49,13 @@ export async function deleteProfile(id: string): Promise<void> {
     FILE_KEY_PREFIX + id,
   ]);
   await browser.storage.local.set({ [INDEX_KEY]: next });
+  await idbDel(FILE_KEY_PREFIX + id);
 }
 
 export async function storeFile(id: string, file: File): Promise<StoredFileReference> {
   const storageKey = FILE_KEY_PREFIX + id;
   const buffer = await file.arrayBuffer();
-  await browser.storage.local.set({ [storageKey]: buffer });
+  await idbSet(storageKey, buffer);
   return {
     name: file.name,
     type: file.type,
@@ -63,6 +65,6 @@ export async function storeFile(id: string, file: File): Promise<StoredFileRefer
 }
 
 export async function getFileBuffer(id: string): Promise<ArrayBuffer | undefined> {
-  const entry = await browser.storage.local.get(FILE_KEY_PREFIX + id);
-  return entry[FILE_KEY_PREFIX + id] as ArrayBuffer | undefined;
+  const buffer = await idbGet<ArrayBuffer>(FILE_KEY_PREFIX + id);
+  return buffer ?? undefined;
 }
