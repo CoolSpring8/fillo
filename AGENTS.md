@@ -3,6 +3,7 @@
 ## Project Structure & Module Organization
 - `entrypoints/` holds browser extension surfaces: `background.ts`, `content.ts`, and the React popup under `popup/`.
 - `assets/` stores reusable media referenced via the `@/` alias; `public/` contains shipped icons and static files copied as-is.
+- `tests/` collects Vitest suites; mirror entrypoint names (e.g., `tests/popup/`) as coverage grows.
 - Build configuration lives in `wxt.config.ts`; TypeScript options extend WXT defaults through `tsconfig.json`.
 - Keep feature-specific utilities near their entrypoint, creating subdirectories inside `entrypoints/` when logic grows.
 
@@ -12,6 +13,7 @@
 - `pnpm build` generates a production bundle in `dist/`; add `:firefox` for Gecko assets.
 - `pnpm zip` packages the latest build for store submission; run after a clean `pnpm build`.
 - `pnpm compile` executes `tsc --noEmit` for a fast type-only regression check.
+- `pnpm test` runs Vitest in watch mode; append `-- --run` for a single CI-friendly pass.
 
 ## Coding Style & Naming Conventions
 - Write TypeScript-first React components; prefer function components with hooks.
@@ -20,8 +22,9 @@
 - Keep imports path-based, favoring the WXT alias (`@/assets/...`) when referencing shared resources.
 
 ## Testing Guidelines
-- Automated tests are not yet configured; at minimum run `pnpm compile` and exercise features through `pnpm dev` before opening a PR.
-- If you introduce a test runner (e.g., Vitest), colocate specs as `*.test.ts[x]`, add an npm script, and document the workflow in this guide.
+- Vitest is configured in `vitest.config.ts`; author unit tests under `tests/` or beside modules as `*.test.ts[x]`.
+- Use `pnpm test` during development, `pnpm test -- --run` in CI, and add `--coverage` when validating broader changes.
+- Provide smoke tests for new entrypoints and utilities; keep assertions deterministic to avoid browser-specific flakes.
 - Validate extension behavior in both Chromium and Firefox when APIs differ, noting gaps in the PR description.
 
 ## Commit & Pull Request Guidelines
