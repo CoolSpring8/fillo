@@ -32,3 +32,6 @@
 - Follow Conventional Commits (`type: summary`) as seen in `chore: init repo with wxt`; use present-tense summaries under 75 characters.
 - Push focused branches, link tracking issues, and include screenshots or screen captures for UI changes in the popup.
 - Describe verification steps (commands run, browsers tested) and call out any follow-up work or known limitations.
+
+## Development Stage Notes
+- Early-stage migrations can drop existing local data; ignore backward compatibility unless otherwise specified.

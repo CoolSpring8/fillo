@@ -44,10 +44,7 @@ export async function deleteProfile(id: string): Promise<void> {
   const index: string[] = stored[INDEX_KEY] ?? [];
   const next = index.filter((entry) => entry !== id);
 
-  await browser.storage.local.remove([
-    PROFILE_KEY_PREFIX + id,
-    FILE_KEY_PREFIX + id,
-  ]);
+  await browser.storage.local.remove(PROFILE_KEY_PREFIX + id);
   await browser.storage.local.set({ [INDEX_KEY]: next });
   await idbDel(FILE_KEY_PREFIX + id);
 }
