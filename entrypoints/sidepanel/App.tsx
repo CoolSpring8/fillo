@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
@@ -6,6 +6,7 @@ import type { FillResultMessage, ScannedField } from '../../shared/apply/types';
 import type { FieldSlot } from '../../shared/apply/slots';
 import { resolveSlotFromAutocomplete, resolveSlotFromLabel } from '../../shared/apply/slots';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
+import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
 
 type PanelMode = 'dom' | 'manual';
 
@@ -19,6 +20,8 @@ interface FieldEntry {
   suggestion?: string;
   status: FieldStatus;
   reason?: string;
+  slotSource: 'heuristic' | 'model' | 'unset';
+  slotNote?: string;
 }
 
 interface ViewState {
@@ -50,10 +53,12 @@ export default function App() {
   const [viewState, setViewState] = useState<ViewState>({ loadingProfiles: true });
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [classifying, setClassifying] = useState(false);
 
   const portRef = useRef<RuntimePort | null>(null);
   const slotValuesRef = useRef<SlotValueMap>({});
   const scanRequestIdRef = useRef<string | null>(null);
+  const descriptorsRef = useRef<FieldDescriptor[]>([]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -124,6 +129,14 @@ export default function App() {
         }
         setFields(buildFieldEntries(parsed.fields, slotValuesRef.current));
         setScanning(false);
+        const descriptors: FieldDescriptor[] = parsed.fields.map((field) => ({
+          id: field.id,
+          label: field.label,
+          type: field.kind,
+          autocomplete: field.autocomplete ?? null,
+          required: field.required,
+        }));
+        descriptorsRef.current = descriptors;
         return;
       }
 
@@ -293,6 +306,53 @@ export default function App() {
     [slotValues],
   );
 
+  const classifyAndApply = useCallback(async (descriptors: FieldDescriptor[]) => {
+    if (descriptors.length === 0) {
+      return;
+    }
+    try {
+      const map = await classifyFieldDescriptors(descriptors);
+      if (map.size === 0) {
+        return;
+      }
+      setFields((current) =>
+        current.map((entry) => {
+          const match = map.get(entry.field.id);
+          if (!match?.slot) {
+            return entry;
+          }
+          const suggestion = slotValuesRef.current[match.slot] ?? entry.suggestion;
+          return {
+            ...entry,
+            slot: match.slot,
+            suggestion,
+            slotSource: 'model',
+            slotNote: match.reason,
+          };
+        }),
+      );
+    } catch (error) {
+      console.warn('Field classification failed', error);
+    }
+  }, []);
+
+  const handleClassify = useCallback(async () => {
+    if (classifying) {
+      return;
+    }
+    const descriptors = descriptorsRef.current;
+    if (descriptors.length === 0) {
+      return;
+    }
+    setClassifying(true);
+    try {
+      await classifyAndApply(descriptors);
+      setFeedback('Classification updated');
+    } finally {
+      setClassifying(false);
+    }
+  }, [classifying, classifyAndApply]);
+
   const openProfilesPage = () => {
     browser.tabs
       .create({ url: browser.runtime.getURL('/popup.html') })
@@ -322,6 +382,14 @@ export default function App() {
           </select>
           <button type="button" className="secondary" onClick={requestScan} disabled={scanning}>
             {scanning ? 'Scanning…' : 'Rescan page'}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={handleClassify}
+            disabled={classifying || fields.length === 0}
+          >
+            {classifying ? 'Classifying…' : 'Classify fields'}
           </button>
           <button type="button" className="secondary" onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}>
             Clear overlay
@@ -375,13 +443,15 @@ export default function App() {
     }
     return fields.map((entry) => {
       const hasOptions = slotOptions.length > 0;
-      const suggestedValue =
-        entry.slot && slotValues[entry.slot] ? slotValues[entry.slot] : undefined;
+      const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
+      const slotLabel = entry.slot
+        ? `${entry.slot}${entry.slotSource === 'model' ? ' (AI)' : ''}`
+        : 'unmapped';
       const summary =
         entry.field.kind === 'file'
           ? 'File upload: you will be prompted to choose a file.'
           : suggestedValue
-          ? `Suggested: ${formatSlotLabel(entry.slot!)} — ${truncate(suggestedValue)}`
+          ? `Suggested (${entry.slotSource === 'model' ? 'AI' : 'profile'}): ${truncate(suggestedValue)}`
           : hasOptions
           ? 'Choose a value in the approval popup.'
           : 'No stored values available. Update the profile to enable autofill.';
@@ -397,7 +467,7 @@ export default function App() {
                 {entry.field.required && ' *'}
               </div>
               <div className="field-meta">
-                {entry.field.kind} · {entry.slot ?? 'unmapped'} · frame {entry.field.frameId}
+                {entry.field.kind} · {slotLabel} · frame {entry.field.frameId}
               </div>
             </div>
             {entry.status !== 'idle' && (
@@ -407,6 +477,7 @@ export default function App() {
             )}
           </header>
           <div className="field-suggestion">{summary}</div>
+          {entry.slotNote && <div className="field-meta">AI note: {entry.slotNote}</div>}
           {entry.reason && <div className="field-meta">{entry.reason}</div>}
           <div className="field-actions">
             <button
@@ -473,6 +544,8 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
       suggestion,
       status: 'idle',
       reason: undefined,
+      slotSource: slot ? 'heuristic' : 'unset',
+      slotNote: undefined,
     };
   });
 
