@@ -26,6 +26,7 @@ interface OverlayElements {
 let cleanupFns: Array<() => void> = [];
 let currentTarget: HTMLElement | null = null;
 let currentMode: OverlayMode | null = null;
+let overlayRoot: ShadowRoot | null = null;
 
 export function clearOverlay(): void {
   cleanupFns.forEach((fn) => fn());
@@ -249,9 +250,8 @@ function ensureElements(): OverlayElements {
     document.documentElement.append(host);
   }
 
-  let root = host.shadowRoot;
-  if (!root) {
-    root = host.attachShadow({ mode: 'open' });
+  if (!overlayRoot) {
+    overlayRoot = host.shadowRoot ?? host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = `
       .highlight {
@@ -326,8 +326,10 @@ function ensureElements(): OverlayElements {
         color: #475569;
       }
     `;
-    root.append(style);
+    overlayRoot.append(style);
   }
+
+  const root = overlayRoot!;
 
   let highlight = root.querySelector<HTMLDivElement>('.highlight');
   if (!highlight) {
