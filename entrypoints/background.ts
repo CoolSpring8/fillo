@@ -63,6 +63,22 @@ export default defineBackground(() => {
       registerSidePanelPort(port);
     }
   });
+
+  browser.contextMenus.removeAll().then(() => {
+    browser.contextMenus.create({
+      id: 'resume-helper-fill',
+      title: 'Fill with Resume Helper…',
+      contexts: ['editable'],
+    });
+  });
+
+  browser.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId !== 'resume-helper-fill' || !tab?.id) {
+      return;
+    }
+
+    await browser.sidePanel.open({ tabId: tab.id });
+  });
 });
 
 function registerContentPort(port: RuntimePort): void {

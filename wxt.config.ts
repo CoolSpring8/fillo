@@ -12,7 +12,7 @@ export default defineConfig({
       default_title: 'Resume Helper',
     },
     options_page: 'options.html',
-    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel'],
+    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus'],
     host_permissions: [
       'https://api.openai.com/*',
       'https://*.greenhouse.io/*',
