@@ -26,18 +26,11 @@ import type {
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
-type StatusPhase = 'idle' | 'extracting' | 'generating' | 'saving' | 'complete' | 'error';
+type StatusPhase = 'idle' | 'extracting' | 'parsing' | 'saving' | 'complete' | 'error';
 
 interface StatusState {
   phase: StatusPhase;
   message: string;
-}
-
-function toSnapshot(config: ProviderConfig): ProviderSnapshot {
-  if (config.kind === 'openai') {
-    return { kind: 'openai', model: config.model, apiBaseUrl: config.apiBaseUrl };
-  }
-  return { kind: 'on-device' };
 }
 
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
@@ -69,6 +62,7 @@ export default function App() {
   const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
   const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
   const [file, setFile] = useState<File | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<ProfileRecord | null>(null);
   const [status, setStatus] = useState<StatusState>({ phase: 'idle', message: '' });
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -140,6 +134,7 @@ export default function App() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null;
     setFile(nextFile);
+    setCurrentProfile(null);
     setStatus({ phase: 'idle', message: '' });
     setErrorDetails(null);
     setValidationErrors([]);
@@ -152,13 +147,8 @@ export default function App() {
     setFile(null);
   };
 
-  const handleImport = async () => {
+  const handleExtract = async () => {
     if (!file) {
-      return;
-    }
-    if (selectedProvider === 'openai' && !apiKey) {
-      setStatus({ phase: 'error', message: 'Please provide an OpenAI API key.' });
-      setErrorDetails(null);
       return;
     }
     setBusy(true);
@@ -173,9 +163,60 @@ export default function App() {
         throw new Error('No extractable text found in the PDF. Is it a scanned document?');
       }
 
-      const messages = buildResumePrompt(text);
+      setStatus({ phase: 'saving', message: 'Saving extracted text locally…' });
+      const id = crypto.randomUUID();
+      const fileRef = await storeFile(id, file);
+      const profile: ProfileRecord = {
+        id,
+        createdAt: new Date().toISOString(),
+        sourceFile: fileRef,
+        rawText: text,
+      };
 
-      setStatus({ phase: 'generating', message: 'Generating structured resume data…' });
+      await saveProfile(profile);
+      setCurrentProfile(profile);
+
+      const nextSettings = buildSettings(
+        selectedProvider,
+        apiKey,
+        model,
+        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
+      );
+      setSettings(nextSettings);
+      await saveSettings(nextSettings);
+
+      setStatus({
+        phase: 'complete',
+        message: 'Extraction complete! Profile saved with raw text. You can optionally parse it below.',
+      });
+      resetFileInput();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus({ phase: 'error', message: 'Extraction failed.' });
+      setErrorDetails(message);
+      console.error(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleParse = async () => {
+    if (!currentProfile) {
+      return;
+    }
+    if (selectedProvider === 'openai' && !apiKey) {
+      setStatus({ phase: 'error', message: 'Please provide an OpenAI API key before parsing.' });
+      setErrorDetails(null);
+      return;
+    }
+    setBusy(true);
+    setErrorDetails(null);
+    setValidationErrors([]);
+
+    try {
+      setStatus({ phase: 'parsing', message: 'Parsing resume text with AI…' });
+      const messages = buildResumePrompt(currentProfile.rawText);
+
       let result: ResumeExtractionResult;
       let providerSnapshot: ProviderSnapshot;
       if (selectedProvider === 'on-device') {
@@ -190,20 +231,16 @@ export default function App() {
         providerSnapshot = { kind: 'openai', model, apiBaseUrl: openAiBaseUrl };
       }
 
-      setStatus({ phase: 'saving', message: 'Saving profile locally…' });
-      const id = crypto.randomUUID();
-      const fileRef = await storeFile(id, file);
+      setStatus({ phase: 'saving', message: 'Saving structured resume data…' });
       const validation = validateResume(result.resume);
       if (!validation.valid) {
         setValidationErrors(validation.errors ?? []);
       }
 
       const profile: ProfileRecord = {
-        id,
-        createdAt: new Date().toISOString(),
+        ...currentProfile,
         provider: providerSnapshot,
-        sourceFile: fileRef,
-        rawText: text,
+        parsedAt: new Date().toISOString(),
         resume: result.resume,
         custom: result.custom ?? {},
         validation: {
@@ -213,6 +250,7 @@ export default function App() {
       };
 
       await saveProfile(profile);
+      setCurrentProfile(profile);
 
       const nextSettings = buildSettings(
         selectedProvider,
@@ -223,11 +261,13 @@ export default function App() {
       setSettings(nextSettings);
       await saveSettings(nextSettings);
 
-      setStatus({ phase: 'complete', message: 'Import complete! Open the popup to review profiles.' });
-      resetFileInput();
+      setStatus({
+        phase: 'complete',
+        message: 'Parsing complete! Open the popup to review structured profile data.',
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus({ phase: 'error', message: 'Import failed.' });
+      setStatus({ phase: 'error', message: 'Parsing failed.' });
       setErrorDetails(message);
       console.error(error);
     } finally {
@@ -249,11 +289,39 @@ export default function App() {
     <div className="onboarding-container">
       <header>
         <h1>Resume Importer</h1>
-        <p>Choose your AI provider, upload a PDF resume, and we&apos;ll extract JSON Resume data locally.</p>
+        <p>Upload a PDF to extract resume text locally. You can optionally parse it with AI for structured data.</p>
       </header>
 
       <section className="card">
-        <h2>1. Pick Provider</h2>
+        <h2>1. Upload Resume PDF</h2>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          onChange={handleFileChange}
+        />
+        <button
+          type="button"
+          disabled={busy || !file}
+          onClick={handleExtract}
+        >
+          {busy && status.phase === 'extracting' ? 'Working…' : 'Extract text'}
+        </button>
+        <p className="helper-text">
+          All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
+        </p>
+        {currentProfile && (
+          <p className="helper-text">
+            Latest extraction captured {currentProfile.rawText.length.toLocaleString()} characters of resume text.
+          </p>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>2. (Optional) Parse With AI</h2>
+        <p className="helper-text">
+          Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
+        </p>
         <div className="provider-options">
           <label className={!canUseOnDevice ? 'disabled' : ''}>
             <input
@@ -279,64 +347,59 @@ export default function App() {
             {providerLabels.openai}
           </label>
           {selectedProvider === 'openai' && (
-          <div className="openai-fields">
-            <label className="field">
-              API key
-              <input
-                type="password"
+            <div className="openai-fields">
+              <label className="field">
+                API key
+                <input
+                  type="password"
                   value={apiKey}
                   placeholder="sk-..."
                   onChange={(event) => handleApiKeyChange(event.target.value)}
                   autoComplete="off"
                 />
               </label>
-            <label className="field">
-              Model
-              <input
-                type="text"
-                value={model}
-                onChange={(event) => handleModelChange(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              API base URL
-              <input
-                type="text"
-                value={apiBaseUrl}
-                onChange={(event) => handleApiBaseUrlChange(event.target.value)}
-                placeholder="https://api.openai.com"
-              />
-            </label>
+              <label className="field">
+                Model
+                <input
+                  type="text"
+                  value={model}
+                  onChange={(event) => handleModelChange(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                API base URL
+                <input
+                  type="text"
+                  value={apiBaseUrl}
+                  onChange={(event) => handleApiBaseUrlChange(event.target.value)}
+                  placeholder="https://api.openai.com"
+                />
+              </label>
               <p className="helper-text">
                 We send requests directly to OpenAI from your browser. Keep API keys private; they are stored locally.
               </p>
             </div>
           )}
         </div>
-      </section>
-
-      <section className="card">
-        <h2>2. Upload Resume PDF</h2>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileChange}
-        />
         <button
           type="button"
           disabled={
             busy ||
-            !file ||
+            !currentProfile ||
             (selectedProvider === 'openai' && !apiKey)
           }
-          onClick={handleImport}
+          onClick={handleParse}
         >
-          {busy ? 'Working…' : 'Import'}
+          {busy && status.phase === 'parsing' ? 'Working…' : 'Parse resume'}
         </button>
-        <p className="helper-text">
-          All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
-        </p>
+        {!currentProfile && (
+          <p className="helper-text">Upload a resume above to enable parsing.</p>
+        )}
+        {currentProfile && (
+          <p className="helper-text">
+            Parsing updates the stored profile with JSON Resume data for autofill workflows.
+          </p>
+        )}
       </section>
 
       {status.message && (

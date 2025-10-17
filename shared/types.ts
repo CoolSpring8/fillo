@@ -36,11 +36,12 @@ export interface ResumeExtractionResult {
 export interface ProfileRecord {
   id: string;
   createdAt: string;
-  provider: ProviderSnapshot;
+  provider?: ProviderSnapshot;
+  parsedAt?: string;
   sourceFile: StoredFileReference;
   rawText: string;
-  resume: unknown;
-  custom: Record<string, unknown>;
+  resume?: unknown;
+  custom?: Record<string, unknown>;
   validation?: {
     valid: boolean;
     errors?: string[];

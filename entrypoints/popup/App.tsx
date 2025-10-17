@@ -54,15 +54,20 @@ export default function App() {
     const createdAt = new Date(profile.createdAt);
     const basics = (profile.resume as Record<string, any> | undefined)?.basics ?? {};
     const displayName = typeof basics.name === 'string' && basics.name.trim().length > 0 ? basics.name : 'Unnamed profile';
-    const providerLabel =
-      profile.provider.kind === 'openai'
+    const parsedAt = profile.parsedAt ? new Date(profile.parsedAt) : null;
+    const providerLabel = profile.provider
+      ? profile.provider.kind === 'openai'
         ? `OpenAI (${profile.provider.model}${
             profile.provider.apiBaseUrl &&
             profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
               ? ` @ ${profile.provider.apiBaseUrl}`
               : ''
           })`
-        : 'Chrome on-device';
+        : 'Chrome on-device'
+      : null;
+    const parsingSummary = providerLabel
+      ? `${providerLabel}${parsedAt ? ` · Parsed ${parsedAt.toLocaleString()}` : ''}`
+      : 'Not parsed yet — run AI parsing for structured data';
 
     return (
       <article key={profile.id} className="profile-card">
@@ -70,7 +75,10 @@ export default function App() {
           <div className="profile-summary">
             <strong>{displayName}</strong>
             <span className="profile-subline">
-              {providerLabel} · Imported {createdAt.toLocaleString()}
+              Imported {createdAt.toLocaleString()}
+            </span>
+            <span className="profile-subline">
+              {parsingSummary}
             </span>
             <span className="profile-subline">
               PDF: {profile.sourceFile.name} ({profile.sourceFile.size.toLocaleString()} bytes) · Raw text: {profile.rawText.length.toLocaleString()} chars
@@ -92,11 +100,19 @@ export default function App() {
           <div className="profile-details">
             <div>
               <h3>JSON Resume</h3>
-              <pre>{JSON.stringify(profile.resume, null, 2)}</pre>
+              {profile.provider ? (
+                <pre>{JSON.stringify(profile.resume ?? {}, null, 2)}</pre>
+              ) : (
+                <p className="info">No structured resume stored yet. Run AI parsing from onboarding to populate this section.</p>
+              )}
             </div>
             <div>
               <h3>Custom fields</h3>
-              <pre>{JSON.stringify(profile.custom, null, 2)}</pre>
+              {profile.provider ? (
+                <pre>{JSON.stringify(profile.custom ?? {}, null, 2)}</pre>
+              ) : (
+                <p className="info">No custom fields available without structured parsing.</p>
+              )}
             </div>
             <div>
               <h3>Raw text</h3>
