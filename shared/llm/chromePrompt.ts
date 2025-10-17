@@ -23,7 +23,7 @@ declare global {
 }
 
 function getLanguageModel(): ChromeLanguageModel | undefined {
-  return window.LanguageModel ?? window.ai?.languageModel;
+  return window.LanguageModel;
 }
 
 function formatMessages(messages: ChatMessage[]): string {
@@ -39,7 +39,7 @@ export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailab
   }
 
   if (!languageModel.availability) {
-    return 'available';
+    return 'unavailable';
   }
 
   try {
@@ -61,10 +61,7 @@ export async function promptOnDevice(messages: ChatMessage[]): Promise<ResumeExt
     const promptText = formatMessages(messages);
     const responseJson = await session.prompt(promptText, {
       // Chrome Prompt API expects a JSON schema constraint when enforcing structure.
-      responseConstraint: {
-        type: 'json_schema',
-        schema: OUTPUT_SCHEMA,
-      },
+      responseConstraint: OUTPUT_SCHEMA,
       temperature: 0,
     });
 
