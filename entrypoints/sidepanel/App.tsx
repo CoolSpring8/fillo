@@ -1,9 +1,11 @@
+import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
-import type { FillResultMessage, ScannedField } from '../../shared/apply/types';
+import type { FillResultMessage, PromptOption, PromptOptionSlot, ScannedField } from '../../shared/apply/types';
 import type { FieldSlot } from '../../shared/apply/slotTypes';
+import { buildManualValueTree, flattenManualLeaves, type ManualValueNode } from './manualValues';
 import {
   getAllAdapterIds,
   resolveSlotFromAutocomplete,
@@ -34,42 +36,6 @@ interface ViewState {
   loadingProfiles: boolean;
   error?: string;
 }
-
-const MANUAL_SLOTS: FieldSlot[] = [
-  'name',
-  'firstName',
-  'lastName',
-  'headline',
-  'summary',
-  'email',
-  'phone',
-  'address',
-  'website',
-  'linkedin',
-  'github',
-  'city',
-  'country',
-  'state',
-  'postalCode',
-  'birthDate',
-  'gender',
-  'currentCompany',
-  'currentTitle',
-  'currentLocation',
-  'currentStartDate',
-  'currentEndDate',
-  'educationSchool',
-  'educationDegree',
-  'educationField',
-  'educationStartDate',
-  'educationEndDate',
-  'educationGpa',
-  'expectedSalary',
-  'preferredLocation',
-  'availabilityDate',
-  'jobType',
-  'skills',
-];
 
 export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
@@ -344,16 +310,7 @@ export default function App() {
   };
 
   const handleReview = (entry: FieldEntry) => {
-    const options =
-      entry.field.kind === 'file'
-        ? []
-        : MANUAL_SLOTS.map((slot) => {
-            const value = slotValuesRef.current[slot];
-            if (!value || !value.trim()) {
-              return null;
-            }
-            return { slot, label: formatSlotLabel(slot), value: value.trim() };
-          }).filter((entry): entry is { slot: FieldSlot; label: string; value: string } => Boolean(entry));
+    const options = entry.field.kind === 'file' ? [] : manualOptions;
 
     if (entry.field.kind !== 'file' && options.length === 0) {
       setFeedback(t('sidepanel.feedback.noValues'));
@@ -411,24 +368,45 @@ export default function App() {
     }
   };
 
-  const manualValues = useMemo(
+  const manualTree = useMemo<ManualValueNode[]>(
     () =>
-      MANUAL_SLOTS.map((slot) => ({ slot, value: slotValues[slot] ?? '' })).filter(
-        (entry) => entry.value.trim().length > 0,
-      ),
-    [slotValues],
+      buildManualValueTree(selectedProfile, {
+        resumeLabel: t('sidepanel.manual.resumeRoot'),
+        customLabel: t('sidepanel.manual.customRoot'),
+      }),
+    [selectedProfile, t],
   );
 
-  const slotOptions = useMemo(
-    () =>
-      MANUAL_SLOTS.map((slot) => {
-        const value = slotValues[slot];
-        if (!value || !value.trim()) {
-          return null;
+  const manualLeaves = useMemo(() => flattenManualLeaves(manualTree), [manualTree]);
+
+  const manualOptions = useMemo<PromptOption[]>(
+    () => {
+      const seen = new Set<string>();
+      const options: Array<{ slot: PromptOptionSlot; label: string; value: string }> = [];
+
+      const addOption = (slot: PromptOptionSlot, label: string, rawValue: string | undefined) => {
+        if (!rawValue) {
+          return;
         }
-        return { slot, value: value.trim() };
-      }).filter((entry): entry is { slot: FieldSlot; value: string } => Boolean(entry)),
-    [slotValues],
+        const normalized = rawValue.trim();
+        if (!normalized || seen.has(slot)) {
+          return;
+        }
+        seen.add(slot);
+        options.push({ slot, label, value: normalized });
+      };
+
+      (Object.entries(slotValues) as Array<[FieldSlot, string | undefined]>).forEach(([slot, value]) => {
+        addOption(slot, formatSlotLabel(slot), value);
+      });
+
+      manualLeaves.forEach((leaf) => {
+        addOption(leaf.slotKey, leaf.displayPath, leaf.value);
+      });
+
+      return options;
+    },
+    [slotValues, manualLeaves],
   );
 
   const classifyAndApply = useCallback(async (descriptors: FieldDescriptor[]) => {
@@ -584,7 +562,7 @@ export default function App() {
       return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
     }
     return fields.map((entry) => {
-      const hasOptions = slotOptions.length > 0;
+      const hasOptions = manualOptions.length > 0;
       const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
       const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
       const slotLabel =
@@ -656,20 +634,12 @@ export default function App() {
     }
     return (
       <div className="manual-grid">
-        {manualValues.length === 0 && (
+        {manualTree.length === 0 && (
           <div className="info-state">{t('sidepanel.states.noManualValues')}</div>
         )}
-        {manualValues.map((entry) => (
-          <section key={entry.slot} className="manual-item">
-            <header>
-              <span>{formatSlotLabel(entry.slot)}</span>
-              <button type="button" onClick={() => handleCopy(formatSlotLabel(entry.slot), entry.value)}>
-                {t('sidepanel.buttons.copy')}
-              </button>
-            </header>
-            <div className="manual-text">{entry.value}</div>
-          </section>
-        ))}
+        {manualTree.length > 0 && (
+          <ManualTreeView nodes={manualTree} copyLabel={t('sidepanel.buttons.copy')} onCopy={handleCopy} />
+        )}
         <section className="manual-item">
           <header>
             <span>{t('sidepanel.manual.rawLabel')}</span>
@@ -866,6 +836,77 @@ function truncate(value: string, limit = 120): string {
     return value;
   }
   return `${value.slice(0, limit - 1)}…`;
+}
+
+interface ManualTreeViewProps {
+  nodes: ManualValueNode[];
+  copyLabel: string;
+  onCopy: (label: string, value: string) => void;
+}
+
+interface ManualNodeProps {
+  node: ManualValueNode;
+  depth: number;
+  copyLabel: string;
+  onCopy: (label: string, value: string) => void;
+}
+
+function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
+  if (nodes.length === 0) {
+    return null;
+  }
+  return (
+    <div className="manual-tree">
+      {nodes.map((node) => (
+        <section key={node.id} className="manual-item manual-group">
+          <ManualNode node={node} depth={0} copyLabel={copyLabel} onCopy={onCopy} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function ManualNode({ node, depth, copyLabel, onCopy }: ManualNodeProps): JSX.Element {
+  const hasChildren = node.children && node.children.length > 0;
+  const offset = depth > 0 ? { marginLeft: `${Math.min(depth, 6) * 12}px` } : undefined;
+
+  if (!hasChildren && typeof node.value === 'string') {
+    const value = node.value;
+    return (
+      <div className="manual-leaf" style={offset}>
+        <div className="manual-leaf-header">
+          <div className="manual-leaf-info">
+            <span className="manual-leaf-label">{node.label}</span>
+            <span className="manual-leaf-path">{node.displayPath}</span>
+          </div>
+          <button type="button" onClick={() => onCopy(node.displayPath, value)}>
+            {copyLabel}
+          </button>
+        </div>
+        <div className="manual-text">{value}</div>
+      </div>
+    );
+  }
+
+  return (
+    <details className="manual-branch" open={depth === 0} style={offset}>
+      <summary>
+        <span className="manual-branch-label">{node.label}</span>
+        <span className="manual-count">{node.children?.length ?? 0}</span>
+      </summary>
+      <div className="manual-node-children">
+        {node.children?.map((child) => (
+          <ManualNode
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            copyLabel={copyLabel}
+            onCopy={onCopy}
+          />
+        ))}
+      </div>
+    </details>
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

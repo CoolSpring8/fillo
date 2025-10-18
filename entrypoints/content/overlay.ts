@@ -1,6 +1,5 @@
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
-import type { PromptOption } from '../../shared/apply/types';
-import type { FieldSlot } from '../../shared/apply/slotTypes';
+import type { PromptOption, PromptOptionSlot } from '../../shared/apply/types';
 
 type OverlayMode = 'highlight' | 'prompt';
 
@@ -8,9 +7,9 @@ interface PromptOptions {
   label: string;
   preview?: string;
   options?: PromptOption[];
-  defaultSlot?: FieldSlot | null;
+  defaultSlot?: PromptOptionSlot | null;
   defaultValue?: string;
-  onFill: (value: string, slot: FieldSlot | null) => void;
+  onFill: (value: string, slot: PromptOptionSlot | null) => void;
   onSkip: () => void;
 }
 
@@ -100,7 +99,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
   const controls = document.createElement('div');
   controls.className = 'overlay-controls';
 
-  let currentSlot: FieldSlot | null = options.defaultSlot ?? null;
+  let currentSlot: PromptOptionSlot | null = options.defaultSlot ?? null;
   let currentValue = options.defaultValue ?? options.preview ?? '';
 
   const updatePreview = () => {
@@ -148,7 +147,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
 
     select.addEventListener('change', (event) => {
       const target = event.target as HTMLSelectElement;
-      const slot = target.value as FieldSlot | '';
+      const slot = target.value as PromptOptionSlot | '';
       if (!slot) {
         currentSlot = null;
         currentValue = '';

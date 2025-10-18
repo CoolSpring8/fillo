@@ -86,6 +86,8 @@ sidepanel:
     noManualValues: 暂无结构化字段，可复制下方原始文本。
   manual:
     rawLabel: 原始简历文本
+    resumeRoot: 简历数据
+    customRoot: 自定义字段
   buttons:
     copy: 复制
     copyAll: 全部复制

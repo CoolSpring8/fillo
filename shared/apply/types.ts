@@ -31,8 +31,10 @@ export interface ScannedField {
 
 import type { FieldSlot } from './slotTypes';
 
+export type PromptOptionSlot = FieldSlot | `profile.${string}`;
+
 export interface PromptOption {
-  slot: FieldSlot;
+  slot: PromptOptionSlot;
   label: string;
   value: string;
 }
@@ -46,7 +48,7 @@ export interface PromptFillRequest {
   value?: string;
   preview?: string;
   options?: PromptOption[];
-  defaultSlot?: FieldSlot | null;
+  defaultSlot?: PromptOptionSlot | null;
 }
 
 export type FillResultStatus = 'filled' | 'skipped' | 'failed';

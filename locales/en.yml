@@ -86,6 +86,8 @@ sidepanel:
     noManualValues: No structured fields available. Copy from raw text below.
   manual:
     rawLabel: Raw resume text
+    resumeRoot: Resume data
+    customRoot: Custom fields
   buttons:
     copy: Copy
     copyAll: Copy all
