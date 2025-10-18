@@ -30,6 +30,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const adapters = useMemo(() => listAvailableAdapters(), []);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(adapters.map((adapter) => adapter.id));
+  const { t } = i18n;
 
   useEffect(() => {
     getSettings().then((settings) => {
@@ -63,7 +64,7 @@ export default function App() {
           ? { provider: createOpenAIProvider(apiKey, model, baseUrl), adapters: selectedAdapters }
           : { provider: { kind: 'on-device' }, adapters: selectedAdapters };
       await saveSettings(nextSettings);
-      setFeedback({ kind: 'success', message: 'Settings saved.' });
+      setFeedback({ kind: 'success', message: t('options.feedback.saved') });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFeedback({ kind: 'error', message });
@@ -79,7 +80,7 @@ export default function App() {
   if (!loaded) {
     return (
       <div className="options-container">
-        <p>Loading settings…</p>
+        <p>{t('options.loading')}</p>
       </div>
     );
   }
@@ -87,12 +88,12 @@ export default function App() {
   return (
     <div className="options-container">
       <header>
-        <h1>Resume Importer Settings</h1>
-        <p>Update your preferred provider and credentials. All values are stored locally via browser.storage.</p>
+        <h1>{t('options.title')}</h1>
+        <p>{t('options.description')}</p>
       </header>
 
       <section className="card">
-        <h2>Provider</h2>
+        <h2>{t('options.provider.heading')}</h2>
         <label>
           <input
             type="radio"
@@ -104,12 +105,12 @@ export default function App() {
               setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
             }}
           />
-          Chrome on-device (Prompt API)
+          {t('options.provider.onDevice')}
         </label>
         <div className="availability">
-          <span>Availability: {availability}</span>
+          <span>{t('options.provider.availability', [availability])}</span>
           <button type="button" onClick={handleRefreshAvailability}>
-            Refresh
+            {t('options.provider.refresh')}
           </button>
         </div>
 
@@ -126,13 +127,13 @@ export default function App() {
               }
             }}
           />
-          OpenAI
+          {t('options.provider.openai')}
         </label>
 
         {provider === 'openai' && (
           <div className="openai-fields">
             <label className="field">
-              API key
+              {t('options.provider.apiKey')}
               <input
                 type="password"
                 value={apiKey}
@@ -142,7 +143,7 @@ export default function App() {
               />
             </label>
             <label className="field">
-              Model
+              {t('options.provider.model')}
               <input
                 type="text"
                 value={model}
@@ -150,7 +151,7 @@ export default function App() {
               />
             </label>
             <label className="field">
-              API base URL
+              {t('options.provider.apiBaseUrl')}
               <input
                 type="text"
                 value={apiBaseUrl}
@@ -163,11 +164,13 @@ export default function App() {
       </section>
 
       <section className="card">
-        <h2>Field adapters</h2>
-        <p>Select the label adapters to apply when classifying form fields. All adapters run locally.</p>
+        <h2>{t('options.adapters.heading')}</h2>
+        <p>{t('options.adapters.description')}</p>
         <div className="adapter-list">
           {adapters.map((adapter) => {
             const checked = activeAdapters.includes(adapter.id);
+            const name = t(adapter.nameKey);
+            const description = adapter.descriptionKey ? t(adapter.descriptionKey) : null;
             return (
               <label key={adapter.id} className="field checkbox">
                 <input
@@ -183,8 +186,8 @@ export default function App() {
                   }}
                 />
                 <span>
-                  <strong>{adapter.name}</strong>
-                  {adapter.description && <span className="caption"> — {adapter.description}</span>}
+                  <strong>{name}</strong>
+                  {description && <span className="caption"> — {description}</span>}
                 </span>
               </label>
             );
@@ -194,7 +197,7 @@ export default function App() {
 
       <div className="actions">
         <button type="button" onClick={handleSave} disabled={busy || (provider === 'openai' && !apiKey)}>
-          {busy ? 'Saving…' : 'Save settings'}
+          {busy ? t('options.actions.saving') : t('options.actions.save')}
         </button>
       </div>
 

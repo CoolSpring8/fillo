@@ -12,6 +12,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>({ loading: true });
+  const { t } = i18n;
 
   const refresh = async () => {
     setViewState({ loading: true });
@@ -66,21 +67,28 @@ export default function App() {
     const isExpanded = expandedId === profile.id;
     const createdAt = new Date(profile.createdAt);
     const basics = (profile.resume as Record<string, any> | undefined)?.basics ?? {};
-    const displayName = typeof basics.name === 'string' && basics.name.trim().length > 0 ? basics.name : 'Unnamed profile';
+    const displayName =
+      typeof basics.name === 'string' && basics.name.trim().length > 0
+        ? basics.name
+        : t('popup.profile.unnamed');
     const parsedAt = profile.parsedAt ? new Date(profile.parsedAt) : null;
     const providerLabel = profile.provider
       ? profile.provider.kind === 'openai'
-        ? `OpenAI (${profile.provider.model}${
-            profile.provider.apiBaseUrl &&
-            profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
-              ? ` @ ${profile.provider.apiBaseUrl}`
-              : ''
-          })`
-        : 'Chrome on-device'
+        ? profile.provider.apiBaseUrl &&
+          profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
+          ? t('popup.provider.openaiModelWithBase', [
+              profile.provider.model,
+              profile.provider.apiBaseUrl,
+            ])
+          : t('popup.provider.openaiModel', [profile.provider.model])
+        : t('popup.provider.onDevice')
       : null;
+    const parsedLabel = parsedAt ? t('popup.provider.parsed', [parsedAt.toLocaleString()]) : null;
     const parsingSummary = providerLabel
-      ? `${providerLabel}${parsedAt ? ` · Parsed ${parsedAt.toLocaleString()}` : ''}`
-      : 'Not parsed yet — run AI parsing for structured data';
+      ? parsedLabel
+        ? `${providerLabel} · ${parsedLabel}`
+        : providerLabel
+      : t('popup.provider.notParsed');
 
     return (
       <article key={profile.id} className="profile-card">
@@ -88,52 +96,56 @@ export default function App() {
           <div className="profile-summary">
             <strong>{displayName}</strong>
             <span className="profile-subline">
-              Imported {createdAt.toLocaleString()}
+              {t('popup.profile.importedAt', [createdAt.toLocaleString()])}
             </span>
             <span className="profile-subline">
               {parsingSummary}
             </span>
             <span className="profile-subline">
-              PDF: {profile.sourceFile.name} ({profile.sourceFile.size.toLocaleString()} bytes) · Raw text: {profile.rawText.length.toLocaleString()} chars
+              {t('popup.profile.fileInfo', [
+                profile.sourceFile.name,
+                profile.sourceFile.size.toLocaleString(),
+                profile.rawText.length.toLocaleString(),
+              ])}
             </span>
             {profile.validation && !profile.validation.valid && (
-              <span className="profile-warning">Validation warnings available</span>
+              <span className="profile-warning">{t('popup.profile.validationWarning')}</span>
             )}
           </div>
           <div className="profile-actions">
             <button type="button" onClick={() => toggleExpanded(profile.id)}>
-              {isExpanded ? 'Hide details' : 'View details'}
+              {isExpanded ? t('popup.buttons.hideDetails') : t('popup.buttons.viewDetails')}
             </button>
             <button type="button" className="danger" onClick={() => handleDelete(profile.id)}>
-              Delete
+              {t('popup.buttons.delete')}
             </button>
           </div>
         </div>
         {isExpanded && (
           <div className="profile-details">
             <div>
-              <h3>JSON Resume</h3>
+              <h3>{t('popup.sections.jsonResume')}</h3>
               {profile.provider ? (
                 <pre>{JSON.stringify(profile.resume ?? {}, null, 2)}</pre>
               ) : (
-                <p className="info">No structured resume stored yet. Run AI parsing from onboarding to populate this section.</p>
+                <p className="info">{t('popup.info.noStructured')}</p>
               )}
             </div>
             <div>
-              <h3>Custom fields</h3>
+              <h3>{t('popup.sections.customFields')}</h3>
               {profile.provider ? (
                 <pre>{JSON.stringify(profile.custom ?? {}, null, 2)}</pre>
               ) : (
-                <p className="info">No custom fields available without structured parsing.</p>
+                <p className="info">{t('popup.info.noCustom')}</p>
               )}
             </div>
             <div>
-              <h3>Raw text</h3>
+              <h3>{t('popup.sections.rawText')}</h3>
               <pre className="raw-text">{profile.rawText}</pre>
             </div>
             {profile.validation && profile.validation.errors && profile.validation.errors.length > 0 && (
               <div>
-                <h3>Validation warnings</h3>
+                <h3>{t('popup.sections.validationWarnings')}</h3>
                 <ul>
                   {profile.validation.errors.map((item) => (
                     <li key={item}>{item}</li>
@@ -150,15 +162,13 @@ export default function App() {
   return (
     <div className="popup">
       <header>
-        <h1>Imported Profiles</h1>
-        <p>Use onboarding to add resumes. Delete entries you no longer need.</p>
+        <h1>{t('popup.title')}</h1>
+        <p>{t('popup.description')}</p>
       </header>
-      {viewState.loading && <p className="info">Loading profiles…</p>}
-      {viewState.error && <p className="error">{viewState.error}</p>}
+      {viewState.loading && <p className="info">{t('popup.loading')}</p>}
+      {viewState.error && <p className="error">{t('popup.error', [viewState.error])}</p>}
       {!viewState.loading && profiles.length === 0 && (
-        <p className="info">
-          No profiles stored yet. Import a PDF via the onboarding page to get started.
-        </p>
+        <p className="info">{t('popup.empty')}</p>
       )}
       <div className="profiles">{profiles.map((profile) => renderProfile(profile))}</div>
       <footer>
@@ -168,7 +178,7 @@ export default function App() {
             browser.tabs.create({ url: browser.runtime.getURL('/onboarding.html') })
           }
         >
-          Open onboarding
+          {t('popup.buttons.openOnboarding')}
         </button>
         <button
           type="button"
@@ -176,10 +186,10 @@ export default function App() {
             browser.tabs.create({ url: browser.runtime.getURL('/options.html') })
           }
         >
-          Settings
+          {t('popup.buttons.settings')}
         </button>
         <button type="button" onClick={() => openSidePanel()}>
-          Open side panel
+          {t('popup.buttons.openSidePanel')}
         </button>
       </footer>
     </div>

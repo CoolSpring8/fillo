@@ -1,0 +1,195 @@
+app:
+  name: 简历助手
+contextMenu:
+  fill: 使用 Resume Helper 自动填写…
+options:
+  loading: 正在加载设置…
+  title: 简历导入器设置
+  description: 更新首选的解析服务和凭据。所有数据都会保存在浏览器本地。
+  provider:
+    heading: 服务提供方
+    onDevice: Chrome 本地模型（Prompt API）
+    availability: 可用性：$1
+    refresh: 刷新
+    openai: OpenAI
+    apiKey: API 密钥
+    model: 模型
+    apiBaseUrl: API 基础地址
+  adapters:
+    heading: 字段匹配适配器
+    description: 选择需要启用的字段标签适配器。所有匹配均在本地完成。
+    items:
+      en_default:
+        name: 英文（默认）
+        description: 匹配常见英文表单字段标签。
+      zh_cn:
+        name: 中文（简体）
+        description: 匹配常见中文表单字段标签。
+  actions:
+    save: 保存设置
+    saving: 正在保存…
+  feedback:
+    saved: 设置已保存。
+popup:
+  title: 已导入的简历
+  description: 使用引导页导入简历，可在此管理与删除。
+  loading: 正在加载简历…
+  error: 加载简历失败（$1）
+  empty: 尚未保存任何简历，请先在引导页导入 PDF。
+  buttons:
+    openOnboarding: 打开引导页
+    settings: 打开设置
+    openSidePanel: 打开侧边栏
+    viewDetails: 查看详情
+    hideDetails: 收起详情
+    delete: 删除
+  provider:
+    onDevice: Chrome 本地解析
+    openaiModel: OpenAI（$1）
+    openaiModelWithBase: OpenAI（$1 @ $2）
+    parsed: 已解析于 $1
+    notParsed: 尚未解析——请在引导页运行 AI 解析以获取结构化数据
+  profile:
+    unnamed: 未命名的简历
+    importedAt: 导入时间：$1
+    fileInfo: 'PDF：$1（$2 字节）· 原文字符数：$3'
+    validationWarning: 存在校验警告
+  sections:
+    jsonResume: JSON 简历
+    customFields: 自定义字段
+    rawText: 原始文本
+    validationWarnings: 校验警告
+  info:
+    noStructured: 尚未保存结构化简历，请先运行 AI 解析。
+    noCustom: 未进行结构化解析前无法使用自定义字段。
+sidepanel:
+  title: 简历助手
+  subtitle: 选择一份简历，在填写前逐项确认。
+  toolbar:
+    scanning: 正在扫描…
+    rescan: 重新扫描页面
+    classify: 识别字段
+    classifying: 正在识别…
+    fillMapped: 填写匹配字段
+    clearOverlay: 清除高亮
+    manageProfiles: 管理简历
+  tabs:
+    dom: 字段审核
+    manual: 手动复制
+  states:
+    noProfilesOption: 暂无简历
+    loadingProfiles: 正在加载简历…
+    error: 加载简历失败（$1）
+    noProfile: 请先在引导页导入简历，便于自动填写。
+    noProfileManual: 请先导入简历以使用手动复制功能。
+    noFields: 未检测到可填写的字段。
+    noManualValues: 暂无结构化字段，可复制下方原始文本。
+  manual:
+    rawLabel: 原始简历文本
+  buttons:
+    copy: 复制
+    copyAll: 全部复制
+    review: 审核并填写
+    openPicker: 打开选择器
+  feedback:
+    noMapped: 没有可直接填写的字段。
+    autofill:
+      1: 正在填写 $1 个字段…
+      n: 正在填写 $1 个字段…
+    copied: 已复制 $1
+    noClipboard: 无法写入剪贴板
+    classificationUpdated: 字段归类已更新
+    noValues: 暂无可用字段，请先完善简历。
+  preview:
+    file: 将打开文件选择器以上传简历。
+    select: 请在审核面板中选择一个值。
+  field:
+    noLabel: （无标签）
+    unmapped: 未映射
+    aiSuffix: （AI）
+    fileSummary: 文件上传：点击后将打开选择对话框。
+    suggestedProfile: 推荐（简历）：$1
+    suggestedAI: 推荐（AI）：$1
+    chooseValue: 请在审核弹窗中选择一个值。
+    noValues: 暂无存储的值，请更新简历信息后重试。
+    aiNote: AI 备注：$1
+    meta: $1 · $2 · 第 $3 帧
+  fieldKind:
+    text: 文本
+    email: 邮箱
+    tel: 电话
+    number: 数字
+    date: 日期
+    select: 下拉选项
+    textarea: 多行文本
+    checkbox: 复选框
+    radio: 单选按钮
+    file: 文件
+  status:
+    pending: 待处理
+    filled: 已填写
+    skipped: 已跳过
+    failed: 失败
+  reason:
+    frameUnavailable: 目标框架不可用
+    missingFrame: 未找到目标框架
+    noActiveTab: 当前没有活动标签页
+    missingField: 字段不存在
+    missingElement: 元素不存在
+    fillFailed: 填写失败
+    clickFailed: 点击失败
+    noSelection: 未选择任何值
+    emptyValue: 值为空
+  profile:
+    unnamed: 未命名的简历
+    label: $1 · $2
+slots:
+  name: 姓名
+  firstName: 名
+  lastName: 姓
+  email: 邮箱
+  phone: 电话
+  city: 城市
+  country: 国家
+  state: 省/州
+  postalCode: 邮编
+  address: 地址
+  birthDate: 出生日期
+  gender: 性别
+  website: 个人网站
+  linkedin: LinkedIn
+  github: GitHub
+  summary: 自我简介
+  headline: 头衔
+  currentCompany: 当前公司
+  currentTitle: 当前职位
+  currentLocation: 工作地点
+  currentStartDate: 入职日期
+  currentEndDate: 离职日期
+  educationSchool: 毕业院校
+  educationDegree: 学历/学位
+  educationField: 专业
+  educationStartDate: 入学日期
+  educationEndDate: 毕业日期
+  educationGpa: 平均绩点
+  expectedSalary: 期望薪资
+  preferredLocation: 期望地点
+  availabilityDate: 可到岗日期
+  jobType: 工作性质
+  skills: 技能
+overlay:
+  prompt:
+    heading: 推荐值
+    awaitingSelection: 请选择一个值继续。
+    placeholder: 请选择…
+    helper: 请选择要填入此字段的数据。
+    fill: 填写
+    skip: 跳过
+adapters:
+  items:
+    en_default:
+      name: 英文（默认）
+      description: 匹配常见英文表单字段标签。
+    zh_cn:
+      name: 中文（简体）
+      description: 匹配常见中文表单字段标签。

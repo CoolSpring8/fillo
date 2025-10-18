@@ -1,8 +1,10 @@
 import { defineConfig } from 'wxt';
 
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
+  srcDir: '.',
+  modules: ['@wxt-dev/i18n/module', '@wxt-dev/module-react'],
   manifest: {
+    default_locale: 'en',
     name: 'Resume Importer',
     description:
       'Import resumes from PDF, extract structured JSON Resume data, and store local profiles.',

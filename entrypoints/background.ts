@@ -67,7 +67,7 @@ export default defineBackground(() => {
   browser.contextMenus.removeAll().then(() => {
     browser.contextMenus.create({
       id: 'resume-helper-fill',
-      title: 'Fill with Resume Helper…',
+      title: i18n.t('contextMenu.fill'),
       contexts: ['editable'],
     });
   });

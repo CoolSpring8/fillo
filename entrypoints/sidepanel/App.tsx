@@ -83,6 +83,7 @@ export default function App() {
   const [classifying, setClassifying] = useState(false);
   const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
+  const { t } = i18n;
 
   const portRef = useRef<RuntimePort | null>(null);
   const slotValuesRef = useRef<SlotValueMap>({});
@@ -104,6 +105,21 @@ export default function App() {
   useEffect(() => {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
   }, [activeAdapterIds, defaultAdapterIds]);
+
+  const formatFillReason = (reason: string): string => {
+    const map: Record<string, string> = {
+      'frame-unavailable': t('sidepanel.reason.frameUnavailable'),
+      'missing-frame': t('sidepanel.reason.missingFrame'),
+      'no-active-tab': t('sidepanel.reason.noActiveTab'),
+      'missing-field': t('sidepanel.reason.missingField'),
+      'missing-element': t('sidepanel.reason.missingElement'),
+      'fill-failed': t('sidepanel.reason.fillFailed'),
+      'click-failed': t('sidepanel.reason.clickFailed'),
+      'no-selection': t('sidepanel.reason.noSelection'),
+      'empty-value': t('sidepanel.reason.emptyValue'),
+    };
+    return map[reason] ?? reason;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -263,7 +279,7 @@ export default function App() {
         entry.status !== 'filled',
     );
     if (targets.length === 0) {
-      setFeedback('No mapped fields ready to fill.');
+      setFeedback(t('sidepanel.feedback.noMapped'));
       return;
     }
     const pendingIds = new Set<string>();
@@ -291,8 +307,8 @@ export default function App() {
           : entry,
       ),
     );
-    setFeedback(`Filling ${targets.length} field${targets.length > 1 ? 's' : ''}…`);
-  }, [fields, sendMessage]);
+    setFeedback(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
+  }, [fields, sendMessage, t]);
 
   const requestScan = () => {
     if (!portRef.current) {
@@ -340,7 +356,7 @@ export default function App() {
           }).filter((entry): entry is { slot: FieldSlot; label: string; value: string } => Boolean(entry));
 
     if (entry.field.kind !== 'file' && options.length === 0) {
-      setFeedback('No stored values available. Update the profile first.');
+      setFeedback(t('sidepanel.feedback.noValues'));
       return;
     }
 
@@ -367,8 +383,8 @@ export default function App() {
       value: entry.field.kind === 'file' ? '' : defaultValue,
       preview:
         entry.field.kind === 'file'
-          ? 'Open the file picker to upload your resume.'
-          : defaultValue || entry.suggestion || 'Select a value in the approval panel.',
+          ? t('sidepanel.preview.file')
+          : defaultValue || entry.suggestion || t('sidepanel.preview.select'),
       options: entry.field.kind === 'file' ? undefined : options,
       defaultSlot,
     });
@@ -388,10 +404,10 @@ export default function App() {
   const handleCopy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setFeedback(`Copied ${label}`);
+      setFeedback(t('sidepanel.feedback.copied', [label]));
     } catch (error) {
       console.error('Failed to copy', error);
-      setFeedback('Unable to copy to clipboard');
+      setFeedback(t('sidepanel.feedback.noClipboard'));
     }
   };
 
@@ -456,7 +472,7 @@ export default function App() {
     setClassifying(true);
     try {
       await classifyAndApply(descriptors);
-      setFeedback('Classification updated');
+      setFeedback(t('sidepanel.feedback.classificationUpdated'));
     } finally {
       setClassifying(false);
     }
@@ -473,8 +489,8 @@ export default function App() {
   return (
     <div className="panel">
       <header className="panel-header">
-        <h1>Resume Helper</h1>
-        <p>Select a profile and review each field before filling.</p>
+        <h1>{t('sidepanel.title')}</h1>
+        <p>{t('sidepanel.subtitle')}</p>
       </header>
       <div className="panel-body">
         <div className="toolbar">
@@ -482,7 +498,7 @@ export default function App() {
             value={selectedProfileId ?? ''}
             onChange={(event) => setSelectedProfileId(event.target.value || null)}
           >
-            {profiles.length === 0 && <option value="">No profiles available</option>}
+            {profiles.length === 0 && <option value="">{t('sidepanel.states.noProfilesOption')}</option>}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {formatProfileLabel(profile)}
@@ -490,7 +506,7 @@ export default function App() {
             ))}
           </select>
           <button type="button" className="secondary" onClick={requestScan} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Rescan page'}
+            {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
           </button>
           <button
             type="button"
@@ -498,7 +514,7 @@ export default function App() {
             onClick={handleClassify}
             disabled={classifying || fields.length === 0}
           >
-            {classifying ? 'Classifying…' : 'Classify fields'}
+            {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
           </button>
           <button
             type="button"
@@ -515,13 +531,13 @@ export default function App() {
               ) || fields.length === 0
             }
           >
-            Fill mapped fields
+            {t('sidepanel.toolbar.fillMapped')}
           </button>
           <button type="button" className="secondary" onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}>
-            Clear overlay
+            {t('sidepanel.toolbar.clearOverlay')}
           </button>
           <button type="button" className="secondary" onClick={openProfilesPage}>
-            Manage profiles
+            {t('sidepanel.toolbar.manageProfiles')}
           </button>
         </div>
         <div className="mode-tabs">
@@ -531,7 +547,7 @@ export default function App() {
             tabIndex={0}
             onClick={() => setMode('dom')}
           >
-            Field Review
+            {t('sidepanel.tabs.dom')}
           </div>
           <div
             className={`mode-tab ${mode === 'manual' ? 'active' : ''}`}
@@ -539,7 +555,7 @@ export default function App() {
             tabIndex={0}
             onClick={() => setMode('manual')}
           >
-            Manual Copy
+            {t('sidepanel.tabs.manual')}
           </div>
         </div>
         <div className="content">
@@ -553,34 +569,36 @@ export default function App() {
 
   function renderDomMode() {
     if (viewState.loadingProfiles) {
-      return <div className="info-state">Loading profiles…</div>;
+      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
     }
     if (viewState.error) {
-      return <div className="error-state">{viewState.error}</div>;
+      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
     }
     if (!selectedProfile) {
-      return <div className="empty-state">Import a resume in onboarding to populate autofill data.</div>;
+      return <div className="empty-state">{t('sidepanel.states.noProfile')}</div>;
     }
     if (scanning) {
-      return <div className="info-state">Scanning page fields…</div>;
+      return <div className="info-state">{t('sidepanel.toolbar.scanning')}</div>;
     }
     if (fields.length === 0) {
-      return <div className="empty-state">No fillable fields detected on this page.</div>;
+      return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
     }
     return fields.map((entry) => {
       const hasOptions = slotOptions.length > 0;
       const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
       const slotLabel = entry.slot
-        ? `${entry.slot}${entry.slotSource === 'model' ? ' (AI)' : ''}`
-        : 'unmapped';
+        ? `${t(`slots.${entry.slot}`)}${entry.slotSource === 'model' ? ` ${t('sidepanel.field.aiSuffix')}` : ''}`
+        : t('sidepanel.field.unmapped');
       const summary =
         entry.field.kind === 'file'
-          ? 'File upload: you will be prompted to choose a file.'
+          ? t('sidepanel.field.fileSummary')
           : suggestedValue
-          ? `Suggested (${entry.slotSource === 'model' ? 'AI' : 'profile'}): ${truncate(suggestedValue)}`
+          ? entry.slotSource === 'model'
+            ? t('sidepanel.field.suggestedAI', [truncate(suggestedValue)])
+            : t('sidepanel.field.suggestedProfile', [truncate(suggestedValue)])
           : hasOptions
-          ? 'Choose a value in the approval popup.'
-          : 'No stored values available. Update the profile to enable autofill.';
+          ? t('sidepanel.field.chooseValue')
+          : t('sidepanel.field.noValues');
 
       const disabled = entry.field.kind !== 'file' && !hasOptions;
 
@@ -589,22 +607,26 @@ export default function App() {
           <header>
             <div>
               <div className="field-title">
-                {entry.field.label || '(No label)'}
+                {entry.field.label || t('sidepanel.field.noLabel')}
                 {entry.field.required && ' *'}
               </div>
               <div className="field-meta">
-                {entry.field.kind} · {slotLabel} · frame {entry.field.frameId}
+                {t('sidepanel.field.meta', [
+                  t(`sidepanel.fieldKind.${entry.field.kind}`),
+                  slotLabel,
+                  String(entry.field.frameId),
+                ])}
               </div>
             </div>
             {entry.status !== 'idle' && (
               <span className={`status-tag status-${entry.status}`}>
-                {entry.status}
+                {t(`sidepanel.status.${entry.status}`)}
               </span>
             )}
           </header>
           <div className="field-suggestion">{summary}</div>
-          {entry.slotNote && <div className="field-meta">AI note: {entry.slotNote}</div>}
-          {entry.reason && <div className="field-meta">{entry.reason}</div>}
+          {entry.slotNote && <div className="field-meta">{t('sidepanel.field.aiNote', [entry.slotNote])}</div>}
+          {entry.reason && <div className="field-meta">{formatFillReason(entry.reason)}</div>}
           <div className="field-actions">
             <button
               type="button"
@@ -612,7 +634,7 @@ export default function App() {
               disabled={disabled}
               onClick={() => handleReview(entry)}
             >
-              {entry.field.kind === 'file' ? 'Open picker' : 'Review & fill'}
+              {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.review')}
             </button>
           </div>
         </article>
@@ -622,25 +644,25 @@ export default function App() {
 
   function renderManualMode() {
     if (viewState.loadingProfiles) {
-      return <div className="info-state">Loading profiles…</div>;
+      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
     }
     if (viewState.error) {
-      return <div className="error-state">{viewState.error}</div>;
+      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
     }
     if (!selectedProfile) {
-      return <div className="empty-state">Import a resume to access manual copy helpers.</div>;
+      return <div className="empty-state">{t('sidepanel.states.noProfileManual')}</div>;
     }
     return (
       <div className="manual-grid">
         {manualValues.length === 0 && (
-          <div className="info-state">No structured fields available. Copy from raw text below.</div>
+          <div className="info-state">{t('sidepanel.states.noManualValues')}</div>
         )}
         {manualValues.map((entry) => (
           <section key={entry.slot} className="manual-item">
             <header>
               <span>{formatSlotLabel(entry.slot)}</span>
               <button type="button" onClick={() => handleCopy(formatSlotLabel(entry.slot), entry.value)}>
-                Copy
+                {t('sidepanel.buttons.copy')}
               </button>
             </header>
             <div className="manual-text">{entry.value}</div>
@@ -648,9 +670,9 @@ export default function App() {
         ))}
         <section className="manual-item">
           <header>
-            <span>Raw resume text</span>
-            <button type="button" onClick={() => handleCopy('Raw text', selectedProfile.rawText)}>
-              Copy all
+            <span>{t('sidepanel.manual.rawLabel')}</span>
+            <button type="button" onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}>
+              {t('sidepanel.buttons.copyAll')}
             </button>
           </header>
           <pre className="raw-text">{selectedProfile.rawText}</pre>
@@ -747,9 +769,12 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
 
 function formatProfileLabel(profile: ProfileRecord): string {
   const basics = extractBasics(profile.resume);
-  const name = typeof basics.name === 'string' && basics.name.trim() ? basics.name.trim() : 'Unnamed profile';
+  const name =
+    typeof basics.name === 'string' && basics.name.trim()
+      ? basics.name.trim()
+      : i18n.t('sidepanel.profile.unnamed');
   const created = new Date(profile.createdAt).toLocaleDateString();
-  return `${name} · ${created}`;
+  return i18n.t('sidepanel.profile.label', [name, created]);
 }
 
 function extractBasics(resume: unknown): Record<string, unknown> {
@@ -766,71 +791,71 @@ function extractBasics(resume: unknown): Record<string, unknown> {
 function formatSlotLabel(slot: FieldSlot): string {
   switch (slot) {
     case 'firstName':
-      return 'First name';
+      return i18n.t('slots.firstName');
     case 'lastName':
-      return 'Last name';
+      return i18n.t('slots.lastName');
     case 'email':
-      return 'Email';
+      return i18n.t('slots.email');
     case 'phone':
-      return 'Phone';
+      return i18n.t('slots.phone');
     case 'address':
-      return 'Address';
+      return i18n.t('slots.address');
     case 'website':
-      return 'Website';
+      return i18n.t('slots.website');
     case 'linkedin':
-      return 'LinkedIn';
+      return i18n.t('slots.linkedin');
     case 'github':
-      return 'GitHub';
+      return i18n.t('slots.github');
     case 'city':
-      return 'City';
+      return i18n.t('slots.city');
     case 'country':
-      return 'Country';
+      return i18n.t('slots.country');
     case 'state':
-      return 'State/Province';
+      return i18n.t('slots.state');
     case 'postalCode':
-      return 'Postal code';
+      return i18n.t('slots.postalCode');
     case 'birthDate':
-      return 'Birth date';
+      return i18n.t('slots.birthDate');
     case 'gender':
-      return 'Gender';
+      return i18n.t('slots.gender');
     case 'currentCompany':
-      return 'Current company';
+      return i18n.t('slots.currentCompany');
     case 'currentTitle':
-      return 'Current title';
+      return i18n.t('slots.currentTitle');
     case 'currentLocation':
-      return 'Current location';
+      return i18n.t('slots.currentLocation');
     case 'currentStartDate':
-      return 'Current start date';
+      return i18n.t('slots.currentStartDate');
     case 'currentEndDate':
-      return 'Current end date';
+      return i18n.t('slots.currentEndDate');
     case 'educationSchool':
-      return 'Education school';
+      return i18n.t('slots.educationSchool');
     case 'educationDegree':
-      return 'Education degree';
+      return i18n.t('slots.educationDegree');
     case 'educationField':
-      return 'Field of study';
+      return i18n.t('slots.educationField');
     case 'educationStartDate':
-      return 'Education start date';
+      return i18n.t('slots.educationStartDate');
     case 'educationEndDate':
-      return 'Education end date';
+      return i18n.t('slots.educationEndDate');
     case 'educationGpa':
-      return 'GPA';
+      return i18n.t('slots.educationGpa');
     case 'expectedSalary':
-      return 'Expected salary';
+      return i18n.t('slots.expectedSalary');
     case 'preferredLocation':
-      return 'Preferred location';
+      return i18n.t('slots.preferredLocation');
     case 'availabilityDate':
-      return 'Availability date';
+      return i18n.t('slots.availabilityDate');
     case 'jobType':
-      return 'Job type';
+      return i18n.t('slots.jobType');
     case 'skills':
-      return 'Skills';
+      return i18n.t('slots.skills');
     case 'summary':
-      return 'Summary';
+      return i18n.t('slots.summary');
     case 'headline':
-      return 'Headline';
+      return i18n.t('slots.headline');
     default:
-      return 'Full name';
+      return i18n.t('slots.name');
   }
 }
 

@@ -18,6 +18,6 @@ describe('field adapters', () => {
   });
 
   it('falls back when adapter excluded', () => {
-    expect(resolveSlotFromLabel('联系电话', ['en-default'])).toBeNull();
+    expect(resolveSlotFromLabel('联系电话', ['en_default'])).toBeNull();
   });
 });

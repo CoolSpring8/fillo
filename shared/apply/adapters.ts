@@ -1,9 +1,14 @@
+import type { GeneratedI18nStructure } from '#i18n';
 import type { FieldSlot } from './slotTypes';
+
+type ZeroSubstitutionKey = {
+  [K in keyof GeneratedI18nStructure]: GeneratedI18nStructure[K]['substitutions'] extends 0 ? K : never;
+}[keyof GeneratedI18nStructure];
 
 export interface FieldLabelAdapter {
   id: string;
-  name: string;
-  description?: string;
+  nameKey: ZeroSubstitutionKey;
+  descriptionKey?: ZeroSubstitutionKey;
   matchers: Partial<Record<FieldSlot, RegExp[]>>;
 }
 
@@ -80,14 +85,15 @@ const ZH_CN_MATCHERS: Partial<Record<FieldSlot, RegExp[]>> = {
 
 const DEFAULT_ADAPTERS: FieldLabelAdapter[] = [
   {
-    id: 'en-default',
-    name: 'English (default)',
+    id: 'en_default',
+    nameKey: 'adapters.items.en_default.name',
+    descriptionKey: 'adapters.items.en_default.description',
     matchers: EN_MATCHERS,
   },
   {
-    id: 'zh-cn',
-    name: '中文（简体）',
-    description: '匹配常见中文表单字段标签',
+    id: 'zh_cn',
+    nameKey: 'adapters.items.zh_cn.name',
+    descriptionKey: 'adapters.items.zh_cn.description',
     matchers: ZH_CN_MATCHERS,
   },
 ];

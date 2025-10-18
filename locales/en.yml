@@ -1,0 +1,195 @@
+app:
+  name: Resume Helper
+contextMenu:
+  fill: Fill with Resume Helper…
+options:
+  loading: Loading settings…
+  title: Resume Importer Settings
+  description: Update your preferred provider and credentials. All values are stored locally via browser.storage.
+  provider:
+    heading: Provider
+    onDevice: Chrome on-device (Prompt API)
+    availability: 'Availability: $1'
+    refresh: Refresh
+    openai: OpenAI
+    apiKey: API key
+    model: Model
+    apiBaseUrl: API base URL
+  adapters:
+    heading: Field adapters
+    description: Select the label adapters to apply when classifying form fields. All adapters run locally.
+    items:
+      en_default:
+        name: English (default)
+        description: Matches common English form labels.
+      zh_cn:
+        name: Chinese (Simplified)
+        description: Matches common Chinese form labels.
+  actions:
+    save: Save settings
+    saving: Saving…
+  feedback:
+    saved: Settings saved.
+popup:
+  title: Imported Profiles
+  description: Use onboarding to add resumes. Delete entries you no longer need.
+  loading: Loading profiles…
+  error: Unable to load profiles ($1)
+  empty: No profiles stored yet. Import a PDF via the onboarding page to get started.
+  buttons:
+    openOnboarding: Open onboarding
+    settings: Settings
+    openSidePanel: Open side panel
+    viewDetails: View details
+    hideDetails: Hide details
+    delete: Delete
+  provider:
+    onDevice: Chrome on-device
+    openaiModel: OpenAI ($1)
+    openaiModelWithBase: OpenAI ($1 @ $2)
+    parsed: Parsed $1
+    notParsed: Not parsed yet — run AI parsing for structured data
+  profile:
+    unnamed: Unnamed profile
+    importedAt: Imported $1
+    fileInfo: 'PDF: $1 ($2 bytes) · Raw text: $3 chars'
+    validationWarning: Validation warnings available
+  sections:
+    jsonResume: JSON Resume
+    customFields: Custom fields
+    rawText: Raw text
+    validationWarnings: Validation warnings
+  info:
+    noStructured: No structured resume stored yet. Run AI parsing from onboarding to populate this section.
+    noCustom: No custom fields available without structured parsing.
+sidepanel:
+  title: Resume Helper
+  subtitle: Select a profile and review each field before filling.
+  toolbar:
+    scanning: Scanning…
+    rescan: Rescan page
+    classify: Classify fields
+    classifying: Classifying…
+    fillMapped: Fill mapped fields
+    clearOverlay: Clear overlay
+    manageProfiles: Manage profiles
+  tabs:
+    dom: Field Review
+    manual: Manual Copy
+  states:
+    noProfilesOption: No profiles available
+    loadingProfiles: Loading profiles…
+    error: Unable to load profiles ($1)
+    noProfile: Import a resume in onboarding to populate autofill data.
+    noProfileManual: Import a resume to access manual copy helpers.
+    noFields: No fillable fields detected on this page.
+    noManualValues: No structured fields available. Copy from raw text below.
+  manual:
+    rawLabel: Raw resume text
+  buttons:
+    copy: Copy
+    copyAll: Copy all
+    review: Review & fill
+    openPicker: Open picker
+  feedback:
+    noMapped: No mapped fields ready to fill.
+    autofill:
+      1: Filling 1 field…
+      n: Filling $1 fields…
+    copied: Copied $1
+    noClipboard: Unable to copy to clipboard
+    classificationUpdated: Classification updated
+    noValues: No stored values available. Update the profile first.
+  preview:
+    file: Open the file picker to upload your resume.
+    select: Select a value in the approval panel.
+  field:
+    noLabel: (No label)
+    unmapped: unmapped
+    aiSuffix: (AI)
+    fileSummary: 'File upload: you will be prompted to choose a file.'
+    suggestedProfile: 'Suggested (profile): $1'
+    suggestedAI: 'Suggested (AI): $1'
+    chooseValue: Choose a value in the approval popup.
+    noValues: No stored values available. Update the profile to enable autofill.
+    aiNote: 'AI note: $1'
+    meta: $1 · $2 · frame $3
+  fieldKind:
+    text: text
+    email: email
+    tel: phone
+    number: number
+    date: date
+    select: select
+    textarea: multiline
+    checkbox: checkbox
+    radio: radio
+    file: file
+  status:
+    pending: pending
+    filled: filled
+    skipped: skipped
+    failed: failed
+  reason:
+    frameUnavailable: Frame unavailable
+    missingFrame: Frame unavailable
+    noActiveTab: No active tab
+    missingField: Field missing
+    missingElement: Element missing
+    fillFailed: Fill failed
+    clickFailed: Click failed
+    noSelection: No selection made
+    emptyValue: Value was empty
+  profile:
+    unnamed: Unnamed profile
+    label: $1 · $2
+slots:
+  name: Full name
+  firstName: First name
+  lastName: Last name
+  email: Email
+  phone: Phone
+  city: City
+  country: Country
+  state: State/Province
+  postalCode: Postal code
+  address: Address
+  birthDate: Birth date
+  gender: Gender
+  website: Website
+  linkedin: LinkedIn
+  github: GitHub
+  summary: Summary
+  headline: Headline
+  currentCompany: Current company
+  currentTitle: Current title
+  currentLocation: Current location
+  currentStartDate: Current start date
+  currentEndDate: Current end date
+  educationSchool: Education school
+  educationDegree: Education degree
+  educationField: Field of study
+  educationStartDate: Education start date
+  educationEndDate: Education end date
+  educationGpa: GPA
+  expectedSalary: Expected salary
+  preferredLocation: Preferred location
+  availabilityDate: Availability date
+  jobType: Job type
+  skills: Skills
+overlay:
+  prompt:
+    heading: Suggested value
+    awaitingSelection: Select a value to continue.
+    placeholder: Choose a value…
+    helper: Pick the data to use for this field.
+    fill: Fill
+    skip: Skip
+adapters:
+  items:
+    en_default:
+      name: English (default)
+      description: Matches common English form labels.
+    zh_cn:
+      name: Chinese (Simplified)
+      description: Matches common Chinese form labels.

@@ -86,11 +86,12 @@ export function showPrompt(target: Element, options: PromptOptions): void {
 }
 
 function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
+  const { t } = i18n;
   popover.innerHTML = '';
 
   const heading = document.createElement('div');
   heading.className = 'overlay-title';
-  heading.textContent = options.label.length > 0 ? options.label : 'Suggested value';
+  heading.textContent = options.label.length > 0 ? options.label : t('overlay.prompt.heading');
 
   const body = document.createElement('div');
   body.className = 'overlay-body';
@@ -108,7 +109,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
     } else if (options.preview && options.preview.trim().length > 0) {
       body.textContent = options.preview;
     } else {
-      body.textContent = 'Select a value to continue.';
+      body.textContent = t('overlay.prompt.awaitingSelection');
     }
   };
 
@@ -122,7 +123,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
 
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'Choose a value…';
+    placeholder.textContent = t('overlay.prompt.placeholder');
     select.append(placeholder);
 
     for (const option of normalizeOptions) {
@@ -162,7 +163,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
 
     const helper = document.createElement('div');
     helper.className = 'overlay-helper';
-    helper.textContent = 'Pick the data to use for this field.';
+    helper.textContent = t('overlay.prompt.helper');
 
     controls.append(select, helper);
   } else {
@@ -180,7 +181,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
   fill = document.createElement('button');
   fill.type = 'button';
   fill.className = 'overlay-btn primary';
-  fill.textContent = 'Fill';
+  fill.textContent = t('overlay.prompt.fill');
   fill.disabled = normalizeOptions.length > 0 && (!currentValue || currentValue.trim().length === 0);
   fill.addEventListener('click', (event) => {
     event.preventDefault();
@@ -193,7 +194,7 @@ function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
   const skip = document.createElement('button');
   skip.type = 'button';
   skip.className = 'overlay-btn';
-  skip.textContent = 'Skip';
+  skip.textContent = t('overlay.prompt.skip');
   skip.addEventListener('click', (event) => {
     event.preventDefault();
     options.onSkip();
