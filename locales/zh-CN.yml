@@ -1,11 +1,11 @@
 app:
-  name: 简历助手
+  name: ApplyPilot
 contextMenu:
-  fill: 使用 Resume Helper 自动填写…
+  fill: 使用 ApplyPilot 自动填写…
 options:
   loading: 正在加载设置…
-  title: 简历导入器设置
-  description: 更新首选的解析服务和凭据。所有数据都会保存在浏览器本地。
+  title: ApplyPilot 设置
+  description: ApplyPilot 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
   provider:
     heading: 服务提供方
     onDevice: Chrome 本地模型（Prompt API）
@@ -17,7 +17,7 @@ options:
     apiBaseUrl: API 基础地址
   adapters:
     heading: 字段匹配适配器
-    description: 选择需要启用的字段标签适配器。所有匹配均在本地完成。
+    description: 选择 ApplyPilot 需要启用的字段标签适配器。所有匹配均在本地完成。
     items:
       en_default:
         name: 英文（默认）
@@ -31,8 +31,8 @@ options:
   feedback:
     saved: 设置已保存。
 popup:
-  title: 已导入的简历
-  description: 使用引导页导入简历，可在此管理与删除。
+  title: ApplyPilot 简历
+  description: 在 ApplyPilot 中导入一次，之后可在任何应用流程中重复使用。
   loading: 正在加载简历…
   error: 加载简历失败（$1）
   empty: 尚未保存任何简历，请先在引导页导入 PDF。

@@ -5,13 +5,12 @@ export default defineConfig({
   modules: ['@wxt-dev/i18n/module', '@wxt-dev/module-react'],
   manifest: {
     default_locale: 'en',
-    name: 'Resume Importer',
-    description:
-      'Import resumes from PDF, extract structured JSON Resume data, and store local profiles.',
+    name: 'ApplyPilot',
+    description: 'Turn your resume into effortless job applications. ApplyPilot keeps your experience at your fingertips and lands applications in just a few clicks.',
     version: '0.1.0',
     manifest_version: 3,
     action: {
-      default_title: 'Resume Helper',
+      default_title: 'ApplyPilot',
     },
     options_page: 'options.html',
     permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus'],

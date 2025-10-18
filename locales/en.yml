@@ -1,11 +1,11 @@
 app:
-  name: Resume Helper
+  name: ApplyPilot
 contextMenu:
-  fill: Fill with Resume Helper…
+  fill: Fill with ApplyPilot…
 options:
   loading: Loading settings…
-  title: Resume Importer Settings
-  description: Update your preferred provider and credentials. All values are stored locally via browser.storage.
+  title: ApplyPilot Settings
+  description: ApplyPilot keeps your experience ready to go wherever you apply. Manage your data and adapters here.
   provider:
     heading: Provider
     onDevice: Chrome on-device (Prompt API)
@@ -17,7 +17,7 @@ options:
     apiBaseUrl: API base URL
   adapters:
     heading: Field adapters
-    description: Select the label adapters to apply when classifying form fields. All adapters run locally.
+    description: Choose which label adapters ApplyPilot should use when matching fields. All matching runs locally.
     items:
       en_default:
         name: English (default)
@@ -31,8 +31,8 @@ options:
   feedback:
     saved: Settings saved.
 popup:
-  title: Imported Profiles
-  description: Use onboarding to add resumes. Delete entries you no longer need.
+  title: ApplyPilot Profiles
+  description: Import once in ApplyPilot and reuse it wherever you apply.
   loading: Loading profiles…
   error: Unable to load profiles ($1)
   empty: No profiles stored yet. Import a PDF via the onboarding page to get started.
