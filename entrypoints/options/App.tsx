@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ensureOnDeviceAvailability,
   type LanguageModelAvailability,
@@ -10,6 +10,7 @@ import {
   OPENAI_DEFAULT_BASE_URL,
 } from '../../shared/storage/settings';
 import type { AppSettings } from '../../shared/types';
+import { listAvailableAdapters } from '../../shared/apply/adapters';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -27,6 +28,8 @@ export default function App() {
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [busy, setBusy] = useState(false);
+  const adapters = useMemo(() => listAvailableAdapters(), []);
+  const [activeAdapters, setActiveAdapters] = useState<string[]>(adapters.map((adapter) => adapter.id));
 
   useEffect(() => {
     getSettings().then((settings) => {
@@ -46,6 +49,7 @@ export default function App() {
       setProvider('on-device');
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
     }
+    setActiveAdapters(settings.adapters.length > 0 ? settings.adapters : adapters.map((adapter) => adapter.id));
   };
 
   const handleSave = async () => {
@@ -53,10 +57,11 @@ export default function App() {
     setFeedback(null);
     try {
       const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const selectedAdapters = activeAdapters.length > 0 ? activeAdapters : adapters.map((adapter) => adapter.id);
       const nextSettings: AppSettings =
         provider === 'openai'
-          ? { provider: createOpenAIProvider(apiKey, model, baseUrl) }
-          : { provider: { kind: 'on-device' } };
+          ? { provider: createOpenAIProvider(apiKey, model, baseUrl), adapters: selectedAdapters }
+          : { provider: { kind: 'on-device' }, adapters: selectedAdapters };
       await saveSettings(nextSettings);
       setFeedback({ kind: 'success', message: 'Settings saved.' });
     } catch (error) {
@@ -155,6 +160,36 @@ export default function App() {
             </label>
           </div>
         )}
+      </section>
+
+      <section className="card">
+        <h2>Field adapters</h2>
+        <p>Select the label adapters to apply when classifying form fields. All adapters run locally.</p>
+        <div className="adapter-list">
+          {adapters.map((adapter) => {
+            const checked = activeAdapters.includes(adapter.id);
+            return (
+              <label key={adapter.id} className="field checkbox">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => {
+                    setActiveAdapters((current) => {
+                      if (event.target.checked) {
+                        return Array.from(new Set([...current, adapter.id]));
+                      }
+                      return current.filter((id) => id !== adapter.id);
+                    });
+                  }}
+                />
+                <span>
+                  <strong>{adapter.name}</strong>
+                  {adapter.description && <span className="caption"> — {adapter.description}</span>}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </section>
 
       <div className="actions">

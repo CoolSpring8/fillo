@@ -1,5 +1,5 @@
 import type { ProfileRecord } from '../types';
-import type { FieldSlot } from './slots';
+import type { FieldSlot } from './slotTypes';
 import {
   coerceString,
   getValueByPath,

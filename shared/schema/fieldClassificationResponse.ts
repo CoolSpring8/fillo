@@ -1,4 +1,4 @@
-import type { FieldSlot } from '../apply/slots';
+import type { FieldSlot } from '../apply/slotTypes';
 
 const KNOWN_SLOTS: readonly FieldSlot[] = [
   'name',

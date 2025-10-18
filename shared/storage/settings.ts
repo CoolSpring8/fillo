@@ -1,4 +1,5 @@
 import type { AppSettings, OpenAIProviderConfig, ProviderConfig } from '../types';
+import { getAllAdapterIds } from '../apply/slots';
 
 const SETTINGS_KEY = 'settings:app';
 export const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com';
@@ -7,6 +8,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   provider: {
     kind: 'on-device',
   },
+  adapters: getAllAdapterIds(),
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -15,19 +17,25 @@ export async function getSettings(): Promise<AppSettings> {
   if (!settings) {
     return DEFAULT_SETTINGS;
   }
+  const adapters = Array.isArray(settings.adapters) && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
   if (settings.provider.kind === 'openai') {
     return {
       provider: normalizeOpenAIProvider(settings.provider),
+      adapters,
     };
   }
-  return settings;
+  return {
+    provider: settings.provider,
+    adapters,
+  };
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
+  const adapters = settings.adapters && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
   const normalized: AppSettings =
     settings.provider.kind === 'openai'
-      ? { provider: normalizeOpenAIProvider(settings.provider) }
-      : settings;
+      ? { provider: normalizeOpenAIProvider(settings.provider), adapters }
+      : { provider: settings.provider, adapters };
   await browser.storage.local.set({ [SETTINGS_KEY]: normalized });
 }
 

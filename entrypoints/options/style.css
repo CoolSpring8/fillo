@@ -76,6 +76,28 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.adapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.field.checkbox {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.field.checkbox input[type='checkbox'] {
+  margin-top: 4px;
+}
+
+.field.checkbox .caption {
+  font-weight: normal;
+  color: #52606d;
+  margin-left: 4px;
+}
+
 .availability {
   display: flex;
   align-items: center;

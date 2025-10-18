@@ -15,6 +15,7 @@ import {
   saveSettings,
   OPENAI_DEFAULT_BASE_URL,
 } from '../../shared/storage/settings';
+import { getAllAdapterIds } from '../../shared/apply/slots';
 import { validateResume } from '../../shared/validate';
 import type {
   AppSettings,
@@ -42,11 +43,12 @@ function buildSettings(
   apiKey: string,
   model: string,
   apiBaseUrl: string,
+  adapters: string[],
 ): AppSettings {
   if (kind === 'openai') {
-    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl) };
+    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl), adapters };
   }
-  return { provider: { kind: 'on-device' } };
+  return { provider: { kind: 'on-device' }, adapters };
 }
 
 const providerLabels: Record<'on-device' | 'openai', string> = {
@@ -91,13 +93,15 @@ export default function App() {
     setSelectedProvider(value);
     if (value === 'on-device') {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL);
+      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adapters);
       setSettings(next);
       await saveSettings(next);
     } else {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       setApiBaseUrl(nextBase);
-      const next = buildSettings('openai', apiKey, model, nextBase);
+      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const next = buildSettings('openai', apiKey, model, nextBase, adapters);
       setSettings(next);
       await saveSettings(next);
     }
@@ -107,7 +111,8 @@ export default function App() {
     setApiKey(value);
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const next = buildSettings('openai', value, model, nextBase);
+      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const next = buildSettings('openai', value, model, nextBase, adapters);
       setSettings(next);
       void saveSettings(next);
     }
@@ -117,7 +122,8 @@ export default function App() {
     setModel(value);
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const next = buildSettings('openai', apiKey, value, nextBase);
+      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const next = buildSettings('openai', apiKey, value, nextBase, adapters);
       setSettings(next);
       void saveSettings(next);
     }
@@ -126,7 +132,8 @@ export default function App() {
   const handleApiBaseUrlChange = (value: string) => {
     setApiBaseUrl(value);
     if (selectedProvider === 'openai') {
-      const next = buildSettings('openai', apiKey, model, value);
+      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const next = buildSettings('openai', apiKey, model, value, adapters);
       setSettings(next);
       void saveSettings(next);
     }
@@ -178,11 +185,13 @@ export default function App() {
       await saveProfile(profile);
       setCurrentProfile(profile);
 
+      const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
       const nextSettings = buildSettings(
         selectedProvider,
         apiKey,
         model,
         apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
+        adapterIds,
       );
       setSettings(nextSettings);
       await saveSettings(nextSettings);
@@ -256,11 +265,13 @@ export default function App() {
       await saveProfile(profile);
       setCurrentProfile(profile);
 
+      const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
       const nextSettings = buildSettings(
         selectedProvider,
         apiKey,
         model,
         apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
+        adapterIds,
       );
       setSettings(nextSettings);
       await saveSettings(nextSettings);

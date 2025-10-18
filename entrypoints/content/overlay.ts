@@ -1,6 +1,6 @@
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import type { PromptOption } from '../../shared/apply/types';
-import type { FieldSlot } from '../../shared/apply/slots';
+import type { FieldSlot } from '../../shared/apply/slotTypes';
 
 type OverlayMode = 'highlight' | 'prompt';
 

@@ -1,4 +1,4 @@
-import type { FieldSlot } from '../../shared/apply/slots';
+import type { FieldSlot } from '../../shared/apply/slotTypes';
 import {
   CLASSIFICATION_KNOWN_SLOTS,
   FIELD_CLASSIFICATION_RESPONSE_SCHEMA,

@@ -29,7 +29,7 @@ export interface ScannedField {
   frameUrl: string;
 }
 
-import type { FieldSlot } from './slots';
+import type { FieldSlot } from './slotTypes';
 
 export interface PromptOption {
   slot: FieldSlot;

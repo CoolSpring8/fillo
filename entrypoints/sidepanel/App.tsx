@@ -3,10 +3,16 @@ import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
 import type { FillResultMessage, ScannedField } from '../../shared/apply/types';
-import type { FieldSlot } from '../../shared/apply/slots';
-import { resolveSlotFromAutocomplete, resolveSlotFromLabel } from '../../shared/apply/slots';
+import type { FieldSlot } from '../../shared/apply/slotTypes';
+import {
+  getAllAdapterIds,
+  resolveSlotFromAutocomplete,
+  resolveSlotFromLabel,
+  resolveSlotFromText,
+} from '../../shared/apply/slots';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
 import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
+import { getSettings } from '../../shared/storage/settings';
 
 type PanelMode = 'dom' | 'manual';
 
@@ -75,11 +81,14 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [classifying, setClassifying] = useState(false);
+  const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
+  const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
 
   const portRef = useRef<RuntimePort | null>(null);
   const slotValuesRef = useRef<SlotValueMap>({});
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
+  const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -91,6 +100,10 @@ export default function App() {
   useEffect(() => {
     slotValuesRef.current = slotValues;
   }, [slotValues]);
+
+  useEffect(() => {
+    adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
+  }, [activeAdapterIds, defaultAdapterIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +145,40 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadSettings = async () => {
+      try {
+        const settings = await getSettings();
+        if (cancelled) {
+          return;
+        }
+        setActiveAdapterIds(settings.adapters.length > 0 ? settings.adapters : defaultAdapterIds);
+      } catch (error) {
+        console.warn('Failed to load settings', error);
+      }
+    };
+
+    loadSettings().catch(console.error);
+
+    const listener = (changes: Record<string, unknown>, area: string) => {
+      if (area !== 'local') {
+        return;
+      }
+      if ('settings:app' in changes) {
+        loadSettings().catch(console.error);
+      }
+    };
+
+    browser.storage.onChanged.addListener(listener);
+
+    return () => {
+      cancelled = true;
+      browser.storage.onChanged.removeListener(listener);
+    };
+  }, [defaultAdapterIds]);
+
+  useEffect(() => {
     const port = browser.runtime.connect({ name: 'sidepanel' });
     portRef.current = port;
 
@@ -148,7 +195,7 @@ export default function App() {
         if (scanRequestIdRef.current && parsed.requestId !== scanRequestIdRef.current) {
           return;
         }
-        setFields(buildFieldEntries(parsed.fields, slotValuesRef.current));
+        setFields(buildFieldEntries(parsed.fields, slotValuesRef.current, adapterIdsRef.current));
         setScanning(false);
         const descriptors: FieldDescriptor[] = parsed.fields.map((field) => ({
           id: field.id,
@@ -613,7 +660,7 @@ export default function App() {
   }
 }
 
-function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEntry[] {
+function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters: string[]): FieldEntry[] {
   return fields.map((field) => {
     const slot = resolveSlot(field);
     const suggestion = slot ? slots[slot] : undefined;
@@ -645,9 +692,13 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
     if (byAutocomplete) {
       return byAutocomplete;
     }
-    const byLabel = resolveSlotFromLabel(field.label);
+    const byLabel = resolveSlotFromLabel(field.label, adapters);
     if (byLabel) {
       return byLabel;
+    }
+    const byAdaptersContext = resolveSlotFromText(field.context, adapters);
+    if (byAdaptersContext) {
+      return byAdaptersContext;
     }
     if (hasContext(['email', 'e-mail'])) return 'email';
     if (hasContext(['phone', 'mobile', 'telephone'])) return 'phone';
