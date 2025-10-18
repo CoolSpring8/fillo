@@ -185,6 +185,53 @@ overlay:
     helper: 请选择要填入此字段的数据。
     fill: 填写
     skip: 跳过
+onboarding:
+  title: 简历导入器
+  description: 上传 PDF，可在本地提取简历文本，并可选用 AI 生成结构化数据。
+  buttons:
+    working: 正在处理…
+  upload:
+    heading: 1. 上传简历 PDF
+    button: 提取文本
+    helper: 所有处理都在本次浏览器会话内完成。不支持无法选择文本的扫描版 PDF。
+    latest: 本次提取共获取 $1 个字符的简历文本。
+  parse:
+    heading: 2. （可选）使用 AI 解析
+    helper: 可选择本地模型或 OpenAI 优化结构化数据，随时可重新执行。
+    button: 解析简历
+    needUpload: 请先在上方上传简历以启用解析。
+    summary: 解析结果会将 JSON 简历数据写入存档，便于自动填写。
+  openai:
+    apiKey: API 密钥
+    apiKeyPlaceholder: sk-...
+    model: 模型
+    baseUrl: API 基础地址
+    baseUrlPlaceholder: https://api.openai.com
+    helper: 请求会直接从浏览器发送至 OpenAI。请妥善保管密钥；我们仅在本地保存。
+  provider:
+    onDevice:
+      downloadable: 下载模型后可用（需要用户手动触发）。
+      downloading: 模型正在下载，请保持本页面打开。
+      unavailable: 当前配置或 Chrome 版本不支持本地模型。
+  preview:
+    heading: 3. 预览已保存的数据
+    extracted: 提取的文本
+    parsed: 解析后的 JSON 简历
+    empty: 完成可选解析后才会显示结构化数据。
+  status:
+    extracting: 正在提取 PDF 文本…
+    savingExtraction: 正在本地保存提取结果…
+    extractionComplete: 提取完成！已保存原始文本，可在下方继续执行 AI 解析。
+    extractionFailed: 提取失败。
+    requireApiKey: 解析前请先填写 OpenAI API 密钥。
+    parsing: 正在使用 AI 解析简历…
+    savingParsing: 正在保存结构化简历数据…
+    parsingComplete: 解析完成！请在弹窗中查看结构化信息。
+    parsingFailed: 解析失败。
+  validation:
+    heading: JSON 简历校验警告
+  errors:
+    noText: 未在 PDF 中找到可提取的文本，是否为扫描件？
 adapters:
   items:
     en_default:

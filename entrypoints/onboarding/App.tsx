@@ -51,11 +51,6 @@ function buildSettings(
   return { provider: { kind: 'on-device' }, adapters };
 }
 
-const providerLabels: Record<'on-device' | 'openai', string> = {
-  'on-device': 'Chrome on-device (Prompt API)',
-  openai: 'OpenAI',
-};
-
 export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai'>('on-device');
@@ -71,6 +66,11 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<'extract' | 'parse' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { t } = i18n;
+  const providerLabels: Record<'on-device' | 'openai', string> = {
+    'on-device': t('options.provider.onDevice'),
+    openai: t('options.provider.openai'),
+  };
 
   useEffect(() => {
     getSettings().then((loaded) => {
@@ -165,14 +165,14 @@ export default function App() {
     setValidationErrors([]);
 
     try {
-      setStatus({ phase: 'extracting', message: 'Extracting PDF text…' });
+      setStatus({ phase: 'extracting', message: t('onboarding.status.extracting') });
       const { text } = await extractTextFromPdf(file);
 
       if (!text.trim()) {
-        throw new Error('No extractable text found in the PDF. Is it a scanned document?');
+        throw new Error(t('onboarding.errors.noText'));
       }
 
-      setStatus({ phase: 'saving', message: 'Saving extracted text locally…' });
+      setStatus({ phase: 'saving', message: t('onboarding.status.savingExtraction') });
       const id = crypto.randomUUID();
       const fileRef = await storeFile(id, file);
       const profile: ProfileRecord = {
@@ -198,12 +198,12 @@ export default function App() {
 
       setStatus({
         phase: 'complete',
-        message: 'Extraction complete! Profile saved with raw text. You can optionally parse it below.',
+        message: t('onboarding.status.extractionComplete'),
       });
       resetFileInput();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus({ phase: 'error', message: 'Extraction failed.' });
+      setStatus({ phase: 'error', message: t('onboarding.status.extractionFailed') });
       setErrorDetails(message);
       console.error(error);
     } finally {
@@ -217,7 +217,7 @@ export default function App() {
       return;
     }
     if (selectedProvider === 'openai' && !apiKey) {
-      setStatus({ phase: 'error', message: 'Please provide an OpenAI API key before parsing.' });
+      setStatus({ phase: 'error', message: t('onboarding.status.requireApiKey') });
       setErrorDetails(null);
       return;
     }
@@ -227,7 +227,7 @@ export default function App() {
     setValidationErrors([]);
 
     try {
-      setStatus({ phase: 'parsing', message: 'Parsing resume text with AI…' });
+      setStatus({ phase: 'parsing', message: t('onboarding.status.parsing') });
       const messages = buildResumePrompt(currentProfile.rawText);
 
       let result: ResumeExtractionResult;
@@ -244,7 +244,7 @@ export default function App() {
         providerSnapshot = { kind: 'openai', model, apiBaseUrl: openAiBaseUrl };
       }
 
-      setStatus({ phase: 'saving', message: 'Saving structured resume data…' });
+      setStatus({ phase: 'saving', message: t('onboarding.status.savingParsing') });
       const validation = validateResume(result.resume);
       if (!validation.valid) {
         setValidationErrors(validation.errors ?? []);
@@ -278,11 +278,11 @@ export default function App() {
 
       setStatus({
         phase: 'complete',
-        message: 'Parsing complete! Open the popup to review structured profile data.',
+        message: t('onboarding.status.parsingComplete'),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus({ phase: 'error', message: 'Parsing failed.' });
+      setStatus({ phase: 'error', message: t('onboarding.status.parsingFailed') });
       setErrorDetails(message);
       console.error(error);
     } finally {
@@ -294,22 +294,22 @@ export default function App() {
   const canUseOnDevice = availability !== 'unavailable';
   const onDeviceNote =
     availability === 'downloadable'
-      ? 'Available after model download (requires a user gesture).'
+      ? t('onboarding.provider.onDevice.downloadable')
       : availability === 'downloading'
-        ? 'Model download in progress. Keep this tab open.'
+        ? t('onboarding.provider.onDevice.downloading')
         : availability === 'unavailable'
-          ? 'Not available in this profile or Chrome version.'
+          ? t('onboarding.provider.onDevice.unavailable')
           : null;
 
   return (
     <div className="onboarding-container">
       <header>
-        <h1>Resume Importer</h1>
-        <p>Upload a PDF to extract resume text locally. You can optionally parse it with AI for structured data.</p>
+        <h1>{t('onboarding.title')}</h1>
+        <p>{t('onboarding.description')}</p>
       </header>
 
       <section className="card">
-        <h2>1. Upload Resume PDF</h2>
+        <h2>{t('onboarding.upload.heading')}</h2>
         <input
           ref={fileInputRef}
           type="file"
@@ -321,23 +321,21 @@ export default function App() {
           disabled={busy || !file}
           onClick={handleExtract}
         >
-          {busy && busyAction === 'extract' ? 'Working…' : 'Extract text'}
+          {busy && busyAction === 'extract' ? t('onboarding.buttons.working') : t('onboarding.upload.button')}
         </button>
         <p className="helper-text">
-          All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
+          {t('onboarding.upload.helper')}
         </p>
         {currentProfile && (
           <p className="helper-text">
-            Latest extraction captured {currentProfile.rawText.length.toLocaleString()} characters of resume text.
+            {t('onboarding.upload.latest', [currentProfile.rawText.length.toLocaleString()])}
           </p>
         )}
       </section>
 
       <section className="card">
-        <h2>2. (Optional) Parse With AI</h2>
-        <p className="helper-text">
-          Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
-        </p>
+        <h2>{t('onboarding.parse.heading')}</h2>
+        <p className="helper-text">{t('onboarding.parse.helper')}</p>
         <div className="provider-options">
           <label className={!canUseOnDevice ? 'disabled' : ''}>
             <input
@@ -365,17 +363,17 @@ export default function App() {
           {selectedProvider === 'openai' && (
             <div className="openai-fields">
               <label className="field">
-                API key
+                {t('onboarding.openai.apiKey')}
                 <input
                   type="password"
                   value={apiKey}
-                  placeholder="sk-..."
+                  placeholder={t('onboarding.openai.apiKeyPlaceholder')}
                   onChange={(event) => handleApiKeyChange(event.target.value)}
                   autoComplete="off"
                 />
               </label>
               <label className="field">
-                Model
+                {t('onboarding.openai.model')}
                 <input
                   type="text"
                   value={model}
@@ -383,16 +381,16 @@ export default function App() {
                 />
               </label>
               <label className="field">
-                API base URL
+                {t('onboarding.openai.baseUrl')}
                 <input
                   type="text"
                   value={apiBaseUrl}
                   onChange={(event) => handleApiBaseUrlChange(event.target.value)}
-                  placeholder="https://api.openai.com"
+                  placeholder={t('onboarding.openai.baseUrlPlaceholder')}
                 />
               </label>
               <p className="helper-text">
-                We send requests directly to OpenAI from your browser. Keep API keys private; they are stored locally.
+                {t('onboarding.openai.helper')}
               </p>
             </div>
           )}
@@ -406,34 +404,30 @@ export default function App() {
           }
           onClick={handleParse}
         >
-          {busy && busyAction === 'parse' ? 'Working…' : 'Parse resume'}
+          {busy && busyAction === 'parse' ? t('onboarding.buttons.working') : t('onboarding.parse.button')}
         </button>
         {!currentProfile && (
-          <p className="helper-text">Upload a resume above to enable parsing.</p>
+          <p className="helper-text">{t('onboarding.parse.needUpload')}</p>
         )}
         {currentProfile && (
-          <p className="helper-text">
-            Parsing updates the stored profile with JSON Resume data for autofill workflows.
-          </p>
+          <p className="helper-text">{t('onboarding.parse.summary')}</p>
         )}
       </section>
 
       {currentProfile && (
         <section className="card">
-          <h2>3. Preview Stored Data</h2>
+          <h2>{t('onboarding.preview.heading')}</h2>
           <div className="preview-section">
             <div className="preview-block">
-              <h3>Extracted text</h3>
+              <h3>{t('onboarding.preview.extracted')}</h3>
               <pre className="preview-pre preview-text">{currentProfile.rawText}</pre>
             </div>
             <div className="preview-block">
-              <h3>Parsed JSON Resume</h3>
+              <h3>{t('onboarding.preview.parsed')}</h3>
               {currentProfile.provider ? (
                 <pre className="preview-pre">{JSON.stringify(currentProfile.resume ?? {}, null, 2)}</pre>
               ) : (
-                <p className="helper-text">
-                  Run parsing to populate structured resume data. This stays empty until you complete the optional step.
-                </p>
+                <p className="helper-text">{t('onboarding.preview.empty')}</p>
               )}
             </div>
           </div>
@@ -449,7 +443,7 @@ export default function App() {
 
       {validationErrors.length > 0 && (
         <section className="status warning">
-          <strong>JSON Resume validation warnings</strong>
+          <strong>{t('onboarding.validation.heading')}</strong>
           <ul>
             {validationErrors.map((item) => (
               <li key={item}>{item}</li>

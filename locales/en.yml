@@ -185,6 +185,53 @@ overlay:
     helper: Pick the data to use for this field.
     fill: Fill
     skip: Skip
+onboarding:
+  title: Resume Importer
+  description: Upload a PDF to extract resume text locally. You can optionally parse it with AI for structured data.
+  buttons:
+    working: Working…
+  upload:
+    heading: 1. Upload Resume PDF
+    button: Extract text
+    helper: All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
+    latest: Latest extraction captured $1 characters of resume text.
+  parse:
+    heading: 2. (Optional) Parse With AI
+    helper: Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
+    button: Parse resume
+    needUpload: Upload a resume above to enable parsing.
+    summary: Parsing updates the stored profile with JSON Resume data for autofill workflows.
+  openai:
+    apiKey: API key
+    apiKeyPlaceholder: sk-...
+    model: Model
+    baseUrl: API base URL
+    baseUrlPlaceholder: https://api.openai.com
+    helper: We send requests directly to OpenAI from your browser. Keep API keys private; they are stored locally.
+  provider:
+    onDevice:
+      downloadable: Available after model download (requires a user gesture).
+      downloading: Model download in progress. Keep this tab open.
+      unavailable: Not available in this profile or Chrome version.
+  preview:
+    heading: 3. Preview Stored Data
+    extracted: Extracted text
+    parsed: Parsed JSON Resume
+    empty: Run parsing to populate structured resume data. This stays empty until you complete the optional step.
+  status:
+    extracting: Extracting PDF text…
+    savingExtraction: Saving extracted text locally…
+    extractionComplete: Extraction complete! Profile saved with raw text. You can optionally parse it below.
+    extractionFailed: Extraction failed.
+    requireApiKey: Please provide an OpenAI API key before parsing.
+    parsing: Parsing resume text with AI…
+    savingParsing: Saving structured resume data…
+    parsingComplete: Parsing complete! Open the popup to review structured profile data.
+    parsingFailed: Parsing failed.
+  validation:
+    heading: JSON Resume validation warnings
+  errors:
+    noText: No extractable text found in the PDF. Is it a scanned document?
 adapters:
   items:
     en_default:

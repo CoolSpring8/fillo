@@ -586,9 +586,11 @@ export default function App() {
     return fields.map((entry) => {
       const hasOptions = slotOptions.length > 0;
       const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
-      const slotLabel = entry.slot
-        ? `${t(`slots.${entry.slot}`)}${entry.slotSource === 'model' ? ` ${t('sidepanel.field.aiSuffix')}` : ''}`
-        : t('sidepanel.field.unmapped');
+      const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
+      const slotLabel =
+        entry.slot && entry.slotSource === 'model'
+          ? `${baseSlotLabel}${t('sidepanel.field.aiSuffix')}`
+          : baseSlotLabel;
       const summary =
         entry.field.kind === 'file'
           ? t('sidepanel.field.fileSummary')
