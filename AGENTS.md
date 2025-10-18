@@ -4,6 +4,7 @@
 - `entrypoints/` holds browser extension surfaces: `background.ts`, `content.ts`, and the React popup under `popup/`.
 - `assets/` stores reusable media referenced via the `@/` alias; `public/` contains shipped icons and static files copied as-is.
 - `tests/` collects Vitest suites; mirror entrypoint names (e.g., `tests/popup/`) as coverage grows.
+- Localize UI through `@wxt-dev/i18n`; keep messages in `locales/*.yml` and avoid hardcoding visible strings.
 - Build configuration lives in `wxt.config.ts`; TypeScript options extend WXT defaults through `tsconfig.json`.
 - Keep feature-specific utilities near their entrypoint, creating subdirectories inside `entrypoints/` when logic grows.
 
