@@ -37,11 +37,32 @@ const MANUAL_SLOTS: FieldSlot[] = [
   'summary',
   'email',
   'phone',
+  'address',
   'website',
   'linkedin',
   'github',
   'city',
   'country',
+  'state',
+  'postalCode',
+  'birthDate',
+  'gender',
+  'currentCompany',
+  'currentTitle',
+  'currentLocation',
+  'currentStartDate',
+  'currentEndDate',
+  'educationSchool',
+  'educationDegree',
+  'educationField',
+  'educationStartDate',
+  'educationEndDate',
+  'educationGpa',
+  'expectedSalary',
+  'preferredLocation',
+  'availabilityDate',
+  'jobType',
+  'skills',
 ];
 
 export default function App() {
@@ -560,6 +581,7 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
       const tokens = Array.isArray(token) ? token : [token];
       return tokens.some((entry) => label.includes(entry));
     };
+    const contextIncludesAll = (tokens: string[]) => tokens.every((entry) => context.includes(entry));
 
     const byAutocomplete = resolveSlotFromAutocomplete(field.autocomplete);
     if (byAutocomplete) {
@@ -571,6 +593,27 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
     }
     if (hasContext(['email', 'e-mail'])) return 'email';
     if (hasContext(['phone', 'mobile', 'telephone'])) return 'phone';
+    if (hasContext(['address', 'street address'])) return 'address';
+    if (hasContext(['postal code', 'zip'])) return 'postalCode';
+    if (hasContext(['state', 'province', 'region'])) return 'state';
+    if (hasContext(['date of birth', 'birth date', 'dob', 'birthday'])) return 'birthDate';
+    if (hasContext(['gender', 'sex'])) return 'gender';
+    if (hasContext(['current company', 'employer']) || hasLabel(['current company', 'employer'])) return 'currentCompany';
+    if (hasContext(['current title', 'job title', 'position']) || hasLabel(['job title', 'position'])) return 'currentTitle';
+    if (hasContext(['current location', 'work location'])) return 'currentLocation';
+    if (contextIncludesAll(['employment', 'start']) || hasContext(['employment start', 'work start'])) return 'currentStartDate';
+    if (contextIncludesAll(['employment', 'end']) || hasContext(['employment end', 'work end', 'last day'])) return 'currentEndDate';
+    if (hasContext(['school', 'university', 'college', 'institution'])) return 'educationSchool';
+    if (hasContext(['degree', 'qualification', 'study type'])) return 'educationDegree';
+    if (hasContext(['major', 'field of study', 'discipline'])) return 'educationField';
+    if (hasContext(['enrollment', 'education start'])) return 'educationStartDate';
+    if (hasContext(['graduation', 'completion'])) return 'educationEndDate';
+    if (hasContext(['gpa', 'grade point', 'grade'])) return 'educationGpa';
+    if (hasContext(['expected salary', 'desired salary', 'salary expectation'])) return 'expectedSalary';
+    if (hasContext(['preferred location', 'desired location', 'target location'])) return 'preferredLocation';
+    if (hasContext(['availability', 'available from', 'available date'])) return 'availabilityDate';
+    if (hasContext(['employment type', 'job type'])) return 'jobType';
+    if (hasContext(['skill'])) return 'skills';
 
     if (field.kind === 'email') return 'email';
     if (field.kind === 'tel') return 'phone';
@@ -621,6 +664,8 @@ function formatSlotLabel(slot: FieldSlot): string {
       return 'Email';
     case 'phone':
       return 'Phone';
+    case 'address':
+      return 'Address';
     case 'website':
       return 'Website';
     case 'linkedin':
@@ -631,6 +676,46 @@ function formatSlotLabel(slot: FieldSlot): string {
       return 'City';
     case 'country':
       return 'Country';
+    case 'state':
+      return 'State/Province';
+    case 'postalCode':
+      return 'Postal code';
+    case 'birthDate':
+      return 'Birth date';
+    case 'gender':
+      return 'Gender';
+    case 'currentCompany':
+      return 'Current company';
+    case 'currentTitle':
+      return 'Current title';
+    case 'currentLocation':
+      return 'Current location';
+    case 'currentStartDate':
+      return 'Current start date';
+    case 'currentEndDate':
+      return 'Current end date';
+    case 'educationSchool':
+      return 'Education school';
+    case 'educationDegree':
+      return 'Education degree';
+    case 'educationField':
+      return 'Field of study';
+    case 'educationStartDate':
+      return 'Education start date';
+    case 'educationEndDate':
+      return 'Education end date';
+    case 'educationGpa':
+      return 'GPA';
+    case 'expectedSalary':
+      return 'Expected salary';
+    case 'preferredLocation':
+      return 'Preferred location';
+    case 'availabilityDate':
+      return 'Availability date';
+    case 'jobType':
+      return 'Job type';
+    case 'skills':
+      return 'Skills';
     case 'summary':
       return 'Summary';
     case 'headline':

@@ -1,64 +1,202 @@
 import type { ProfileRecord } from '../types';
 import type { FieldSlot } from './slots';
+import {
+  coerceString,
+  getValueByPath,
+  normalizeDate,
+  normalizeEnum,
+  toPrimaryArray,
+} from './value';
 
 export type SlotValueMap = Partial<Record<FieldSlot, string>>;
+
+interface SlotContext {
+  profile: ProfileRecord;
+  resume?: Record<string, unknown>;
+  basics?: Record<string, unknown>;
+  location?: Record<string, unknown>;
+  work: Record<string, unknown>[];
+  education: Record<string, unknown>[];
+  custom?: Record<string, unknown>;
+}
+
+interface SlotDefinition {
+  slot: FieldSlot;
+  resolver: (context: SlotContext) => string | undefined;
+}
+
+const SLOT_DEFINITIONS: SlotDefinition[] = [
+  { slot: 'name', resolver: ({ basics }) => readString(basics?.name) },
+  {
+    slot: 'firstName',
+    resolver: ({ basics }) => deriveNameParts(basics).firstName,
+  },
+  {
+    slot: 'lastName',
+    resolver: ({ basics }) => deriveNameParts(basics).lastName,
+  },
+  { slot: 'headline', resolver: ({ basics }) => readString(basics?.label) },
+  { slot: 'summary', resolver: ({ basics }) => readString(basics?.summary) },
+  { slot: 'email', resolver: ({ basics }) => readString(basics?.email) },
+  { slot: 'phone', resolver: ({ basics }) => readString(basics?.phone) },
+  { slot: 'website', resolver: ({ basics }) => readString(basics?.url) },
+  {
+    slot: 'address',
+    resolver: ({ location }) =>
+      readString(location?.address) ??
+      joinLocation([location?.address, location?.streetAddress]),
+  },
+  { slot: 'city', resolver: ({ location }) => readString(location?.city) },
+  { slot: 'state', resolver: ({ location }) => readString(location?.region ?? location?.state) },
+  { slot: 'country', resolver: ({ location }) => readString(location?.country) },
+  { slot: 'postalCode', resolver: ({ location }) => readString(location?.postalCode ?? location?.zip) },
+  {
+    slot: 'birthDate',
+    resolver: ({ basics }) => normalizeDate(basics?.birthdate ?? basics?.birthday),
+  },
+  {
+    slot: 'gender',
+    resolver: ({ basics }) =>
+      normalizeEnum(basics?.gender, 'gender') ?? readString(basics?.gender),
+  },
+  {
+    slot: 'linkedin',
+    resolver: ({ basics }) => collectProfiles(toPrimaryArray(basics?.profiles)).linkedin,
+  },
+  {
+    slot: 'github',
+    resolver: ({ basics }) => collectProfiles(toPrimaryArray(basics?.profiles)).github,
+  },
+  {
+    slot: 'currentCompany',
+    resolver: ({ work }) => coerceString(getValueByPath(work, '0.name')),
+  },
+  {
+    slot: 'currentTitle',
+    resolver: ({ work }) => coerceString(getValueByPath(work, '0.position') ?? getValueByPath(work, '0.title')),
+  },
+  {
+    slot: 'currentLocation',
+    resolver: ({ work }) => composeLocation(extractObject(getValueByPath(work, '0.location'))),
+  },
+  {
+    slot: 'currentStartDate',
+    resolver: ({ work }) => normalizeDate(getValueByPath(work, '0.startDate')),
+  },
+  {
+    slot: 'currentEndDate',
+    resolver: ({ work }) => normalizeDate(getValueByPath(work, '0.endDate')),
+  },
+  {
+    slot: 'educationSchool',
+    resolver: ({ education }) =>
+      coerceString(getValueByPath(education, '0.institution') ?? getValueByPath(education, '0.school')),
+  },
+  {
+    slot: 'educationDegree',
+    resolver: ({ education }) =>
+      coerceString(getValueByPath(education, '0.studyType') ?? getValueByPath(education, '0.degree')),
+  },
+  {
+    slot: 'educationField',
+    resolver: ({ education }) =>
+      coerceString(getValueByPath(education, '0.area') ?? getValueByPath(education, '0.major')),
+  },
+  {
+    slot: 'educationStartDate',
+    resolver: ({ education }) => normalizeDate(getValueByPath(education, '0.startDate')),
+  },
+  {
+    slot: 'educationEndDate',
+    resolver: ({ education }) => normalizeDate(getValueByPath(education, '0.endDate')),
+  },
+  {
+    slot: 'educationGpa',
+    resolver: ({ education }) => coerceString(getValueByPath(education, '0.score') ?? getValueByPath(education, '0.gpa')),
+  },
+  {
+    slot: 'expectedSalary',
+    resolver: ({ basics, custom }) =>
+      coerceString(basics?.expectedSalary ?? basics?.salary ?? custom?.expectedSalary ?? custom?.salaryExpectation),
+  },
+  {
+    slot: 'preferredLocation',
+    resolver: ({ basics, custom }) => composeLocation(extractObject(custom?.preferredLocation) ?? extractObject(basics?.location)),
+  },
+  {
+    slot: 'availabilityDate',
+    resolver: ({ basics, custom }) =>
+      normalizeDate(basics?.availabilityDate ?? basics?.startDate ?? custom?.availabilityDate),
+  },
+  {
+    slot: 'jobType',
+    resolver: ({ basics, custom }) =>
+      normalizeEnum(basics?.employmentType ?? basics?.jobType ?? custom?.jobType, 'jobType') ??
+      coerceString(basics?.employmentType ?? basics?.jobType ?? custom?.jobType),
+  },
+  {
+    slot: 'skills',
+    resolver: ({ resume }) => {
+      const entries = toPrimaryArray(resume?.skills).map((entry) => extractObject(entry));
+      if (entries.length === 0) {
+        return undefined;
+      }
+      const tokens = entries
+        .map((entry) => {
+          if (!entry) {
+            return undefined;
+          }
+          const name = coerceString(entry.name);
+          const keywords = Array.isArray(entry.keywords)
+            ? (entry.keywords as unknown[]).map((item) => coerceString(item)).filter(Boolean)
+            : [];
+          const combined = [name, ...keywords].filter(Boolean) as string[];
+          if (combined.length === 0) {
+            return undefined;
+          }
+          return combined.join(', ');
+        })
+        .filter(Boolean);
+      if (tokens.length === 0) {
+        return undefined;
+      }
+      return tokens.join(' | ');
+    },
+  },
+];
 
 export function buildSlotValues(profile: ProfileRecord | null | undefined): SlotValueMap {
   if (!profile) {
     return {};
   }
 
-  const slots: SlotValueMap = {};
   const resume = extractObject(profile.resume);
-  const basics = extractObject(resume?.['basics']);
+  const basics = extractObject(resume?.basics);
+  const location = extractObject(basics?.location);
+  const work = toPrimaryArray(resume?.work).map((entry) => extractObject(entry) ?? {});
+  const education = toPrimaryArray(resume?.education).map((entry) => extractObject(entry) ?? {});
+  const custom = extractObject(profile.custom);
 
-  if (typeof basics?.name === 'string') {
-    slots.name = basics.name.trim();
-  }
+  const context: SlotContext = {
+    profile,
+    resume,
+    basics,
+    location,
+    work,
+    education,
+    custom,
+  };
 
-  if (typeof basics?.label === 'string') {
-    slots.headline = basics.label.trim();
-  }
+  const slots: SlotValueMap = {};
 
-  if (typeof basics?.summary === 'string') {
-    slots.summary = basics.summary.trim();
-  }
-
-  if (typeof basics?.email === 'string') {
-    slots.email = basics.email.trim();
-  }
-
-  if (typeof basics?.phone === 'string') {
-    slots.phone = basics.phone.trim();
-  }
-
-  if (typeof basics?.url === 'string') {
-    slots.website = basics.url.trim();
-  }
-
-  const location = extractObject(basics?.['location']);
-  if (typeof location?.city === 'string') {
-    slots.city = location.city.trim();
-  }
-  if (typeof location?.country === 'string') {
-    slots.country = location.country.trim();
-  }
-
-  const nameParts = deriveNameParts(basics);
-  if (nameParts.firstName && !slots.firstName) {
-    slots.firstName = nameParts.firstName;
-  }
-  if (nameParts.lastName && !slots.lastName) {
-    slots.lastName = nameParts.lastName;
-  }
-
-  const profiles = Array.isArray(basics?.['profiles']) ? (basics?.['profiles'] as unknown[]) : [];
-  const profileUrls = collectProfiles(profiles);
-  if (profileUrls.linkedin) {
-    slots.linkedin = profileUrls.linkedin;
-  }
-  if (profileUrls.github) {
-    slots.github = profileUrls.github;
+  for (const definition of SLOT_DEFINITIONS) {
+    if (slots[definition.slot]) {
+      continue;
+    }
+    const value = definition.resolver(context);
+    if (value) {
+      slots[definition.slot] = value;
+    }
   }
 
   return slots;
@@ -155,4 +293,29 @@ function readString(value: unknown): string | undefined {
     return value.trim();
   }
   return undefined;
+}
+
+function joinLocation(parts: Array<unknown>): string | undefined {
+  const tokens = parts
+    .map((part) => coerceString(part))
+    .filter(Boolean) as string[];
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  return tokens.join(', ');
+}
+
+function composeLocation(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) {
+    return undefined;
+  }
+  const tokens = [
+    coerceString(record.city),
+    coerceString(record.region ?? record.state),
+    coerceString(record.country),
+  ].filter(Boolean) as string[];
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  return tokens.join(', ');
 }
