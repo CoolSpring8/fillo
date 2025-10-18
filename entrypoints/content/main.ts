@@ -133,6 +133,41 @@ export default defineContentScript({
         return;
       }
 
+      if (message.mode === 'auto') {
+        const element = getElement(message.fieldId);
+        const value = typeof message.value === 'string' ? message.value : '';
+        if (!element || !(element instanceof HTMLElement)) {
+          send({
+            kind: 'FILL_RESULT',
+            requestId: message.requestId,
+            fieldId: message.fieldId,
+            status: 'failed',
+            reason: 'missing-element',
+          });
+          return;
+        }
+        if (!value.trim()) {
+          send({
+            kind: 'FILL_RESULT',
+            requestId: message.requestId,
+            fieldId: message.fieldId,
+            status: 'failed',
+            reason: 'empty-value',
+          });
+          return;
+        }
+        const filled = fillField(message.fieldId, value);
+        send({
+          kind: 'FILL_RESULT',
+          requestId: message.requestId,
+          fieldId: message.fieldId,
+          status: filled ? 'filled' : 'failed',
+          reason: filled ? undefined : 'fill-failed',
+        });
+        clearOverlay();
+        return;
+      }
+
       const element = getElement(message.fieldId);
       if (!element || !(element instanceof HTMLElement)) {
         send({

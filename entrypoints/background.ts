@@ -207,7 +207,14 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
   const value = typeof payload.value === 'string' ? payload.value : undefined;
   const preview = typeof payload.preview === 'string' ? payload.preview : undefined;
   const label = typeof payload.label === 'string' ? payload.label : '';
-  const mode = payload.mode === 'click' ? 'click' : 'fill';
+  let mode: PromptFillRequest['mode'];
+  if (payload.mode === 'click') {
+    mode = 'click';
+  } else if (payload.mode === 'auto') {
+    mode = 'auto';
+  } else {
+    mode = 'fill';
+  }
   const options = Array.isArray(payload.options)
     ? (payload.options as Record<string, unknown>[])
         .map((entry) => {

@@ -42,7 +42,7 @@ export interface PromptFillRequest {
   fieldId: string;
   frameId: number;
   label: string;
-  mode: 'fill' | 'click';
+  mode: 'fill' | 'click' | 'auto';
   value?: string;
   preview?: string;
   options?: PromptOption[];

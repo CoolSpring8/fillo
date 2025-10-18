@@ -198,13 +198,54 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [feedback]);
 
-  const sendMessage = (payload: Record<string, unknown>) => {
+  const sendMessage = useCallback((payload: Record<string, unknown>) => {
     const port = portRef.current;
     if (!port) {
       return;
     }
     port.postMessage(payload);
-  };
+  }, []);
+
+  const handleAutoFill = useCallback(() => {
+    const targets = fields.filter(
+      (entry) =>
+        entry.field.kind !== 'file' &&
+        entry.suggestion &&
+        entry.suggestion.trim().length > 0 &&
+        entry.status !== 'pending' &&
+        entry.status !== 'filled',
+    );
+    if (targets.length === 0) {
+      setFeedback('No mapped fields ready to fill.');
+      return;
+    }
+    const pendingIds = new Set<string>();
+    for (const target of targets) {
+      const requestId = crypto.randomUUID();
+      pendingIds.add(target.field.id);
+      sendMessage({
+        kind: 'PROMPT_FILL',
+        requestId,
+        fieldId: target.field.id,
+        frameId: target.field.frameId,
+        label: target.field.label,
+        mode: 'auto',
+        value: target.suggestion ?? '',
+      });
+    }
+    setFields((current) =>
+      current.map((entry) =>
+        pendingIds.has(entry.field.id)
+          ? {
+              ...entry,
+              status: 'pending',
+              reason: undefined,
+            }
+          : entry,
+      ),
+    );
+    setFeedback(`Filling ${targets.length} field${targets.length > 1 ? 's' : ''}…`);
+  }, [fields, sendMessage]);
 
   const requestScan = () => {
     if (!portRef.current) {
@@ -411,6 +452,23 @@ export default function App() {
             disabled={classifying || fields.length === 0}
           >
             {classifying ? 'Classifying…' : 'Classify fields'}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={handleAutoFill}
+            disabled={
+              fields.every(
+                (entry) =>
+                  entry.field.kind === 'file' ||
+                  !entry.suggestion ||
+                  entry.suggestion.trim().length === 0 ||
+                  entry.status === 'pending' ||
+                  entry.status === 'filled',
+              ) || fields.length === 0
+            }
+          >
+            Fill mapped fields
           </button>
           <button type="button" className="secondary" onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}>
             Clear overlay
