@@ -38,7 +38,7 @@ export interface ProfileRecord {
   createdAt: string;
   provider?: ProviderSnapshot;
   parsedAt?: string;
-  sourceFile: StoredFileReference;
+  sourceFile?: StoredFileReference;
   rawText: string;
   resume?: unknown;
   custom?: Record<string, unknown>;

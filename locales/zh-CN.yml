@@ -53,6 +53,7 @@ popup:
     unnamed: 未命名的简历
     importedAt: 导入时间：$1
     fileInfo: 'PDF：$1（$2 字节）· 原文字符数：$3'
+    manualInfo: 手动创建 · 原文字符数：$1
     validationWarning: 存在校验警告
   sections:
     jsonResume: JSON 简历
@@ -188,21 +189,38 @@ overlay:
     fill: 填写
     skip: 跳过
 onboarding:
-  title: 简历导入器
-  description: 上传 PDF，可在本地提取简历文本，并可选用 AI 生成结构化数据。
+  title: 简历工作台
+  description: 导入简历、使用 AI 解析，并维护结构化数据以便自动填写。
   buttons:
     working: 正在处理…
+  manage:
+    heading: 档案列表
+    count: 已保存档案：$1
+    addProfile: 新增档案
+    loading: 正在加载档案…
+    error: 无法加载档案（$1）
+    empty: 暂无档案，可上传简历或手动创建。
+    delete: 删除
+    unnamed: 未命名档案
+    summary: 创建于 $1 · $2 个字符
+    summaryWithFile: 创建于 $1 · $2 · $3 个字符
+    notParsed: 尚未解析
+    parsedOpenAI: 已使用 $1 解析
+    parsedOpenAIAt: 已使用 $1 解析 · $2
+    parsedOnDevice: 已使用本地模型解析
+    parsedOnDeviceAt: 已使用本地模型解析 · $1
   upload:
     heading: 1. 上传简历 PDF
     button: 提取文本
     helper: 所有处理都在本次浏览器会话内完成。不支持无法选择文本的扫描版 PDF。
-    latest: 本次提取共获取 $1 个字符的简历文本。
+    current: 当前档案 "$1" 包含 $2 个字符的原始文本。
   parse:
     heading: 2. （可选）使用 AI 解析
     helper: 可选择本地模型或 OpenAI 优化结构化数据，随时可重新执行。
     button: 解析简历
-    needUpload: 请先在上方上传简历以启用解析。
-    summary: 解析结果会将 JSON 简历数据写入存档，便于自动填写。
+    needProfile: 请选择或创建一个档案以启用解析。
+    needsSave: 解析前请先保存修改。
+    summary: 解析结果会将 JSON 简历数据写入 "$1"，便于自动填写。
   openai:
     apiKey: API 密钥
     apiKeyPlaceholder: sk-...
@@ -215,21 +233,34 @@ onboarding:
       downloadable: 下载模型后可用（需要用户手动触发）。
       downloading: 模型正在下载，请保持本页面打开。
       unavailable: 当前配置或 Chrome 版本不支持本地模型。
-  preview:
-    heading: 3. 预览已保存的数据
-    extracted: 提取的文本
-    parsed: 解析后的 JSON 简历
-    empty: 完成可选解析后才会显示结构化数据。
+  edit:
+    heading: 编辑 "$1"
+    helper: 原始文本长度：$1 个字符。
+    rawLabel: 原始简历文本
+    rawSummary: $1 个字符
+    resumeLabel: 结构化简历（JSON）
+    resumeHelper: 可粘贴或编辑 JSON Resume 字段，留空表示清除结构化数据。
+    customLabel: 自定义字段（JSON）
+    customHelper: 添加希望在自动填写中使用的额外字段。
+    save: 保存修改
+    reset: 重置
+    invalidJson: JSON 无效，请检查括号和引号后重试。
   status:
     extracting: 正在提取 PDF 文本…
     savingExtraction: 正在本地保存提取结果…
     extractionComplete: 提取完成！已保存原始文本，可在下方继续执行 AI 解析。
     extractionFailed: 提取失败。
     requireApiKey: 解析前请先填写 OpenAI API 密钥。
+    saveBeforeParse: 解析前请先保存修改。
     parsing: 正在使用 AI 解析简历…
     savingParsing: 正在保存结构化简历数据…
     parsingComplete: 解析完成！请在弹窗中查看结构化信息。
     parsingFailed: 解析失败。
+    profileDeleted: 已删除档案。
+    profileCreated: 已创建空白档案，请填写简历内容后保存。
+    savingEdits: 正在保存修改…
+    savedEdits: 修改已保存。
+    editFailed: 保存修改失败。
   validation:
     heading: JSON 简历校验警告
   errors:

@@ -89,6 +89,13 @@ export default function App() {
         ? `${providerLabel} · ${parsedLabel}`
         : providerLabel
       : t('popup.provider.notParsed');
+    const fileSummary = profile.sourceFile
+      ? t('popup.profile.fileInfo', [
+          profile.sourceFile.name,
+          profile.sourceFile.size.toLocaleString(),
+          profile.rawText.length.toLocaleString(),
+        ])
+      : t('popup.profile.manualInfo', [profile.rawText.length.toLocaleString()]);
 
     return (
       <article key={profile.id} className="profile-card">
@@ -102,11 +109,7 @@ export default function App() {
               {parsingSummary}
             </span>
             <span className="profile-subline">
-              {t('popup.profile.fileInfo', [
-                profile.sourceFile.name,
-                profile.sourceFile.size.toLocaleString(),
-                profile.rawText.length.toLocaleString(),
-              ])}
+              {fileSummary}
             </span>
             {profile.validation && !profile.validation.valid && (
               <span className="profile-warning">{t('popup.profile.validationWarning')}</span>

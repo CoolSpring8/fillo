@@ -53,6 +53,7 @@ popup:
     unnamed: Unnamed profile
     importedAt: Imported $1
     fileInfo: 'PDF: $1 ($2 bytes) · Raw text: $3 chars'
+    manualInfo: 'Manual profile · Raw text: $1 chars'
     validationWarning: Validation warnings available
   sections:
     jsonResume: JSON Resume
@@ -188,21 +189,38 @@ overlay:
     fill: Fill
     skip: Skip
 onboarding:
-  title: Resume Importer
-  description: Upload a PDF to extract resume text locally. You can optionally parse it with AI for structured data.
+  title: Resume Workspace
+  description: Import resumes, parse them with AI, and curate structured data for autofill.
   buttons:
     working: Working…
+  manage:
+    heading: Profiles
+    count: 'Stored profiles: $1'
+    addProfile: Add profile
+    loading: Loading profiles…
+    error: Unable to load profiles ($1)
+    empty: No profiles yet. Upload a resume or create one manually.
+    delete: Delete
+    unnamed: Untitled profile
+    summary: Created $1 · $2 characters
+    summaryWithFile: Created $1 · $2 · $3 characters
+    notParsed: Not parsed yet
+    parsedOpenAI: Parsed with $1
+    parsedOpenAIAt: Parsed with $1 · $2
+    parsedOnDevice: Parsed on-device
+    parsedOnDeviceAt: Parsed on-device · $1
   upload:
     heading: 1. Upload Resume PDF
     button: Extract text
     helper: All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
-    latest: Latest extraction captured $1 characters of resume text.
+    current: Active profile "$1" has $2 characters of raw text.
   parse:
     heading: 2. (Optional) Parse With AI
     helper: Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
     button: Parse resume
-    needUpload: Upload a resume above to enable parsing.
-    summary: Parsing updates the stored profile with JSON Resume data for autofill workflows.
+    needProfile: Select or create a profile to enable parsing.
+    needsSave: Save your edits before parsing.
+    summary: Parsing updates "$1" with JSON Resume data for autofill workflows.
   openai:
     apiKey: API key
     apiKeyPlaceholder: sk-...
@@ -215,21 +233,34 @@ onboarding:
       downloadable: Available after model download (requires a user gesture).
       downloading: Model download in progress. Keep this tab open.
       unavailable: Not available in this profile or Chrome version.
-  preview:
-    heading: 3. Preview Stored Data
-    extracted: Extracted text
-    parsed: Parsed JSON Resume
-    empty: Run parsing to populate structured resume data. This stays empty until you complete the optional step.
+  edit:
+    heading: Edit "$1"
+    helper: 'Raw text length: $1 characters.'
+    rawLabel: Raw resume text
+    rawSummary: $1 characters
+    resumeLabel: Structured resume (JSON)
+    resumeHelper: Paste or edit JSON Resume fields. Leave blank to clear structured data.
+    customLabel: Custom fields (JSON)
+    customHelper: Add any additional fields you want available during autofill.
+    save: Save changes
+    reset: Reset
+    invalidJson: Invalid JSON. Check for balanced braces and quotes, then try again.
   status:
     extracting: Extracting PDF text…
     savingExtraction: Saving extracted text locally…
     extractionComplete: Extraction complete! Profile saved with raw text. You can optionally parse it below.
     extractionFailed: Extraction failed.
     requireApiKey: Please provide an OpenAI API key before parsing.
+    saveBeforeParse: Save your edits before parsing.
     parsing: Parsing resume text with AI…
     savingParsing: Saving structured resume data…
     parsingComplete: Parsing complete! Open the popup to review structured profile data.
     parsingFailed: Parsing failed.
+    profileDeleted: Profile deleted.
+    profileCreated: Blank profile created. Add resume text to begin using it.
+    savingEdits: Saving edits…
+    savedEdits: Changes saved.
+    editFailed: Failed to save edits.
   validation:
     heading: JSON Resume validation warnings
   errors:
