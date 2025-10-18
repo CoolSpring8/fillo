@@ -100,19 +100,17 @@ export function normalizeDate(value: unknown): string | undefined {
   if (!trimmed) {
     return undefined;
   }
-  const sanitized = trimmed.replace(/[./]/g, '-').replace(/\s+/g, '-');
-  const parts = sanitized.split('-').filter(Boolean);
-  if (parts.length === 1 && parts[0].length === 4) {
-    return `${parts[0]}-01-01`;
+  const sanitized = trimmed.replace(/[./]/g, '-').replace(/\s+/g, '-').toLowerCase();
+  if (/^\d{4}$/.test(sanitized)) {
+    return `${sanitized}-01-01`;
   }
-  if (parts.length === 2) {
-    return `${pad(parts[0])}-${pad(parts[1])}-01`;
+  const yearMonthMatch = sanitized.match(/^(\d{4})-(\d{1,2})$/);
+  if (yearMonthMatch) {
+    return `${yearMonthMatch[1]}-${pad(yearMonthMatch[2])}-01`;
   }
-  if (parts.length >= 3) {
-    const [year, month, day] = parts;
-    if (/^\d{4}$/.test(year)) {
-      return `${year}-${pad(month)}-${pad(day)}`;
-    }
+  const fullMatch = sanitized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (fullMatch) {
+    return `${fullMatch[1]}-${pad(fullMatch[2])}-${pad(fullMatch[3])}`;
   }
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) {
