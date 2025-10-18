@@ -40,6 +40,7 @@ interface SerializedField {
   id: string;
   kind: string;
   label: string;
+  context: string;
   autocomplete?: string;
   required: boolean;
   rect: {
@@ -201,6 +202,7 @@ function serialize(fields: InternalField[]): SerializedField[] {
     id: field.id,
     kind: field.kind,
     label: field.label,
+    context: field.context,
     autocomplete: field.autocomplete,
     required: field.required,
     rect: field.rect,

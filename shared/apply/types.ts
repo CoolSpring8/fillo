@@ -21,6 +21,7 @@ export interface ScannedField {
   id: string;
   kind: FieldKind;
   label: string;
+  context: string;
   autocomplete?: string;
   required: boolean;
   rect: FieldRect;

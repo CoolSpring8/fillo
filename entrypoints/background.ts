@@ -330,6 +330,7 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
       id: String(entry.id ?? ''),
       kind: parseFieldKind(entry.kind),
       label: String(entry.label ?? ''),
+      context: typeof entry.context === 'string' ? entry.context : '',
       autocomplete: typeof entry.autocomplete === 'string' ? entry.autocomplete : undefined,
       required: Boolean(entry.required),
       rect: normalizeRect(entry.rect),

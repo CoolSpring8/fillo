@@ -550,6 +550,17 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
   });
 
   function resolveSlot(field: ScannedField): FieldSlot | null {
+    const context = (field.context ?? '').toLowerCase();
+    const label = field.label.toLowerCase();
+    const hasContext = (token: string | string[]) => {
+      const tokens = Array.isArray(token) ? token : [token];
+      return tokens.some((entry) => context.includes(entry));
+    };
+    const hasLabel = (token: string | string[]) => {
+      const tokens = Array.isArray(token) ? token : [token];
+      return tokens.some((entry) => label.includes(entry));
+    };
+
     const byAutocomplete = resolveSlotFromAutocomplete(field.autocomplete);
     if (byAutocomplete) {
       return byAutocomplete;
@@ -558,12 +569,26 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap): FieldEn
     if (byLabel) {
       return byLabel;
     }
+    if (hasContext(['email', 'e-mail'])) return 'email';
+    if (hasContext(['phone', 'mobile', 'telephone'])) return 'phone';
+
     if (field.kind === 'email') return 'email';
     if (field.kind === 'tel') return 'phone';
     if (field.kind === 'textarea') return 'summary';
-    if (field.kind === 'text' && field.label.toLowerCase().includes('linkedin')) return 'linkedin';
-    if (field.kind === 'text' && field.label.toLowerCase().includes('github')) return 'github';
-    if (field.kind === 'text' && field.label.toLowerCase().includes('website')) return 'website';
+    if (field.kind === 'text' && (hasLabel('linkedin') || hasContext('linkedin'))) return 'linkedin';
+    if (field.kind === 'text' && (hasLabel('github') || hasContext('github'))) return 'github';
+    if (field.kind === 'text' && (hasLabel(['website', 'portfolio']) || hasContext(['website', 'portfolio']))) return 'website';
+    if (hasContext(['linkedin'])) return 'linkedin';
+    if (hasContext(['github'])) return 'github';
+    if (hasContext(['website', 'portfolio'])) return 'website';
+    if (hasContext(['summary', 'about', 'bio'])) return 'summary';
+    if (hasContext(['headline', 'current role', 'title'])) return 'headline';
+    if (hasContext(['city', 'town'])) return 'city';
+    if (hasContext(['country'])) return 'country';
+    if (hasContext(['first name', 'given name'])) return 'firstName';
+    if (hasContext(['last name', 'family name', 'surname'])) return 'lastName';
+    if (hasContext(['full name', 'name'])) return 'name';
+
     return null;
   }
 }
