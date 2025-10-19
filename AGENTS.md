@@ -7,6 +7,7 @@
 - Localize UI through `@wxt-dev/i18n`; keep messages in `locales/*.yml` and avoid hardcoding visible strings.
 - Build configuration lives in `wxt.config.ts`; TypeScript options extend WXT defaults through `tsconfig.json`.
 - Keep feature-specific utilities near their entrypoint, creating subdirectories inside `entrypoints/` when logic grows.
+- Shared AI provider logic (prompt routing, provider errors, etc.) lives in `shared/llm/`. Add provider-specific integrations there so entrypoints stay provider-agnostic.
 
 ## Build, Test, and Development Commands
 - `pnpm install` syncs dependencies and runs `wxt prepare` to scaffold WXT internals.
@@ -22,6 +23,12 @@
 - Use `PascalCase` for components (`App.tsx`), `camelCase` for helpers, and kebab-case for folders within `entrypoints/`.
 - Keep imports path-based, favoring the WXT alias (`@/assets/...`) when referencing shared resources.
 - Call extension APIs through the `browser.*` namespace (use `Browser.*` for types) instead of `chrome.*`.
+
+## Localization Workflow
+- Never hardcode visible UI strings—always add keys under `locales/*.yml` and reference them through `i18n`.
+- Update **all** shipped locale files (currently `locales/en.yml` and `locales/zh-CN.yml`) when adding or changing a message.
+- Quote any YAML string containing `:` to avoid parsing issues (e.g., `'Value: $1'`).
+- Do not edit `.wxt/i18n/structure.d.ts` manually; ask the user to re-run the relevant `wxt` command if the structure needs to regenerate.
 
 ## Testing Guidelines
 - Vitest is configured in `vitest.config.ts`; author unit tests under `tests/` or beside modules as `*.test.ts[x]`.
