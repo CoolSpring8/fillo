@@ -1,5 +1,19 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Group,
+  NativeSelect,
+  Paper,
+  ScrollArea,
+  Stack,
+  Tabs,
+  Text,
+  Title,
+} from '@mantine/core';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord, ProviderConfig } from '../../shared/types';
@@ -815,148 +829,191 @@ export default function App() {
       });
   };
 
+  const profileOptions = useMemo(
+    () =>
+      profiles.map((profile) => ({
+        value: profile.id,
+        label: formatProfileLabel(profile),
+      })),
+    [profiles],
+  );
+
+  const selectOptions = useMemo(
+    () => [
+      { value: '', label: t('sidepanel.states.noProfilesOption') },
+      ...profileOptions,
+    ],
+    [profileOptions, t],
+  );
+
+  const fillDisabled =
+    fields.length === 0 ||
+    fields.every(
+      (entry) =>
+        entry.field.kind === 'file' ||
+        !entry.suggestion ||
+        entry.suggestion.trim().length === 0 ||
+        entry.status === 'pending' ||
+        entry.status === 'filled',
+    );
+
+  const classifyDisabled = classifying || fields.length === 0;
+  const autoButtonDisabled = autoRunning || scanning;
+
+  const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'blue' = 'gray') => (
+    <Alert color={tone} variant="light" radius="lg">
+      {message}
+    </Alert>
+  );
+
+  const renderPanel = (content: ReactNode) => (
+    <ScrollArea style={{ height: '100%' }} px="md" py="md">
+      <Stack gap="md">
+        {feedback && (
+          <Alert color="blue" variant="light" radius="lg" onClose={() => setFeedback(null)} withCloseButton>
+            {feedback}
+          </Alert>
+        )}
+        {content}
+      </Stack>
+    </ScrollArea>
+  );
+
   return (
-    <div className="panel">
-      <header className="panel-header">
-        <h1>{t('sidepanel.title')}</h1>
-        <p>{t('sidepanel.subtitle')}</p>
-      </header>
-      <div className="panel-body">
-        <div className="toolbar">
-          <select
-            value={selectedProfileId ?? ''}
-            onChange={(event) => setSelectedProfileId(event.target.value || null)}
-          >
-            {profiles.length === 0 && <option value="">{t('sidepanel.states.noProfilesOption')}</option>}
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {formatProfileLabel(profile)}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="secondary" onClick={requestScan} disabled={scanning}>
-            {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={handleClassify}
-            disabled={classifying || fields.length === 0}
-          >
-            {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
-          </button>
-          <button
-            type="button"
-            className="primary"
-            onClick={handleAutoFill}
-            disabled={
-              fields.every(
-                (entry) =>
-                  entry.field.kind === 'file' ||
-                  !entry.suggestion ||
-                  entry.suggestion.trim().length === 0 ||
-                  entry.status === 'pending' ||
-                  entry.status === 'filled',
-              ) || fields.length === 0
-            }
-          >
-            {t('sidepanel.toolbar.fillMapped')}
-          </button>
-          <button type="button" className="secondary" onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}>
-            {t('sidepanel.toolbar.clearOverlay')}
-          </button>
-          <button type="button" className="secondary" onClick={openProfilesPage}>
-            {t('sidepanel.toolbar.manageProfiles')}
-          </button>
-        </div>
-        <div className="mode-tabs">
-          <div
-            className={`mode-tab ${mode === 'dom' ? 'active' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setMode('dom')}
-          >
-            {t('sidepanel.tabs.dom')}
-          </div>
-          <div
-            className={`mode-tab ${mode === 'auto' ? 'active' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setMode('auto')}
-          >
-            {t('sidepanel.tabs.auto')}
-          </div>
-          <div
-            className={`mode-tab ${mode === 'manual' ? 'active' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setMode('manual')}
-          >
-            {t('sidepanel.tabs.manual')}
-          </div>
-        </div>
-        <div className="content">
-          {feedback && <div className="info-state">{feedback}</div>}
-          {mode === 'dom' && renderDomMode()}
-          {mode === 'auto' && renderAutoMode()}
-          {mode === 'manual' && renderManualMode()}
-        </div>
-      </div>
-    </div>
+    <Stack gap={0} style={{ height: '100vh' }}>
+      <Paper shadow="sm" withBorder={false} px="md" py="sm">
+        <Stack gap={2}>
+          <Title order={3}>{t('sidepanel.title')}</Title>
+          <Text fz="sm" c="dimmed">
+            {t('sidepanel.subtitle')}
+          </Text>
+        </Stack>
+      </Paper>
+      <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
+        <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
+          <Stack gap="sm">
+            <NativeSelect
+              label={t('popup.title')}
+              value={selectedProfileId ?? ''}
+              onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
+              data={selectOptions}
+              size="sm"
+            />
+            <Group gap="sm" wrap="wrap">
+              <Button variant="light" size="sm" onClick={requestScan} disabled={scanning}>
+                {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
+              </Button>
+              <Button
+                variant="light"
+                size="sm"
+                onClick={handleClassify}
+                disabled={classifyDisabled}
+              >
+                {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAutoFill}
+                disabled={fillDisabled}
+              >
+                {t('sidepanel.toolbar.fillMapped')}
+              </Button>
+              <Button
+                variant="light"
+                size="sm"
+                onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
+              >
+                {t('sidepanel.toolbar.clearOverlay')}
+              </Button>
+              <Button variant="light" size="sm" onClick={openProfilesPage}>
+                {t('sidepanel.toolbar.manageProfiles')}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+        <Tabs
+          value={mode}
+          onChange={(value) => setMode((value as PanelMode) ?? 'dom')}
+          keepMounted={false}
+          variant="outline"
+          radius="md"
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        >
+          <Tabs.List>
+            <Tabs.Tab value="dom">{t('sidepanel.tabs.dom')}</Tabs.Tab>
+            <Tabs.Tab value="auto">{t('sidepanel.tabs.auto')}</Tabs.Tab>
+            <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="dom" style={{ flex: 1, overflow: 'hidden' }}>
+            {renderPanel(renderDomMode())}
+          </Tabs.Panel>
+          <Tabs.Panel value="auto" style={{ flex: 1, overflow: 'hidden' }}>
+            {renderPanel(renderAutoMode())}
+          </Tabs.Panel>
+          <Tabs.Panel value="manual" style={{ flex: 1, overflow: 'hidden' }}>
+            {renderPanel(renderManualMode())}
+          </Tabs.Panel>
+        </Tabs>
+      </Stack>
+    </Stack>
   );
 
   function renderDomMode() {
     if (viewState.loadingProfiles) {
-      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
     }
     if (viewState.error) {
-      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
+      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
     }
     if (!selectedProfile) {
-      return <div className="empty-state">{t('sidepanel.states.noProfile')}</div>;
+      return renderStateAlert(t('sidepanel.states.noProfile'));
     }
     if (scanning) {
-      return <div className="info-state">{t('sidepanel.toolbar.scanning')}</div>;
+      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'blue');
     }
     if (fields.length === 0) {
-      return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
+      return renderStateAlert(t('sidepanel.states.noFields'));
     }
-    return fields.map((entry) => renderFieldCard(entry, { showReviewButton: true }));
+    return (
+      <Stack gap="sm">
+        {fields.map((entry) => renderFieldCard(entry, { showReviewButton: true }))}
+      </Stack>
+    );
   }
 
   function renderAutoMode() {
     if (viewState.loadingProfiles) {
-      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
     }
     if (viewState.error) {
-      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
+      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
     }
     if (!selectedProfile) {
-      return <div className="empty-state">{t('sidepanel.states.noProfile')}</div>;
+      return renderStateAlert(t('sidepanel.states.noProfile'));
     }
     if (scanning) {
-      return <div className="info-state">{t('sidepanel.toolbar.scanning')}</div>;
+      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'blue');
     }
     if (fields.length === 0) {
-      return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
+      return renderStateAlert(t('sidepanel.states.noFields'));
     }
 
     return (
-      <div className="auto-mode">
-        <p className="info-state">{t('sidepanel.auto.description')}</p>
-        <div className="auto-controls">
-          <button
-            type="button"
-            className="primary"
-            disabled={autoRunning || scanning}
-            onClick={handleAutoModeRun}
-          >
+      <Stack gap="sm">
+        <Alert color="blue" variant="light" radius="lg">
+          {t('sidepanel.auto.description')}
+        </Alert>
+        <Group gap="sm" wrap="wrap">
+          <Button onClick={handleAutoModeRun} disabled={autoButtonDisabled} loading={autoRunning} size="sm">
             {autoRunning ? t('sidepanel.auto.running') : t('sidepanel.auto.start')}
-          </button>
-        </div>
-        {autoSummary && <div className="info-state">{autoSummary}</div>}
-        {fields.map((entry) => renderFieldCard(entry))}
-      </div>
+          </Button>
+        </Group>
+        {autoSummary && renderStateAlert(autoSummary)}
+        <Stack gap="sm">
+          {fields.map((entry) => renderFieldCard(entry))}
+        </Stack>
+      </Stack>
     );
   }
 
@@ -996,79 +1053,110 @@ export default function App() {
     }
 
     return (
-      <article key={entry.field.id} className={`field-card ${entry.status !== 'idle' ? entry.status : ''}`}>
-        <header>
-          <div>
-            <div className="field-title">
-              {entry.field.label || t('sidepanel.field.noLabel')}
-              {entry.field.required && ' *'}
-            </div>
-            <div className="field-meta">
-              {t('sidepanel.field.meta', [
-                t(`sidepanel.fieldKind.${entry.field.kind}`),
-                slotLabel,
-                String(entry.field.frameId),
-              ])}
-            </div>
-          </div>
-          {entry.status !== 'idle' && (
-            <span className={`status-tag status-${entry.status}`}>
-              {t(`sidepanel.status.${entry.status}`)}
-            </span>
+      <Card key={entry.field.id} withBorder radius="md" shadow="sm">
+        <Stack gap="sm">
+          <Group justify="space-between" align="flex-start">
+            <Stack gap={4} flex={1}>
+              <Text fw={600} fz="sm">
+                {entry.field.label || t('sidepanel.field.noLabel')}
+                {entry.field.required ? ' *' : ''}
+              </Text>
+              <Text fz="xs" c="dimmed">
+                {t('sidepanel.field.meta', [
+                  t(`sidepanel.fieldKind.${entry.field.kind}`),
+                  slotLabel,
+                  String(entry.field.frameId),
+                ])}
+              </Text>
+            </Stack>
+            {entry.status !== 'idle' && (
+              <Badge
+                color={
+                  entry.status === 'filled'
+                    ? 'green'
+                    : entry.status === 'failed'
+                      ? 'red'
+                      : entry.status === 'pending'
+                        ? 'blue'
+                        : 'gray'
+                }
+                variant="light"
+                size="sm"
+              >
+                {t(`sidepanel.status.${entry.status}`)}
+              </Badge>
+            )}
+          </Group>
+          <Text fz="sm">{summary}</Text>
+          {entry.slotNote && (
+            <Text fz="xs" c="dimmed">
+              {t('sidepanel.field.aiNote', [entry.slotNote])}
+            </Text>
           )}
-        </header>
-        <div className="field-suggestion">{summary}</div>
-        {entry.slotNote && <div className="field-meta">{t('sidepanel.field.aiNote', [entry.slotNote])}</div>}
-        {entry.reason && <div className="field-meta">{formatFillReason(entry.reason)}</div>}
-        {autoInfo.map((line) => (
-          <div key={line} className="field-meta">
-            {line}
-          </div>
-        ))}
-        {showReview && (
-          <div className="field-actions">
-            <button
-              type="button"
-              className="primary"
-              disabled={disabled}
-              onClick={() => handleReview(entry)}
-            >
-              {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.review')}
-            </button>
-          </div>
-        )}
-      </article>
+          {entry.reason && (
+            <Text fz="xs" c="dimmed">
+              {formatFillReason(entry.reason)}
+            </Text>
+          )}
+          {autoInfo.map((line) => (
+            <Text key={line} fz="xs" c="dimmed">
+              {line}
+            </Text>
+          ))}
+          {showReview && (
+            <Group justify="flex-end">
+              <Button size="xs" disabled={disabled} onClick={() => handleReview(entry)}>
+                {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.review')}
+              </Button>
+            </Group>
+          )}
+        </Stack>
+      </Card>
     );
   }
 
   function renderManualMode() {
     if (viewState.loadingProfiles) {
-      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
     }
     if (viewState.error) {
-      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
+      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
     }
     if (!selectedProfile) {
-      return <div className="empty-state">{t('sidepanel.states.noProfileManual')}</div>;
+      return renderStateAlert(t('sidepanel.states.noProfileManual'));
     }
     return (
-      <div className="manual-grid">
-        {manualTree.length === 0 && (
-          <div className="info-state">{t('sidepanel.states.noManualValues')}</div>
-        )}
+      <Stack gap="md">
+        {manualTree.length === 0 && renderStateAlert(t('sidepanel.states.noManualValues'))}
         {manualTree.length > 0 && (
           <ManualTreeView nodes={manualTree} copyLabel={t('sidepanel.buttons.copy')} onCopy={handleCopy} />
         )}
-        <section className="manual-item">
-          <header>
-            <span>{t('sidepanel.manual.rawLabel')}</span>
-            <button type="button" onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}>
-              {t('sidepanel.buttons.copyAll')}
-            </button>
-          </header>
-          <pre className="raw-text">{selectedProfile.rawText}</pre>
-        </section>
-      </div>
+        <Card withBorder radius="md" shadow="sm">
+          <Stack gap="sm">
+            <Group justify="space-between" align="flex-start">
+              <Text fw={600}>{t('sidepanel.manual.rawLabel')}</Text>
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}
+              >
+                {t('sidepanel.buttons.copyAll')}
+              </Button>
+            </Group>
+            <Paper withBorder radius="md" p="sm">
+              <ScrollArea h={220}>
+                <Text
+                  component="pre"
+                  fz="sm"
+                  style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {selectedProfile.rawText}
+                </Text>
+              </ScrollArea>
+            </Paper>
+          </Stack>
+        </Card>
+      </Stack>
     );
   }
 }
@@ -1279,45 +1367,55 @@ function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
     return null;
   }
   return (
-    <div className="manual-tree">
+    <Stack gap="sm">
       {nodes.map((node) => (
-        <section key={node.id} className="manual-item manual-group">
-          <ManualNode node={node} depth={0} copyLabel={copyLabel} onCopy={onCopy} />
-        </section>
+        <ManualNode key={node.id} node={node} depth={0} copyLabel={copyLabel} onCopy={onCopy} />
       ))}
-    </div>
+    </Stack>
   );
 }
 
 function ManualNode({ node, depth, copyLabel, onCopy }: ManualNodeProps): JSX.Element {
   const hasChildren = node.children && node.children.length > 0;
-  const offset = depth > 0 ? { marginLeft: `${Math.min(depth, 6) * 12}px` } : undefined;
+  const offset = depth > 0 ? { marginLeft: `${Math.min(depth, 6) * 16}px` } : undefined;
 
   if (!hasChildren && typeof node.value === 'string') {
     const value = node.value;
     return (
-      <div className="manual-leaf" style={offset}>
-        <div className="manual-leaf-header">
-          <div className="manual-leaf-info">
-            <span className="manual-leaf-label">{node.label}</span>
-            <span className="manual-leaf-path">{node.displayPath}</span>
-          </div>
-          <button type="button" onClick={() => onCopy(node.displayPath, value)}>
-            {copyLabel}
-          </button>
-        </div>
-        <div className="manual-text">{value}</div>
-      </div>
+      <Card withBorder radius="md" shadow="sm" style={offset}>
+        <Stack gap="sm">
+          <Group justify="space-between" align="flex-start">
+            <Stack gap={2}>
+              <Text fw={600} fz="sm">
+                {node.label}
+              </Text>
+              <Text fz="xs" c="dimmed">
+                {node.displayPath}
+              </Text>
+            </Stack>
+            <Button size="xs" variant="light" onClick={() => onCopy(node.displayPath, value)}>
+              {copyLabel}
+            </Button>
+          </Group>
+          <Text fz="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {value}
+          </Text>
+        </Stack>
+      </Card>
     );
   }
 
   return (
-    <details className="manual-branch" open={depth === 0} style={offset}>
-      <summary>
-        <span className="manual-branch-label">{node.label}</span>
-        <span className="manual-count">{node.children?.length ?? 0}</span>
-      </summary>
-      <div className="manual-node-children">
+    <Stack gap="sm" style={offset}>
+      <Group gap="xs" align="center">
+        <Text fw={600} fz="sm">
+          {node.label}
+        </Text>
+        <Badge variant="light" color="gray" size="sm">
+          {(node.children?.length ?? 0).toLocaleString()}
+        </Badge>
+      </Group>
+      <Stack gap="sm">
         {node.children?.map((child) => (
           <ManualNode
             key={child.id}
@@ -1327,8 +1425,8 @@ function ManualNode({ node, depth, copyLabel, onCopy }: ManualNodeProps): JSX.El
             onCopy={onCopy}
           />
         ))}
-      </div>
-    </details>
+      </Stack>
+    </Stack>
   );
 }
 

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, Container, Loader, ScrollArea, Stack, Text, Title } from '@mantine/core';
 import { deleteProfile, listProfiles } from '../../shared/storage/profiles';
 import { OPENAI_DEFAULT_BASE_URL } from '../../shared/storage/settings';
 import type { ProfileRecord } from '../../shared/types';
+import { ProfileAccordion, type ProfileAccordionItem } from './components/ProfileAccordion';
 
 interface ViewState {
   loading: boolean;
@@ -59,142 +61,151 @@ export default function App() {
     }
   };
 
-  const toggleExpanded = (id: string) => {
-    setExpandedId((current) => (current === id ? null : id));
+  const openOnboarding = () => {
+    void browser.tabs.create({ url: browser.runtime.getURL('/onboarding.html') });
   };
 
-  const renderProfile = (profile: ProfileRecord) => {
-    const isExpanded = expandedId === profile.id;
-    const createdAt = new Date(profile.createdAt);
-    const basics = (profile.resume as Record<string, any> | undefined)?.basics ?? {};
-    const displayName =
-      typeof basics.name === 'string' && basics.name.trim().length > 0
-        ? basics.name
-        : t('popup.profile.unnamed');
-    const parsedAt = profile.parsedAt ? new Date(profile.parsedAt) : null;
-    const providerLabel = profile.provider
-      ? profile.provider.kind === 'openai'
-        ? profile.provider.apiBaseUrl &&
-          profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
-          ? t('popup.provider.openaiModelWithBase', [
-              profile.provider.model,
-              profile.provider.apiBaseUrl,
-            ])
-          : t('popup.provider.openaiModel', [profile.provider.model])
-        : t('popup.provider.onDevice')
-      : null;
-    const parsedLabel = parsedAt ? t('popup.provider.parsed', [parsedAt.toLocaleString()]) : null;
-    const parsingSummary = providerLabel
-      ? parsedLabel
-        ? `${providerLabel} · ${parsedLabel}`
-        : providerLabel
-      : t('popup.provider.notParsed');
-    const fileSummary = profile.sourceFile
-      ? t('popup.profile.fileInfo', [
-          profile.sourceFile.name,
-          profile.sourceFile.size.toLocaleString(),
-          profile.rawText.length.toLocaleString(),
-        ])
-      : t('popup.profile.manualInfo', [profile.rawText.length.toLocaleString()]);
-
-    return (
-      <article key={profile.id} className="profile-card">
-        <div className="profile-header">
-          <div className="profile-summary">
-            <strong>{displayName}</strong>
-            <span className="profile-subline">
-              {t('popup.profile.importedAt', [createdAt.toLocaleString()])}
-            </span>
-            <span className="profile-subline">
-              {parsingSummary}
-            </span>
-            <span className="profile-subline">
-              {fileSummary}
-            </span>
-            {profile.validation && !profile.validation.valid && (
-              <span className="profile-warning">{t('popup.profile.validationWarning')}</span>
-            )}
-          </div>
-          <div className="profile-actions">
-            <button type="button" onClick={() => toggleExpanded(profile.id)}>
-              {isExpanded ? t('popup.buttons.hideDetails') : t('popup.buttons.viewDetails')}
-            </button>
-            <button type="button" className="danger" onClick={() => handleDelete(profile.id)}>
-              {t('popup.buttons.delete')}
-            </button>
-          </div>
-        </div>
-        {isExpanded && (
-          <div className="profile-details">
-            <div>
-              <h3>{t('popup.sections.jsonResume')}</h3>
-              {profile.provider ? (
-                <pre>{JSON.stringify(profile.resume ?? {}, null, 2)}</pre>
-              ) : (
-                <p className="info">{t('popup.info.noStructured')}</p>
-              )}
-            </div>
-            <div>
-              <h3>{t('popup.sections.customFields')}</h3>
-              {profile.provider ? (
-                <pre>{JSON.stringify(profile.custom ?? {}, null, 2)}</pre>
-              ) : (
-                <p className="info">{t('popup.info.noCustom')}</p>
-              )}
-            </div>
-            <div>
-              <h3>{t('popup.sections.rawText')}</h3>
-              <pre className="raw-text">{profile.rawText}</pre>
-            </div>
-            {profile.validation && profile.validation.errors && profile.validation.errors.length > 0 && (
-              <div>
-                <h3>{t('popup.sections.validationWarnings')}</h3>
-                <ul>
-                  {profile.validation.errors.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </article>
-    );
+  const openOptions = () => {
+    void browser.tabs.create({ url: browser.runtime.getURL('/options.html') });
   };
+
+  const profileItems = useMemo<ProfileAccordionItem[]>(() => {
+    return profiles.map((profile) => {
+      const createdAt = new Date(profile.createdAt).toLocaleString();
+      const basics = (profile.resume as Record<string, unknown> | undefined)?.basics;
+      const resolvedName =
+        basics && typeof basics === 'object' && basics !== null
+          ? (() => {
+              const name = (basics as Record<string, unknown>).name;
+              return typeof name === 'string' && name.trim().length > 0
+                ? name.trim()
+                : t('popup.profile.unnamed');
+            })()
+          : t('popup.profile.unnamed');
+      const parsedAt = profile.parsedAt ? new Date(profile.parsedAt).toLocaleString() : null;
+      const providerLabel = profile.provider
+        ? profile.provider.kind === 'openai'
+          ? profile.provider.apiBaseUrl && profile.provider.apiBaseUrl !== OPENAI_DEFAULT_BASE_URL
+            ? t('popup.provider.openaiModelWithBase', [
+                profile.provider.model,
+                profile.provider.apiBaseUrl,
+              ])
+            : t('popup.provider.openaiModel', [profile.provider.model])
+          : t('popup.provider.onDevice')
+        : null;
+      const parsedLabel = parsedAt ? t('popup.provider.parsed', [parsedAt]) : null;
+      const parsingSummary = providerLabel
+        ? parsedLabel
+          ? `${providerLabel} · ${parsedLabel}`
+          : providerLabel
+        : t('popup.provider.notParsed');
+      const fileSummary = profile.sourceFile
+        ? t('popup.profile.fileInfo', [
+            profile.sourceFile.name,
+            profile.sourceFile.size.toLocaleString(),
+            profile.rawText.length.toLocaleString(),
+          ])
+        : t('popup.profile.manualInfo', [profile.rawText.length.toLocaleString()]);
+
+      const hasValidationWarning = Boolean(profile.validation && !profile.validation.valid);
+
+      return {
+        id: profile.id,
+        title: resolvedName,
+        importedAtLabel: t('popup.profile.importedAt', [createdAt]),
+        parsingSummary,
+        fileSummary,
+        hasValidationWarning,
+        validationLabel: hasValidationWarning ? t('popup.profile.validationWarning') : null,
+        validationErrors: profile.validation?.errors ?? [],
+        resumeJson: formatJson(profile.resume ?? {}),
+        hasResumeData: Boolean(profile.provider),
+        resumeEmptyLabel: t('popup.info.noStructured'),
+        customJson: formatJson(profile.custom ?? {}),
+        hasCustomData: Boolean(profile.provider),
+        customEmptyLabel: t('popup.info.noCustom'),
+        rawText: profile.rawText,
+        rawLabel: t('popup.sections.rawText'),
+        resumeLabel: t('popup.sections.jsonResume'),
+        customLabel: t('popup.sections.customFields'),
+        validationHeading: t('popup.sections.validationWarnings'),
+      } satisfies ProfileAccordionItem;
+    });
+  }, [profiles, t]);
 
   return (
-    <div className="popup">
-      <header>
-        <h1>{t('popup.title')}</h1>
-        <p>{t('popup.description')}</p>
-      </header>
-      {viewState.loading && <p className="info">{t('popup.loading')}</p>}
-      {viewState.error && <p className="error">{t('popup.error', [viewState.error])}</p>}
-      {!viewState.loading && profiles.length === 0 && (
-        <p className="info">{t('popup.empty')}</p>
-      )}
-      <div className="profiles">{profiles.map((profile) => renderProfile(profile))}</div>
-      <footer>
-        <button
-          type="button"
-          onClick={() =>
-            browser.tabs.create({ url: browser.runtime.getURL('/onboarding.html') })
-          }
-        >
-          {t('popup.buttons.openOnboarding')}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            browser.tabs.create({ url: browser.runtime.getURL('/options.html') })
-          }
-        >
-          {t('popup.buttons.settings')}
-        </button>
-        <button type="button" onClick={() => openSidePanel()}>
-          {t('popup.buttons.openSidePanel')}
-        </button>
-      </footer>
-    </div>
+    <Box
+      bg="var(--mantine-color-gray-0)"
+      style={{
+        minWidth: 360,
+        maxWidth: 420,
+        padding: 16,
+      }}
+    >
+      <ScrollArea.Autosize mah={580} type="auto">
+        <Container size="sm" px={0}>
+          <Stack gap="lg">
+            <Stack gap={4}>
+              <Title order={2}>{t('popup.title')}</Title>
+              <Text c="dimmed">{t('popup.description')}</Text>
+            </Stack>
+
+            {viewState.loading && (
+              <Stack align="center" py="md">
+                <Loader size="sm" color="brand" />
+                <Text fz="sm" c="dimmed">
+                  {t('popup.loading')}
+                </Text>
+              </Stack>
+            )}
+
+            {viewState.error && (
+              <Alert color="red" variant="light">
+                {t('popup.error', [viewState.error])}
+              </Alert>
+            )}
+
+            {!viewState.loading && profiles.length === 0 && (
+              <Alert color="gray" variant="light">
+                {t('popup.empty')}
+              </Alert>
+            )}
+
+            {profiles.length > 0 && (
+              <ProfileAccordion
+                items={profileItems}
+                expandedId={expandedId}
+                onExpandedChange={setExpandedId}
+                onDelete={handleDelete}
+                deleteLabel={t('popup.buttons.delete')}
+              />
+            )}
+
+            <Stack gap="xs">
+              <Button variant="light" fullWidth onClick={openOnboarding}>
+                {t('popup.buttons.openOnboarding')}
+              </Button>
+              <Button variant="light" fullWidth onClick={openOptions}>
+                {t('popup.buttons.settings')}
+              </Button>
+              <Button fullWidth onClick={() => openSidePanel()}>
+                {t('popup.buttons.openSidePanel')}
+              </Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </ScrollArea.Autosize>
+    </Box>
   );
+}
+
+function formatJson(value: unknown): string {
+  if (value === undefined || value === null) {
+    return '{}';
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return '{}';
+  }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Container, Loader, Stack, Text, Title } from '@mantine/core';
 import {
   ensureOnDeviceAvailability,
   type LanguageModelAvailability,
@@ -11,6 +12,9 @@ import {
 } from '../../shared/storage/settings';
 import type { AppSettings } from '../../shared/types';
 import { listAvailableAdapters } from '../../shared/apply/adapters';
+import { ProviderCard } from './components/ProviderCard';
+import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
+import { AutofillCard } from './components/AutofillCard';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -79,160 +83,124 @@ export default function App() {
     setAvailability(await ensureOnDeviceAvailability());
   };
 
+  const handleSelectProvider = (value: 'on-device' | 'openai') => {
+    setProvider(value);
+    if (value === 'on-device') {
+      setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+    } else if (!apiBaseUrl.trim().length) {
+      setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+    }
+  };
+
+  const availabilityText = t('options.provider.availability', [availability]);
+
+  const adapterItems = useMemo<AdapterItem[]>(
+    () =>
+      adapters.map((adapter) => ({
+        id: adapter.id,
+        name: t(adapter.nameKey),
+        description: adapter.descriptionKey ? t(adapter.descriptionKey) : null,
+        checked: activeAdapters.includes(adapter.id),
+      })),
+    [adapters, activeAdapters, t],
+  );
+
+  const handleToggleAdapter = (id: string, checked: boolean) => {
+    setActiveAdapters((current) => {
+      if (checked) {
+        return Array.from(new Set([...current, id]));
+      }
+      return current.filter((item) => item !== id);
+    });
+  };
+
+  const feedbackAlert = feedback ? (
+    <Alert
+      color={feedback.kind === 'success' ? 'green' : 'red'}
+      variant="light"
+      radius="lg"
+      withCloseButton
+      onClose={() => setFeedback(null)}
+    >
+      {feedback.message}
+    </Alert>
+  ) : null;
+
+  const saveDisabled = provider === 'openai' && !apiKey;
+
   if (!loaded) {
     return (
-      <div className="options-container">
-        <p>{t('options.loading')}</p>
-      </div>
+      <Container size="sm" py="xl">
+        <Stack align="center" gap="sm">
+          <Loader size="sm" color="brand" />
+          <Text fz="sm" c="dimmed">
+            {t('options.loading')}
+          </Text>
+        </Stack>
+      </Container>
     );
   }
 
   return (
-    <div className="options-container">
-      <header>
-        <h1>{t('options.title')}</h1>
-        <p>{t('options.description')}</p>
-      </header>
+    <Container size="sm" py="xl">
+      <Stack gap="xl">
+        <Stack gap={4}>
+          <Title order={2}>{t('options.title')}</Title>
+          <Text c="dimmed">{t('options.description')}</Text>
+        </Stack>
 
-      <section className="card">
-        <h2>{t('options.provider.heading')}</h2>
-        <label>
-          <input
-            type="radio"
-            name="provider"
-            value="on-device"
-            checked={provider === 'on-device'}
-            onChange={() => {
-              setProvider('on-device');
-              setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-            }}
-          />
-          {t('options.provider.onDevice')}
-        </label>
-        <div className="availability">
-          <span>{t('options.provider.availability', [availability])}</span>
-          <button type="button" onClick={handleRefreshAvailability}>
-            {t('options.provider.refresh')}
-          </button>
-        </div>
+        <ProviderCard
+          title={t('options.provider.heading')}
+          availabilityText={availabilityText}
+          refreshLabel={t('options.provider.refresh')}
+          providerLabelOnDevice={t('options.provider.onDevice')}
+          providerLabelOpenAI={t('options.provider.openai')}
+          provider={provider}
+          apiKeyLabel={t('options.provider.apiKey')}
+          modelLabel={t('options.provider.model')}
+          baseUrlLabel={t('options.provider.apiBaseUrl')}
+          apiKeyPlaceholder="sk-..."
+          baseUrlPlaceholder="https://api.openai.com"
+          apiKey={apiKey}
+          model={model}
+          apiBaseUrl={apiBaseUrl}
+          onProviderChange={handleSelectProvider}
+          onApiKeyChange={(value) => setApiKey(value)}
+          onModelChange={(value) => setModel(value)}
+          onApiBaseUrlChange={(value) => setApiBaseUrl(value)}
+          onRefreshAvailability={handleRefreshAvailability}
+        />
 
-        <label>
-          <input
-            type="radio"
-            name="provider"
-            value="openai"
-            checked={provider === 'openai'}
-            onChange={() => {
-              setProvider('openai');
-              if (!apiBaseUrl.trim().length) {
-                setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-              }
-            }}
-          />
-          {t('options.provider.openai')}
-        </label>
+        <AdaptersCard
+          title={t('options.adapters.heading')}
+          description={t('options.adapters.description')}
+          items={adapterItems}
+          onToggle={handleToggleAdapter}
+        />
 
-        {provider === 'openai' && (
-          <div className="openai-fields">
-            <label className="field">
-              {t('options.provider.apiKey')}
-              <input
-                type="password"
-                value={apiKey}
-                placeholder="sk-..."
-                onChange={(event) => setApiKey(event.target.value)}
-                autoComplete="off"
-              />
-            </label>
-            <label className="field">
-              {t('options.provider.model')}
-              <input
-                type="text"
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              {t('options.provider.apiBaseUrl')}
-              <input
-                type="text"
-                value={apiBaseUrl}
-                onChange={(event) => setApiBaseUrl(event.target.value)}
-                placeholder="https://api.openai.com"
-              />
-            </label>
-          </div>
-        )}
-      </section>
+        <AutofillCard
+          title={t('options.autofill.heading')}
+          description={t('options.autofill.description')}
+          value={autoFallback}
+          skipLabel={t('options.autofill.skip')}
+          pauseLabel={t('options.autofill.pause')}
+          onChange={setAutoFallback}
+        />
 
-      <section className="card">
-        <h2>{t('options.adapters.heading')}</h2>
-        <p>{t('options.adapters.description')}</p>
-        <div className="adapter-list">
-          {adapters.map((adapter) => {
-            const checked = activeAdapters.includes(adapter.id);
-            const name = t(adapter.nameKey);
-            const description = adapter.descriptionKey ? t(adapter.descriptionKey) : null;
-            return (
-              <label key={adapter.id} className="field checkbox">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => {
-                    setActiveAdapters((current) => {
-                      if (event.target.checked) {
-                        return Array.from(new Set([...current, adapter.id]));
-                      }
-                      return current.filter((id) => id !== adapter.id);
-                    });
-                  }}
-                />
-                <span>
-                  <strong>{name}</strong>
-                  {description && <span className="caption"> — {description}</span>}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </section>
+        <Stack align="flex-end">
+          <Button
+            onClick={handleSave}
+            disabled={saveDisabled}
+            loading={busy}
+            size="md"
+            radius="md"
+          >
+            {busy ? t('options.actions.saving') : t('options.actions.save')}
+          </Button>
+        </Stack>
 
-      <section className="card">
-        <h2>{t('options.autofill.heading')}</h2>
-        <p>{t('options.autofill.description')}</p>
-        <label className="field radio">
-          <input
-            type="radio"
-            name="auto-fallback"
-            value="skip"
-            checked={autoFallback === 'skip'}
-            onChange={() => setAutoFallback('skip')}
-          />
-          <span>{t('options.autofill.skip')}</span>
-        </label>
-        <label className="field radio">
-          <input
-            type="radio"
-            name="auto-fallback"
-            value="pause"
-            checked={autoFallback === 'pause'}
-            onChange={() => setAutoFallback('pause')}
-          />
-          <span>{t('options.autofill.pause')}</span>
-        </label>
-      </section>
-
-      <div className="actions">
-        <button type="button" onClick={handleSave} disabled={busy || (provider === 'openai' && !apiKey)}>
-          {busy ? t('options.actions.saving') : t('options.actions.save')}
-        </button>
-      </div>
-
-      {feedback && (
-        <section className={`status ${feedback.kind === 'success' ? 'complete' : 'error'}`}>
-          {feedback.message}
-        </section>
-      )}
-    </div>
+        {feedbackAlert}
+      </Stack>
+    </Container>
   );
 }
