@@ -125,6 +125,9 @@ sidepanel:
     noValues: No stored values available. Update the profile to enable autofill.
     aiNote: 'AI note: $1'
     meta: $1 · $2 · frame $3
+    autoKey: 'Auto fill key: $1'
+    autoKeyWithConfidence: 'Auto fill key: $1 (confidence $2%)'
+    autoReason: 'Auto fill reason: $1'
   fieldKind:
     text: text
     email: email

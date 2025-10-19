@@ -125,6 +125,9 @@ sidepanel:
     noValues: 暂无存储的值，请更新简历信息后重试。
     aiNote: AI 备注：$1
     meta: $1 · $2 · 第 $3 帧
+    autoKey: 自动填充字段：$1
+    autoKeyWithConfidence: 自动填充字段：$1（置信度 $2%）
+    autoReason: 自动填充原因：$1
   fieldKind:
     text: 文本
     email: 邮箱

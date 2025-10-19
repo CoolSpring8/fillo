@@ -31,6 +31,10 @@ interface FieldEntry {
   reason?: string;
   slotSource: 'heuristic' | 'model' | 'unset';
   slotNote?: string;
+  autoKey?: string;
+  autoKeyLabel?: string;
+  autoNote?: string;
+  autoConfidence?: number;
 }
 
 interface ViewState {
@@ -267,6 +271,25 @@ export default function App() {
     );
   }, []);
 
+  const setFieldAutoDecision = useCallback(
+    (fieldId: string, details: { key?: string; keyLabel?: string; note?: string; confidence?: number }) => {
+      setFields((current) =>
+        current.map((entry) =>
+          entry.field.id === fieldId
+            ? {
+                ...entry,
+                autoKey: details.key,
+                autoKeyLabel: details.keyLabel,
+                autoNote: details.note,
+                autoConfidence: details.confidence,
+              }
+            : entry,
+        ),
+      );
+    },
+    [],
+  );
+
   const waitForFillCompletion = useCallback((requestId: string, timeoutMs = 5000) => {
     return new Promise<FillResultMessage | null>((resolve) => {
       const timeout = window.setTimeout(() => {
@@ -291,6 +314,18 @@ export default function App() {
         key: slot,
         label: formatSlotLabel(slot),
       }));
+  }, []);
+
+  const resetAutoInsights = useCallback(() => {
+    setFields((current) =>
+      current.map((entry) => ({
+        ...entry,
+        autoKey: undefined,
+        autoKeyLabel: undefined,
+        autoNote: undefined,
+        autoConfidence: undefined,
+      })),
+    );
   }, []);
 
   const handleAutoFill = useCallback(() => {
@@ -374,6 +409,8 @@ export default function App() {
     let attempted = 0;
     let filled = 0;
 
+    resetAutoInsights();
+
     try {
       for (const entry of snapshot) {
         if (entry.status === 'filled') {
@@ -408,6 +445,19 @@ export default function App() {
             decision = result;
             break;
           }
+        }
+
+        if (decision) {
+          const keyLabel =
+            decision.decision === 'fill' && decision.key
+              ? available.find((item) => item.key === decision.key)?.label ?? formatSlotLabel(decision.key as FieldSlot)
+              : undefined;
+          setFieldAutoDecision(entry.field.id, {
+            key: decision.decision === 'fill' ? decision.key : undefined,
+            keyLabel,
+            note: decision.reason,
+            confidence: decision.confidence,
+          });
         }
 
         if (!decision || decision.decision !== 'fill' || !decision.key) {
@@ -459,7 +509,18 @@ export default function App() {
         setAutoSummary(t('sidepanel.auto.summary', [String(filled), String(attempted)]));
       }
     }
-  }, [autoRunning, buildAutoFillKeys, fieldsRef, sendMessage, setFieldStatus, slotValuesRef, t, waitForFillCompletion]);
+  }, [
+    autoRunning,
+    buildAutoFillKeys,
+    fieldsRef,
+    resetAutoInsights,
+    sendMessage,
+    setFieldAutoDecision,
+    setFieldStatus,
+    slotValuesRef,
+    t,
+    waitForFillCompletion,
+  ]);
 
   const requestScan = () => {
     if (!portRef.current) {
@@ -821,6 +882,19 @@ export default function App() {
 
     const disabled = entry.field.kind !== 'file' && !hasOptions;
     const showReview = options.showReviewButton ?? false;
+    const autoInfo: string[] = [];
+    const autoConfidencePercent =
+      typeof entry.autoConfidence === 'number' ? Math.round(entry.autoConfidence * 100) : null;
+    if (entry.autoKeyLabel) {
+      autoInfo.push(
+        autoConfidencePercent !== null
+          ? t('sidepanel.field.autoKeyWithConfidence', [entry.autoKeyLabel, String(autoConfidencePercent)])
+          : t('sidepanel.field.autoKey', [entry.autoKeyLabel]),
+      );
+    }
+    if (entry.autoNote) {
+      autoInfo.push(t('sidepanel.field.autoReason', [entry.autoNote]));
+    }
 
     return (
       <article key={entry.field.id} className={`field-card ${entry.status !== 'idle' ? entry.status : ''}`}>
@@ -847,6 +921,11 @@ export default function App() {
         <div className="field-suggestion">{summary}</div>
         {entry.slotNote && <div className="field-meta">{t('sidepanel.field.aiNote', [entry.slotNote])}</div>}
         {entry.reason && <div className="field-meta">{formatFillReason(entry.reason)}</div>}
+        {autoInfo.map((line) => (
+          <div key={line} className="field-meta">
+            {line}
+          </div>
+        ))}
         {showReview && (
           <div className="field-actions">
             <button
@@ -907,6 +986,10 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
       reason: undefined,
       slotSource: slot ? 'heuristic' : 'unset',
       slotNote: undefined,
+      autoKey: undefined,
+      autoKeyLabel: undefined,
+      autoNote: undefined,
+      autoConfidence: undefined,
     };
   });
 
