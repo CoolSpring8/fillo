@@ -1,14 +1,13 @@
 import type { ScannedField } from '../../shared/apply/types';
 import { AUTO_FILL_DECISION_SCHEMA } from '../../shared/schema/autoFillDecision';
-
-interface LanguageModel {
-  create: () => Promise<LanguageModelSession>;
-}
-
-interface LanguageModelSession {
-  prompt: (input: string, options?: Record<string, unknown>) => Promise<string>;
-  destroy?: () => void;
-}
+import type { ProviderConfig } from '../../shared/types';
+import { invokeWithProvider } from '../../shared/llm/runtime';
+import {
+  NoProviderConfiguredError,
+  ProviderAvailabilityError,
+  ProviderConfigurationError,
+  ProviderInvocationError,
+} from '../../shared/llm/errors';
 
 export interface AutoFillKey {
   key: string;
@@ -29,66 +28,57 @@ export interface AutoFillPromptPayload {
   round: number;
 }
 
-export function hasAutoFillModel(): boolean {
-  return Boolean(getLanguageModel());
+export function hasAutoFillModel(provider: ProviderConfig | null | undefined): boolean {
+  if (!provider) {
+    return false;
+  }
+  if (provider.kind === 'openai') {
+    return Boolean(provider.apiKey?.trim() && provider.model?.trim());
+  }
+  return true;
 }
 
-export async function judgeAutoFill(payload: AutoFillPromptPayload): Promise<AutoFillDecision | null> {
-  const model = getLanguageModel();
-  if (!model) {
-    return null;
+export async function judgeAutoFill(
+  provider: ProviderConfig | null | undefined,
+  payload: AutoFillPromptPayload,
+): Promise<AutoFillDecision | null> {
+  if (!provider) {
+    throw new NoProviderConfiguredError();
   }
 
-  let session: LanguageModelSession | undefined;
-  try {
-    session = await model.create();
-  } catch (error) {
-    console.warn('Unable to create on-device session for auto fill', error);
-    return null;
-  }
+  const messages = [
+    {
+      role: 'system' as const,
+      content:
+        'You select which resume data key should fill an HTML form field. ' +
+        'Output only JSON matching {"decision":"fill"|"reject","key":string,"reason":string,"confidence":number}. ' +
+        'Only return keys from the provided list. Never invent new keys or return actual user data. ' +
+        'If unsure, choose "reject".',
+    },
+    {
+      role: 'user' as const,
+      content: buildUserContent(payload),
+    },
+  ];
 
   try {
-    const prompt = formatMessages([
-      {
-        role: 'system',
-        content:
-          'You select which resume data key should fill an HTML form field. ' +
-          'Output only JSON matching {"decision":"fill"|"reject","key":string,"reason":string,"confidence":number}. ' +
-          'Only return keys from the provided list. Never invent new keys or return actual user data. ' +
-          'If unsure, choose "reject".',
-      },
-      {
-        role: 'user',
-        content: buildUserContent(payload),
-      },
-    ]);
-
-    const raw = await session.prompt(prompt, {
-      responseConstraint: AUTO_FILL_DECISION_SCHEMA,
+    const raw = await invokeWithProvider(provider, messages, {
+      responseSchema: AUTO_FILL_DECISION_SCHEMA,
       temperature: 0,
     });
-
     return parseDecision(raw);
   } catch (error) {
+    if (
+      error instanceof NoProviderConfiguredError ||
+      error instanceof ProviderConfigurationError ||
+      error instanceof ProviderAvailabilityError ||
+      error instanceof ProviderInvocationError
+    ) {
+      throw error;
+    }
     console.warn('Auto fill model decision failed', error);
     return null;
-  } finally {
-    session?.destroy?.();
   }
-}
-
-function getLanguageModel(): LanguageModel | undefined {
-  const win = window as unknown as {
-    LanguageModel?: LanguageModel;
-    ai?: { languageModel?: LanguageModel };
-  };
-  return win.LanguageModel ?? win.ai?.languageModel;
-}
-
-function formatMessages(messages: { role: 'system' | 'user'; content: string }[]): string {
-  return messages
-    .map((message) => `${message.role.toUpperCase()}:\n${message.content}`)
-    .join('\n\n');
 }
 
 function buildUserContent(payload: AutoFillPromptPayload): string {
@@ -199,15 +189,16 @@ function parseDecision(raw: string): AutoFillDecision | null {
   return null;
 }
 
-function clampConfidence(value: number): number {
-  if (!Number.isFinite(value)) {
+function clampConfidence(raw: number): number {
+  if (Number.isNaN(raw)) {
     return 0;
   }
-  if (value < 0) {
+  if (raw < 0) {
     return 0;
   }
-  if (value > 1) {
+  if (raw > 1) {
     return 1;
   }
-  return value;
+  return raw;
 }
+

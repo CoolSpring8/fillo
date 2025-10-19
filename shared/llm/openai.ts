@@ -1,5 +1,5 @@
-import { OUTPUT_SCHEMA } from '../schema/outputSchema';
-import type { ChatMessage, ResumeExtractionResult } from '../types';
+import type { ChatMessage } from '../types';
+import { ProviderConfigurationError, ProviderInvocationError } from './errors';
 
 const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com';
 
@@ -17,10 +17,24 @@ interface OpenAIChatCompletionResponse {
   }>;
 }
 
+export interface OpenAIInvocationOptions {
+  responseSchema?: Record<string, unknown>;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
 export async function promptOpenAI(
   { apiKey, model, apiBaseUrl }: OpenAIProviderOptions,
   messages: ChatMessage[],
-): Promise<ResumeExtractionResult> {
+  { responseSchema, temperature = 0, signal }: OpenAIInvocationOptions = {},
+): Promise<string> {
+  if (!apiKey?.trim()) {
+    throw new ProviderConfigurationError('openai', 'OpenAI API key is missing.');
+  }
+  if (!model?.trim()) {
+    throw new ProviderConfigurationError('openai', 'OpenAI model is missing.');
+  }
+
   const baseUrlRaw = apiBaseUrl && apiBaseUrl.trim().length ? apiBaseUrl : DEFAULT_OPENAI_BASE_URL;
   const baseUrl = baseUrlRaw.endsWith('/') ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
   const endpoint = `${baseUrl}/chat/completions`;
@@ -33,32 +47,33 @@ export async function promptOpenAI(
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'resume_extraction',
-          strict: true,
-          schema: OUTPUT_SCHEMA,
-        },
-      },
+      temperature,
+      ...(responseSchema
+        ? {
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'structured_output',
+                strict: true,
+                schema: responseSchema,
+              },
+            },
+          }
+        : {}),
     }),
+    signal,
   });
 
   if (!response.ok) {
     const details = await response.text();
-    throw new Error(`OpenAI request failed (${response.status}): ${details}`);
+    throw new ProviderInvocationError('openai', `OpenAI request failed (${response.status}): ${details}`);
   }
 
   const data = (await response.json()) as OpenAIChatCompletionResponse;
   const text = data.choices?.[0]?.message?.content;
   if (!text) {
-    throw new Error('OpenAI response missing content.');
+    throw new ProviderInvocationError('openai', 'OpenAI response missing content.');
   }
 
-  const parsed = JSON.parse(text) as ResumeExtractionResult;
-  return {
-    resume: parsed.resume ?? {},
-    custom: parsed.custom ?? {},
-  };
+  return text;
 }

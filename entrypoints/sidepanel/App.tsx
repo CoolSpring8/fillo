@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
-import type { ProfileRecord } from '../../shared/types';
+import type { ProfileRecord, ProviderConfig } from '../../shared/types';
 import type { FillResultMessage, PromptOption, PromptOptionSlot, ScannedField } from '../../shared/apply/types';
 import type { FieldSlot } from '../../shared/apply/slotTypes';
 import { buildManualValueTree, flattenManualLeaves, type ManualValueNode } from './manualValues';
@@ -16,6 +16,12 @@ import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
 import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
 import { getSettings } from '../../shared/storage/settings';
 import { judgeAutoFill, hasAutoFillModel, type AutoFillKey } from './autoFillJudge';
+import {
+  NoProviderConfiguredError,
+  ProviderAvailabilityError,
+  ProviderConfigurationError,
+  ProviderInvocationError,
+} from '../../shared/llm/errors';
 
 type PanelMode = 'dom' | 'auto' | 'manual';
 
@@ -67,6 +73,7 @@ export default function App() {
   const autoFallbackRef = useRef<'skip' | 'pause'>('skip');
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
+  const providerRef = useRef<ProviderConfig | null>(null);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -163,6 +170,7 @@ export default function App() {
         if (cancelled) {
           return;
         }
+        providerRef.current = settings.provider;
         setActiveAdapterIds(settings.adapters.length > 0 ? settings.adapters : defaultAdapterIds);
         const fallback = settings.autoFallback ?? 'skip';
         setAutoFallback(fallback);
@@ -383,9 +391,10 @@ export default function App() {
       return;
     }
 
-    if (!hasAutoFillModel()) {
-      setAutoSummary(t('sidepanel.auto.noModel'));
-      setFeedback(t('sidepanel.auto.noModel'));
+    if (!hasAutoFillModel(providerRef.current)) {
+      const message = t('sidepanel.auto.noModel');
+      setAutoSummary(message);
+      setFeedback(message);
       return;
     }
 
@@ -419,6 +428,7 @@ export default function App() {
     let filled = 0;
     let stoppedEarly = false;
     let pausedFieldLabel: string | null = null;
+    let summaryLocked = false;
     const shouldPause = autoFallbackRef.current === 'pause';
 
     resetAutoInsights();
@@ -468,7 +478,7 @@ export default function App() {
 
         let decision = null;
         for (let round = 1; round <= 3; round += 1) {
-          const result = await judgeAutoFill({
+          const result = await judgeAutoFill(providerRef.current, {
             field: entry.field,
             keys: available,
             usedKeys: Array.from(usedKeys),
@@ -554,8 +564,29 @@ export default function App() {
           }
         }
       }
+    } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        setAutoSummary(error.message);
+        setFeedback(error.message);
+        summaryLocked = true;
+      } else {
+        console.warn('Auto mode run failed', error);
+        const message =
+          error instanceof Error ? error.message : t('sidepanel.auto.noModel');
+        setAutoSummary(message);
+        setFeedback(message);
+        summaryLocked = true;
+      }
     } finally {
       setAutoRunning(false);
+      if (summaryLocked) {
+        return;
+      }
       if (stoppedEarly && pausedFieldLabel) {
         setAutoSummary(
           t('sidepanel.auto.paused', [String(filled), String(attempted), pausedFieldLabel]),
@@ -716,14 +747,14 @@ export default function App() {
     [slotValues, manualLeaves],
   );
 
-  const classifyAndApply = useCallback(async (descriptors: FieldDescriptor[]) => {
+  const classifyAndApply = useCallback(async (descriptors: FieldDescriptor[]): Promise<boolean> => {
     if (descriptors.length === 0) {
-      return;
+      return false;
     }
     try {
-      const map = await classifyFieldDescriptors(descriptors);
+      const map = await classifyFieldDescriptors(providerRef.current, descriptors);
       if (map.size === 0) {
-        return;
+        return false;
       }
       setFields((current) =>
         current.map((entry) => {
@@ -741,8 +772,19 @@ export default function App() {
           };
         }),
       );
+      return true;
     } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        setFeedback(error.message);
+        return false;
+      }
       console.warn('Field classification failed', error);
+      return false;
     }
   }, []);
 
@@ -756,8 +798,10 @@ export default function App() {
     }
     setClassifying(true);
     try {
-      await classifyAndApply(descriptors);
-      setFeedback(t('sidepanel.feedback.classificationUpdated'));
+      const updated = await classifyAndApply(descriptors);
+      if (updated) {
+        setFeedback(t('sidepanel.feedback.classificationUpdated'));
+      }
     } finally {
       setClassifying(false);
     }

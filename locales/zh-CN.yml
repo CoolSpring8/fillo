@@ -113,7 +113,7 @@ sidepanel:
     description: 使用本地模型自动匹配简历字段并逐项填写。
     start: 开始自动填充
     running: 正在填充…
-    noModel: 本地 AI 不可用，请更新 Chrome 以启用。
+    noModel: AI 提供商不可用，请在 ApplyPilot 选项中配置。
     noKeys: 暂无可用于自动填充的简历数据。
     summary: 已填写 $1 / $2 个字段。
     paused: 已填写 $1 / $2 个字段，暂停于"$3"。

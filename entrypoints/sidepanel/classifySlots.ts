@@ -4,6 +4,14 @@ import {
   FIELD_CLASSIFICATION_RESPONSE_SCHEMA,
   type ClassificationSlotResponse,
 } from '../../shared/schema/fieldClassificationResponse';
+import type { ProviderConfig } from '../../shared/types';
+import { invokeWithProvider } from '../../shared/llm/runtime';
+import {
+  NoProviderConfiguredError,
+  ProviderAvailabilityError,
+  ProviderConfigurationError,
+  ProviderInvocationError,
+} from '../../shared/llm/errors';
 
 export interface FieldDescriptor {
   id: string;
@@ -16,30 +24,6 @@ export interface FieldDescriptor {
 export interface FieldClassification {
   slot?: FieldSlot;
   reason?: string;
-}
-
-interface LanguageModel {
-  create: () => Promise<LanguageModelSession>;
-}
-
-interface LanguageModelSession {
-  prompt: (input: string, options?: Record<string, unknown>) => Promise<string>;
-  destroy?: () => void;
-}
-
-function getLanguageModel(): LanguageModel | undefined {
-  const lm = (window as unknown as { LanguageModel?: LanguageModel; ai?: { languageModel?: LanguageModel } })
-    .LanguageModel;
-  if (lm) {
-    return lm;
-  }
-  return (window as unknown as { ai?: { languageModel?: LanguageModel } }).ai?.languageModel;
-}
-
-function formatMessages(messages: { role: 'system' | 'user'; content: string }[]): string {
-  return messages
-    .map((message) => `${message.role.toUpperCase()}:\n${message.content}`)
-    .join('\n\n');
 }
 
 function chunkDescriptors(descriptors: FieldDescriptor[], size: number): FieldDescriptor[][] {
@@ -61,27 +45,25 @@ function parseSlot(slot: ClassificationSlotResponse): FieldSlot | undefined {
 }
 
 export async function classifyFieldDescriptors(
+  provider: ProviderConfig | null | undefined,
   descriptors: FieldDescriptor[],
 ): Promise<Map<string, FieldClassification>> {
   if (descriptors.length === 0) {
     return new Map();
   }
 
-  const model = getLanguageModel();
-  if (!model) {
-    return new Map();
+  if (!provider) {
+    throw new NoProviderConfiguredError();
   }
 
   const batches = chunkDescriptors(descriptors, 12);
   const result = new Map<string, FieldClassification>();
 
   for (const batch of batches) {
-    let session: LanguageModelSession | undefined;
     try {
-      session = await model.create();
-      const prompt = formatMessages([
+      const messages = [
         {
-          role: 'system',
+          role: 'system' as const,
           content:
             'You map job application form fields to canonical resume slots. ' +
             'Only respond with JSON strictly matching the provided schema. ' +
@@ -89,7 +71,7 @@ export async function classifyFieldDescriptors(
             'If uncertain, return slot "unknown". Prefer given-name / family-name when available.',
         },
         {
-          role: 'user',
+          role: 'user' as const,
           content: JSON.stringify({
             fields: batch.map((descriptor) => ({
               id: descriptor.id,
@@ -100,10 +82,10 @@ export async function classifyFieldDescriptors(
             })),
           }),
         },
-      ]);
+      ];
 
-      const raw = await session.prompt(prompt, {
-        responseConstraint: FIELD_CLASSIFICATION_RESPONSE_SCHEMA,
+      const raw = await invokeWithProvider(provider, messages, {
+        responseSchema: FIELD_CLASSIFICATION_RESPONSE_SCHEMA,
         temperature: 0,
       });
 
@@ -129,9 +111,15 @@ export async function classifyFieldDescriptors(
         });
       }
     } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        throw error;
+      }
       console.warn('Field classification failed', error);
-    } finally {
-      session?.destroy?.();
     }
   }
 

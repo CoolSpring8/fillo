@@ -113,7 +113,7 @@ sidepanel:
     description: Let the on-device model match resume keys and fill fields automatically.
     start: Start auto fill
     running: Filling…
-    noModel: On-device AI unavailable. Update Chrome to enable auto fill.
+    noModel: AI provider unavailable. Configure a provider in ApplyPilot options.
     noKeys: No resume data available for auto fill.
     summary: Filled $1 of $2 fields.
     paused: Paused after filling $1 of $2 fields at "$3".

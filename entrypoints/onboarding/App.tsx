@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
+import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
-  ensureOnDeviceAvailability,
-  promptOnDevice,
-  type LanguageModelAvailability,
-} from '../../shared/llm/chromePrompt';
-import { promptOpenAI } from '../../shared/llm/openai';
+  NoProviderConfiguredError,
+  ProviderAvailabilityError,
+  ProviderConfigurationError,
+  ProviderInvocationError,
+} from '../../shared/llm/errors';
 import { buildResumePrompt } from '../../shared/llm/prompt';
 import { extractTextFromPdf } from '../../shared/pdf/extractText';
 import { deleteProfile, listProfiles, saveProfile, storeFile } from '../../shared/storage/profiles';
 import {
+  createOnDeviceProvider,
   createOpenAIProvider,
   getSettings,
   saveSettings,
   OPENAI_DEFAULT_BASE_URL,
 } from '../../shared/storage/settings';
 import { getAllAdapterIds } from '../../shared/apply/slots';
+import { OUTPUT_SCHEMA } from '../../shared/schema/outputSchema';
 import { validateResume } from '../../shared/validate';
 import type {
   AppSettings,
@@ -308,19 +312,27 @@ export default function App() {
       setStatus({ phase: 'parsing', message: t('onboarding.status.parsing') });
       const messages = buildResumePrompt(selectedProfile.rawText);
 
-      let result: ResumeExtractionResult;
-      let providerSnapshot: ProviderSnapshot;
-      if (selectedProvider === 'on-device') {
-        result = await promptOnDevice(messages);
-        providerSnapshot = { kind: 'on-device' };
-      } else {
-        const openAiBaseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-        result = await promptOpenAI(
-          { apiKey, model, apiBaseUrl: openAiBaseUrl },
-          messages,
-        );
-        providerSnapshot = { kind: 'openai', model, apiBaseUrl: openAiBaseUrl };
-      }
+      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const providerConfig: ProviderConfig =
+        selectedProvider === 'openai'
+          ? createOpenAIProvider(apiKey, model, baseUrl)
+          : createOnDeviceProvider();
+
+      const raw = await invokeWithProvider(providerConfig, messages, {
+        responseSchema: OUTPUT_SCHEMA,
+        temperature: 0,
+      });
+
+      const parsed = JSON.parse(raw) as ResumeExtractionResult;
+      const result: ResumeExtractionResult = {
+        resume: parsed.resume ?? {},
+        custom: parsed.custom ?? {},
+      };
+
+      const providerSnapshot: ProviderSnapshot =
+        providerConfig.kind === 'openai'
+          ? { kind: 'openai', model: providerConfig.model, apiBaseUrl: providerConfig.apiBaseUrl }
+          : { kind: 'on-device' };
 
       setStatus({ phase: 'saving', message: t('onboarding.status.savingParsing') });
       const validation = validateResume(result.resume);
@@ -358,9 +370,20 @@ export default function App() {
         message: t('onboarding.status.parsingComplete'),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatus({ phase: 'error', message: t('onboarding.status.parsingFailed') });
-      setErrorDetails(message);
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError
+      ) {
+        setStatus({ phase: 'error', message: error.message });
+        setErrorDetails(null);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        const statusMessage =
+          error instanceof ProviderInvocationError ? error.message : t('onboarding.status.parsingFailed');
+        setStatus({ phase: 'error', message: statusMessage });
+        setErrorDetails(error instanceof ProviderInvocationError ? null : message);
+      }
       console.error(error);
     } finally {
       setBusy(false);

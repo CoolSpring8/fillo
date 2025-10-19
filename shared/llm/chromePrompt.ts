@@ -1,5 +1,8 @@
-import { OUTPUT_SCHEMA } from '../schema/outputSchema';
-import type { ChatMessage, ResumeExtractionResult } from '../types';
+import type { ChatMessage } from '../types';
+import {
+  ProviderAvailabilityError,
+  ProviderInvocationError,
+} from './errors';
 
 export type LanguageModelAvailability = 'unavailable' | 'available' | 'downloadable' | 'downloading';
 
@@ -9,7 +12,8 @@ interface ChromeLanguageModel {
 }
 
 interface ChromeLanguageModelSession {
-  prompt: (input: string, options?: Record<string, unknown>) => Promise<string>;
+  prompt: (input: ChatMessage[] | string, options?: Record<string, unknown>) => Promise<string>;
+  clone?: (options?: Record<string, unknown>) => Promise<ChromeLanguageModelSession>;
   destroy?: () => void;
 }
 
@@ -22,14 +26,154 @@ declare global {
   }
 }
 
-function getLanguageModel(): ChromeLanguageModel | undefined {
-  return window.LanguageModel;
+interface OnDeviceSessionHandle {
+  session: ChromeLanguageModelSession;
+  release: () => void;
+  isShared: boolean;
 }
 
-function formatMessages(messages: ChatMessage[]): string {
-  return messages
-    .map((message) => `${message.role.toUpperCase()}:\n${message.content}`)
-    .join('\n\n');
+export interface OnDeviceInvocationOptions {
+  responseSchema?: Record<string, unknown>;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
+let sharedSessionPromise: Promise<ChromeLanguageModelSession> | null = null;
+let sharedSession: ChromeLanguageModelSession | null = null;
+let sharedSessionQueue: Promise<void> = Promise.resolve();
+
+function getLanguageModel(): ChromeLanguageModel | undefined {
+  const win = window as unknown as {
+    LanguageModel?: ChromeLanguageModel;
+    ai?: { languageModel?: ChromeLanguageModel };
+  };
+  return win.ai?.languageModel ?? win.LanguageModel;
+}
+
+function resetSharedSession(): void {
+  try {
+    sharedSession?.destroy?.();
+  } catch {
+    // ignore destroy failures
+  }
+  sharedSession = null;
+  sharedSessionPromise = null;
+  sharedSessionQueue = Promise.resolve();
+}
+
+async function ensureLanguageModel(kind: 'on-device'): Promise<ChromeLanguageModel> {
+  const languageModel = getLanguageModel();
+  if (!languageModel) {
+    throw new ProviderAvailabilityError(kind, 'On-device model unavailable in this context.');
+  }
+  const availability = await ensureOnDeviceAvailability();
+  if (availability !== 'available') {
+    switch (availability) {
+      case 'downloadable':
+        throw new ProviderAvailabilityError(
+          kind,
+          'On-device model not downloaded. Open the options page to download Gemini Nano before continuing.',
+          availability,
+        );
+      case 'downloading':
+        throw new ProviderAvailabilityError(
+          kind,
+          'On-device model is still downloading. Please wait for the download to complete.',
+          availability,
+        );
+      default:
+        throw new ProviderAvailabilityError(
+          kind,
+          'On-device model unavailable. Enable Chrome built-in AI or choose another provider.',
+          availability,
+        );
+    }
+  }
+  return languageModel;
+}
+
+async function ensureSharedSession(languageModel: ChromeLanguageModel): Promise<ChromeLanguageModelSession> {
+  if (sharedSession) {
+    return sharedSession;
+  }
+  if (!sharedSessionPromise) {
+    sharedSessionPromise = languageModel
+      .create()
+      .catch((error) => {
+        sharedSessionPromise = null;
+        throw error;
+      })
+      .then((session) => {
+        sharedSession = session;
+        return session;
+      });
+  }
+  sharedSession = await sharedSessionPromise;
+  return sharedSession;
+}
+
+async function acquireSession(languageModel: ChromeLanguageModel): Promise<OnDeviceSessionHandle> {
+  const base = await ensureSharedSession(languageModel);
+  if (typeof base.clone === 'function') {
+    try {
+      const clone = await base.clone();
+      return {
+        session: clone,
+        release: () => {
+          try {
+            clone.destroy?.();
+          } catch {
+            // noop
+          }
+        },
+        isShared: false,
+      };
+    } catch (error) {
+      console.warn('Chrome Prompt API clone() failed. Falling back to dedicated session.', error);
+    }
+  }
+
+  // If clone is unavailable or failed, create a throwaway session to avoid mutating shared session state across concurrent calls.
+  try {
+    const session = await languageModel.create();
+    return {
+      session,
+      release: () => {
+        try {
+          session.destroy?.();
+        } catch {
+          // noop
+        }
+      },
+      isShared: false,
+    };
+  } catch (error) {
+    // As a last resort, fall back to the shared session with queued access.
+    console.warn('Falling back to shared session for Chrome Prompt API calls.', error);
+    return {
+      session: base,
+      release: () => {
+        // queue release handled separately
+      },
+      isShared: true,
+    };
+  }
+}
+
+function queueSharedSessionWork<T>(work: () => Promise<T>): Promise<T> {
+  const previous = sharedSessionQueue;
+  let resolveNext: (() => void) | null = null;
+  sharedSessionQueue = new Promise<void>((resolve) => {
+    resolveNext = resolve;
+  });
+  return previous
+    .catch(() => {
+      // ignore previous failure; continue regardless
+    })
+    .then(work)
+    .finally(() => {
+      resolveNext?.();
+    });
 }
 
 export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailability> {
@@ -37,11 +181,9 @@ export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailab
   if (!languageModel) {
     return 'unavailable';
   }
-
   if (!languageModel.availability) {
     return 'unavailable';
   }
-
   try {
     return await languageModel.availability();
   } catch {
@@ -49,28 +191,37 @@ export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailab
   }
 }
 
-export async function promptOnDevice(messages: ChatMessage[]): Promise<ResumeExtractionResult> {
-  const languageModel = getLanguageModel();
-  if (!languageModel) {
-    throw new Error('On-device model unavailable in this context.');
+export async function promptOnDevice(
+  messages: ChatMessage[],
+  { responseSchema, temperature = 0, signal }: OnDeviceInvocationOptions = {},
+): Promise<string> {
+  const languageModel = await ensureLanguageModel('on-device');
+  const handle = await acquireSession(languageModel);
+
+  const runPrompt = async () => {
+    try {
+      return await handle.session.prompt(messages, {
+        responseConstraint: responseSchema,
+        temperature,
+        signal,
+      });
+    } catch (error) {
+      resetSharedSession();
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new ProviderInvocationError('on-device', `On-device prompt failed: ${reason}`);
+    }
+  };
+
+  if (handle.isShared) {
+    return queueSharedSessionWork(runPrompt);
   }
 
-  const session = await languageModel.create();
-
   try {
-    const promptText = formatMessages(messages);
-    const responseJson = await session.prompt(promptText, {
-      // Chrome Prompt API expects a JSON schema constraint when enforcing structure.
-      responseConstraint: OUTPUT_SCHEMA,
-      temperature: 0,
-    });
-
-    const parsed = JSON.parse(responseJson) as ResumeExtractionResult;
-    return {
-      resume: parsed.resume ?? {},
-      custom: parsed.custom ?? {},
-    };
+    return await runPrompt();
   } finally {
-    session.destroy?.();
+    handle.release();
   }
 }
