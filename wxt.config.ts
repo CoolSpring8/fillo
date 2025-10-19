@@ -13,7 +13,7 @@ export default defineConfig({
       default_title: 'ApplyPilot',
     },
     options_page: 'options.html',
-    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus'],
+    permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus', 'tabs'],
     host_permissions: [
       'https://api.openai.com/*',
       'https://*.greenhouse.io/*',
