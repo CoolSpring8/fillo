@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Container, List, Stack, Text, Title } from '@mantine/core';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
@@ -28,6 +28,10 @@ import type {
   ProfileRecord,
   ResumeExtractionResult,
 } from '../../shared/types';
+import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCard';
+import { UploadCard } from './components/UploadCard';
+import { ProviderCard } from './components/ProviderCard';
+import { EditProfileCard } from './components/EditProfileCard';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -78,7 +82,6 @@ export default function App() {
   const [customDraft, setCustomDraft] = useState('');
   const [draftDirty, setDraftDirty] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { t } = i18n;
   const providerLabels: Record<'on-device' | 'openai', string> = {
     'on-device': t('options.provider.onDevice'),
@@ -162,8 +165,7 @@ export default function App() {
     return () => browser.storage.onChanged.removeListener(listener);
   }, [refreshProfiles]);
 
-  const handleProviderChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value as 'on-device' | 'openai';
+  const handleProviderChange = async (value: 'on-device' | 'openai') => {
     setSelectedProvider(value);
     if (value === 'on-device') {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
@@ -218,18 +220,10 @@ export default function App() {
     }
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.target.files?.[0] ?? null;
+  const handleFileSelect = (nextFile: File | null) => {
     setFile(nextFile);
     setStatus({ phase: 'idle', message: '' });
     setErrorDetails(null);
-  };
-
-  const resetFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setFile(null);
   };
 
   const handleExtract = async () => {
@@ -278,7 +272,7 @@ export default function App() {
         phase: 'complete',
         message: t('onboarding.status.extractionComplete'),
       });
-      resetFileInput();
+      setFile(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus({ phase: 'error', message: t('onboarding.status.extractionFailed') });
@@ -546,240 +540,170 @@ export default function App() {
 
   const profileCountLabel = profiles.length.toLocaleString();
 
+  const profilesData: ProfilesCardProfile[] = profiles.map((profile) => ({
+    id: profile.id,
+    name: resolveProfileName(profile),
+    summary: formatProfileSummary(profile),
+    parsing: formatProfileParsing(profile),
+    isActive: selectedProfile?.id === profile.id,
+  }));
+
+  const currentSummary =
+    selectedProfile && activeRawLength
+      ? t('onboarding.upload.current', [resolveProfileName(selectedProfile), activeRawLength])
+      : null;
+
+  const workingLabel = t('onboarding.buttons.working');
+  const uploadWorking = busy && busyAction === 'extract';
+  const parseWorking = busy && busyAction === 'parse';
+  const editWorking = busy && busyAction === 'edit';
+
+  const parseDisabled =
+    busy || !selectedProfile || draftDirty || (selectedProvider === 'openai' && !apiKey);
+
+  const parseWarning =
+    selectedProfile && draftDirty ? t('onboarding.parse.needsSave') : null;
+  const parseHint =
+    selectedProfile && !draftDirty
+      ? t('onboarding.parse.summary', [resolveProfileName(selectedProfile)])
+      : null;
+  const needProfileMessage = !selectedProfile ? t('onboarding.parse.needProfile') : null;
+
+  const profilesErrorLabel = profilesState.error
+    ? t('onboarding.manage.error', [profilesState.error])
+    : undefined;
+
+  const statusColor =
+    status.phase === 'error'
+      ? 'red'
+      : status.phase === 'complete'
+        ? 'green'
+        : status.phase === 'idle'
+          ? 'gray'
+          : 'blue';
+
   return (
-    <div className="onboarding-container">
-      <header>
-        <h1>{t('onboarding.title')}</h1>
-        <p>{t('onboarding.description')}</p>
-      </header>
+    <Container size="lg" py="xl" style={{ minHeight: '100vh' }}>
+      <Stack gap="xl">
+        <Stack gap={4}>
+          <Title order={1}>{t('onboarding.title')}</Title>
+          <Text c="dimmed">{t('onboarding.description')}</Text>
+        </Stack>
 
-      <section className="card">
-        <div className="card-heading">
-          <div>
-            <h2>{t('onboarding.manage.heading')}</h2>
-            <p className="helper-text">
-              {t('onboarding.manage.count', [profileCountLabel])}
-            </p>
-          </div>
-          <button type="button" className="ghost" onClick={handleCreateProfile} disabled={busy}>
-            {t('onboarding.manage.addProfile')}
-          </button>
-        </div>
-        {profilesState.loading && <p className="helper-text">{t('onboarding.manage.loading')}</p>}
-        {profilesState.error && (
-          <p className="error-text">{t('onboarding.manage.error', [profilesState.error])}</p>
-        )}
-        {!profilesState.loading && profiles.length === 0 && (
-          <p className="helper-text">{t('onboarding.manage.empty')}</p>
-        )}
-        {profiles.length > 0 && (
-          <div className="profile-list">
-            {profiles.map((profile) => {
-              const isActive = selectedProfile?.id === profile.id;
-              return (
-                <div key={profile.id} className={`profile-row ${isActive ? 'active' : ''}`}>
-                  <button
-                    type="button"
-                    className="profile-select"
-                    onClick={() => handleSelectProfile(profile.id)}
-                    aria-pressed={isActive}
-                  >
-                    <span className="profile-title">{resolveProfileName(profile)}</span>
-                    <span className="profile-meta">{formatProfileSummary(profile)}</span>
-                    <span className="profile-meta">{formatProfileParsing(profile)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-link"
-                    disabled={busy}
-                    onClick={() => handleDeleteProfile(profile.id)}
-                  >
-                    {t('onboarding.manage.delete')}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>{t('onboarding.upload.heading')}</h2>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileChange}
+        <ProfilesCard
+          title={t('onboarding.manage.heading')}
+          countLabel={t('onboarding.manage.count', [profileCountLabel])}
+          addLabel={t('onboarding.manage.addProfile')}
+          loadingLabel={t('onboarding.manage.loading')}
+          emptyLabel={t('onboarding.manage.empty')}
+          deleteLabel={t('onboarding.manage.delete')}
+          errorLabel={profilesErrorLabel}
+          profiles={profilesData}
+          isLoading={profilesState.loading}
+          busy={busy}
+          onCreate={handleCreateProfile}
+          onSelect={handleSelectProfile}
+          onDelete={handleDeleteProfile}
         />
-        <button type="button" disabled={busy || !file} onClick={handleExtract}>
-          {busy && busyAction === 'extract' ? t('onboarding.buttons.working') : t('onboarding.upload.button')}
-        </button>
-        <p className="helper-text">{t('onboarding.upload.helper')}</p>
-        {selectedProfile && activeRawLength && (
-          <p className="helper-text">
-            {t('onboarding.upload.current', [resolveProfileName(selectedProfile), activeRawLength])}
-          </p>
+
+        <UploadCard
+          title={t('onboarding.upload.heading')}
+          helper={t('onboarding.upload.helper')}
+          buttonLabel={t('onboarding.upload.button')}
+          workingLabel={workingLabel}
+          isWorking={uploadWorking}
+          currentSummary={currentSummary}
+          file={file}
+          busy={busy}
+          onExtract={handleExtract}
+          onFileSelect={handleFileSelect}
+        />
+
+        <ProviderCard
+          title={t('onboarding.parse.heading')}
+          helper={t('onboarding.parse.helper')}
+          providerLabels={providerLabels}
+          selectedProvider={selectedProvider}
+          canUseOnDevice={canUseOnDevice}
+          onDeviceNote={onDeviceNote}
+          apiKeyLabel={t('onboarding.openai.apiKey')}
+          apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
+          modelLabel={t('onboarding.openai.model')}
+          baseUrlLabel={t('onboarding.openai.baseUrl')}
+          baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
+          openAiHelper={t('onboarding.openai.helper')}
+          apiKey={apiKey}
+          model={model}
+          apiBaseUrl={apiBaseUrl}
+          workingLabel={workingLabel}
+          parseButtonLabel={t('onboarding.parse.button')}
+          parseWarning={parseWarning}
+          parseHint={parseHint}
+          needProfileMessage={needProfileMessage}
+          isWorking={parseWorking}
+          disabled={parseDisabled}
+          onProviderChange={handleProviderChange}
+          onApiKeyChange={handleApiKeyChange}
+          onModelChange={handleModelChange}
+          onApiBaseUrlChange={handleApiBaseUrlChange}
+          onParse={handleParse}
+        />
+
+        {selectedProfile && (
+          <EditProfileCard
+            title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
+            helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
+            rawLabel={t('onboarding.edit.rawLabel')}
+            rawValue={rawDraft}
+            rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
+            resumeLabel={t('onboarding.edit.resumeLabel')}
+            resumeValue={resumeDraft}
+            resumeHelper={t('onboarding.edit.resumeHelper')}
+            customLabel={t('onboarding.edit.customLabel')}
+            customValue={customDraft}
+            customHelper={t('onboarding.edit.customHelper')}
+            saveLabel={t('onboarding.edit.save')}
+            resetLabel={t('onboarding.edit.reset')}
+            workingLabel={workingLabel}
+            disabledSave={!draftDirty || busy}
+            disabledReset={!draftDirty || busy}
+            isWorking={editWorking}
+            errorMessage={draftError}
+            onSave={handleSaveDrafts}
+            onReset={handleResetDrafts}
+            onRawChange={handleRawDraftChange}
+            onResumeChange={handleResumeDraftChange}
+            onCustomChange={handleCustomDraftChange}
+          />
         )}
-      </section>
 
-      <section className="card">
-        <h2>{t('onboarding.parse.heading')}</h2>
-        <p className="helper-text">{t('onboarding.parse.helper')}</p>
-        <div className="provider-options">
-          <label className={!canUseOnDevice ? 'disabled' : ''}>
-            <input
-              type="radio"
-              name="provider"
-              value="on-device"
-              checked={selectedProvider === 'on-device'}
-              onChange={handleProviderChange}
-              disabled={!canUseOnDevice}
-            />
-            {providerLabels['on-device']}
-          </label>
-          {onDeviceNote && <p className="helper-text">{onDeviceNote}</p>}
-
-          <label>
-            <input
-              type="radio"
-              name="provider"
-              value="openai"
-              checked={selectedProvider === 'openai'}
-              onChange={handleProviderChange}
-            />
-            {providerLabels.openai}
-          </label>
-          {selectedProvider === 'openai' && (
-            <div className="openai-fields">
-              <label className="field">
-                {t('onboarding.openai.apiKey')}
-                <input
-                  type="password"
-                  value={apiKey}
-                  placeholder={t('onboarding.openai.apiKeyPlaceholder')}
-                  onChange={(event) => handleApiKeyChange(event.target.value)}
-                  autoComplete="off"
-                />
-              </label>
-              <label className="field">
-                {t('onboarding.openai.model')}
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(event) => handleModelChange(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                {t('onboarding.openai.baseUrl')}
-                <input
-                  type="text"
-                  value={apiBaseUrl}
-                  onChange={(event) => handleApiBaseUrlChange(event.target.value)}
-                  placeholder={t('onboarding.openai.baseUrlPlaceholder')}
-                />
-              </label>
-              <p className="helper-text">{t('onboarding.openai.helper')}</p>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          disabled={
-            busy ||
-            !selectedProfile ||
-            draftDirty ||
-            (selectedProvider === 'openai' && !apiKey)
-          }
-          onClick={handleParse}
-        >
-          {busy && busyAction === 'parse' ? t('onboarding.buttons.working') : t('onboarding.parse.button')}
-        </button>
-        {!selectedProfile && (
-          <p className="helper-text">{t('onboarding.parse.needProfile')}</p>
+        {status.message && (
+          <Alert variant="light" color={statusColor}>
+            <Stack gap={4}>
+              <Text fw={600}>{status.message}</Text>
+              {errorDetails && (
+                <Text fz="sm" c="dimmed">
+                  {errorDetails}
+                </Text>
+              )}
+            </Stack>
+          </Alert>
         )}
-        {selectedProfile && draftDirty && (
-          <p className="helper-text warning">{t('onboarding.parse.needsSave')}</p>
+
+        {validationErrors.length > 0 && (
+          <Alert variant="light" color="yellow">
+            <Stack gap="xs">
+              <Text fw={600}>{t('onboarding.validation.heading')}</Text>
+              <List spacing={4} size="sm">
+                {validationErrors.map((item) => (
+                  <List.Item key={item}>{item}</List.Item>
+                ))}
+              </List>
+            </Stack>
+          </Alert>
         )}
-        {selectedProfile && !draftDirty && (
-          <p className="helper-text">
-            {t('onboarding.parse.summary', [resolveProfileName(selectedProfile)])}
-          </p>
-        )}
-      </section>
-
-      {selectedProfile && (
-        <section className="card edit-card">
-          <div className="card-heading">
-            <div>
-              <h2>{t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}</h2>
-              <p className="helper-text">
-                {t('onboarding.edit.helper', [activeRawLength ?? '0'])}
-              </p>
-            </div>
-            <div className="heading-actions">
-              <button type="button" className="ghost" onClick={handleResetDrafts} disabled={!draftDirty || busy}>
-                {t('onboarding.edit.reset')}
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveDrafts}
-                disabled={!draftDirty || busy}
-              >
-                {busy && busyAction === 'edit' ? t('onboarding.buttons.working') : t('onboarding.edit.save')}
-              </button>
-            </div>
-          </div>
-          {draftError && <p className="error-text">{draftError}</p>}
-          <div className="edit-grid">
-            <label className="field">
-              {t('onboarding.edit.rawLabel')}
-              <textarea
-                value={rawDraft}
-                onChange={(event) => handleRawDraftChange(event.target.value)}
-                rows={10}
-              />
-              <span className="helper-text">{t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}</span>
-            </label>
-            <label className="field">
-              {t('onboarding.edit.resumeLabel')}
-              <textarea
-                value={resumeDraft}
-                onChange={(event) => handleResumeDraftChange(event.target.value)}
-                rows={10}
-              />
-              <span className="helper-text">{t('onboarding.edit.resumeHelper')}</span>
-            </label>
-            <label className="field">
-              {t('onboarding.edit.customLabel')}
-              <textarea
-                value={customDraft}
-                onChange={(event) => handleCustomDraftChange(event.target.value)}
-                rows={10}
-              />
-              <span className="helper-text">{t('onboarding.edit.customHelper')}</span>
-            </label>
-          </div>
-        </section>
-      )}
-
-      {status.message && (
-        <section className={`status ${status.phase}`}>
-          <strong>{status.message}</strong>
-          {errorDetails && <p>{errorDetails}</p>}
-        </section>
-      )}
-
-      {validationErrors.length > 0 && (
-        <section className="status warning">
-          <strong>{t('onboarding.validation.heading')}</strong>
-          <ul>
-            {validationErrors.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
+      </Stack>
+    </Container>
   );
 }
 
