@@ -15,6 +15,7 @@ interface PromptOptions {
 
 interface HighlightOptions {
   label: string;
+  duration?: number;
 }
 
 interface OverlayElements {
@@ -26,8 +27,13 @@ let cleanupFns: Array<() => void> = [];
 let currentTarget: HTMLElement | null = null;
 let currentMode: OverlayMode | null = null;
 let overlayRoot: ShadowRoot | null = null;
+let dismissTimer: number | null = null;
 
 export function clearOverlay(): void {
+  if (dismissTimer !== null) {
+    window.clearTimeout(dismissTimer);
+    dismissTimer = null;
+  }
   cleanupFns.forEach((fn) => fn());
   cleanupFns = [];
   currentTarget = null;
@@ -35,6 +41,7 @@ export function clearOverlay(): void {
 
   const { highlight, popover } = ensureElements();
   highlight.style.display = 'none';
+  highlight.style.opacity = '0';
   popover.hidden = true;
   popover.innerHTML = '';
 }
@@ -64,6 +71,20 @@ export function showHighlight(target: Element, options: HighlightOptions): void 
     popover.hidden = true;
   }
   attachRepositionListeners(target, highlight, popover, false);
+
+  const duration = Math.max(0, options.duration ?? 1000);
+  if (duration > 0) {
+    dismissTimer = window.setTimeout(() => {
+      dismissTimer = null;
+      clearOverlay();
+    }, duration);
+    cleanupFns.push(() => {
+      if (dismissTimer !== null) {
+        window.clearTimeout(dismissTimer);
+        dismissTimer = null;
+      }
+    });
+  }
 }
 
 export function showPrompt(target: Element, options: PromptOptions): void {
@@ -256,10 +277,13 @@ function ensureElements(): OverlayElements {
     style.textContent = `
       .highlight {
         position: fixed;
-        border: 2px solid #4c9ffe;
-        border-radius: 6px;
-        box-shadow: 0 0 0 4px rgba(76, 159, 254, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 10px;
+        box-shadow: 0 0 0 20000px rgba(15, 23, 42, 0.45);
+        background: rgba(255, 255, 255, 0.03);
         pointer-events: none;
+        transition: opacity 120ms ease;
+        opacity: 0;
       }
       .popover {
         position: fixed;
@@ -361,11 +385,13 @@ async function positionPopover(target: HTMLElement, popover: HTMLDivElement): Pr
 
 function updateHighlightRect(target: HTMLElement, highlight: HTMLDivElement): void {
   const rect = target.getBoundingClientRect();
+  const padding = 6;
   highlight.style.display = 'block';
-  highlight.style.top = `${Math.max(rect.top, 0)}px`;
-  highlight.style.left = `${Math.max(rect.left, 0)}px`;
-  highlight.style.width = `${Math.max(rect.width, 0)}px`;
-  highlight.style.height = `${Math.max(rect.height, 0)}px`;
+  highlight.style.top = `${Math.max(rect.top - padding, 0)}px`;
+  highlight.style.left = `${Math.max(rect.left - padding, 0)}px`;
+  highlight.style.width = `${Math.max(rect.width + padding * 2, 0)}px`;
+  highlight.style.height = `${Math.max(rect.height + padding * 2, 0)}px`;
+  highlight.style.opacity = '1';
 }
 
 function nextFrame(): Promise<void> {

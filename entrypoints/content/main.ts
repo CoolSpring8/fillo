@@ -281,6 +281,7 @@ export default defineContentScript({
         } catch {
           // Element might not be focusable; ignore.
         }
+        showHighlight(target, { label: '', duration: 1000 });
       });
     }
   },
