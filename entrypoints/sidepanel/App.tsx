@@ -56,6 +56,7 @@ export default function App() {
   const [autoSummary, setAutoSummary] = useState<string | null>(null);
   const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
+  const [autoFallback, setAutoFallback] = useState<'skip' | 'pause'>('skip');
   const { t } = i18n;
 
   const portRef = useRef<RuntimePort | null>(null);
@@ -63,6 +64,7 @@ export default function App() {
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
   const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
+  const autoFallbackRef = useRef<'skip' | 'pause'>('skip');
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
 
@@ -84,6 +86,10 @@ export default function App() {
   useEffect(() => {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
   }, [activeAdapterIds, defaultAdapterIds]);
+
+  useEffect(() => {
+    autoFallbackRef.current = autoFallback;
+  }, [autoFallback]);
 
   const formatFillReason = (reason: string): string => {
     const map: Record<string, string> = {
@@ -158,6 +164,9 @@ export default function App() {
           return;
         }
         setActiveAdapterIds(settings.adapters.length > 0 ? settings.adapters : defaultAdapterIds);
+        const fallback = settings.autoFallback ?? 'skip';
+        setAutoFallback(fallback);
+        autoFallbackRef.current = fallback;
       } catch (error) {
         console.warn('Failed to load settings', error);
       }
@@ -408,28 +417,52 @@ export default function App() {
     const snapshot = [...fieldsRef.current];
     let attempted = 0;
     let filled = 0;
+    let stoppedEarly = false;
+    let pausedFieldLabel: string | null = null;
+    const shouldPause = autoFallbackRef.current === 'pause';
 
     resetAutoInsights();
 
     try {
       for (const entry of snapshot) {
+        if (stoppedEarly) {
+          break;
+        }
         if (entry.status === 'filled') {
-          continue;
-        }
-        if (!supportedKinds.has(entry.field.kind)) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-unsupported');
-          continue;
-        }
-        if (entry.field.hasValue) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-non-empty');
           continue;
         }
 
         attempted += 1;
 
+        const markAndMaybePause = (status: FieldStatus, reason: string) => {
+          setFieldStatus(entry.field.id, status, reason);
+          if (shouldPause && !stoppedEarly) {
+            stoppedEarly = true;
+            pausedFieldLabel = entry.field.label || t('sidepanel.field.noLabel');
+          }
+        };
+
+        if (!supportedKinds.has(entry.field.kind)) {
+          markAndMaybePause('skipped', 'auto-unsupported');
+          if (stoppedEarly) {
+            break;
+          }
+          continue;
+        }
+        if (entry.field.hasValue) {
+          markAndMaybePause('skipped', 'auto-non-empty');
+          if (stoppedEarly) {
+            break;
+          }
+          continue;
+        }
+
         const available = availableKeys.filter((key) => !usedKeys.has(key.key));
         if (available.length === 0) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-no-keys');
+          markAndMaybePause('skipped', 'auto-no-keys');
+          if (stoppedEarly) {
+            break;
+          }
           continue;
         }
 
@@ -461,18 +494,27 @@ export default function App() {
         }
 
         if (!decision || decision.decision !== 'fill' || !decision.key) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-no-decision');
+          markAndMaybePause('skipped', 'auto-no-decision');
+          if (stoppedEarly) {
+            break;
+          }
           continue;
         }
 
         const slotValue = slotValuesRef.current[decision.key as FieldSlot];
         if (!slotValue) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-invalid-key');
+          markAndMaybePause('skipped', 'auto-invalid-key');
+          if (stoppedEarly) {
+            break;
+          }
           continue;
         }
         const value = slotValue.trim();
         if (!value) {
-          setFieldStatus(entry.field.id, 'skipped', 'auto-missing-value');
+          markAndMaybePause('skipped', 'auto-missing-value');
+          if (stoppedEarly) {
+            break;
+          }
           continue;
         }
 
@@ -490,7 +532,10 @@ export default function App() {
 
         const result = await waitForFillCompletion(requestId);
         if (!result) {
-          setFieldStatus(entry.field.id, 'failed', 'auto-timeout');
+          markAndMaybePause('failed', 'auto-timeout');
+          if (stoppedEarly) {
+            break;
+          }
           continue;
         }
 
@@ -498,14 +543,24 @@ export default function App() {
           filled += 1;
           usedKeys.add(decision.key);
         } else if (result.status === 'skipped') {
-          setFieldStatus(entry.field.id, 'skipped', result.reason ?? 'auto-no-decision');
+          markAndMaybePause('skipped', result.reason ?? 'auto-no-decision');
+          if (stoppedEarly) {
+            break;
+          }
         } else {
-          setFieldStatus(entry.field.id, 'failed', result.reason ?? 'auto-error');
+          markAndMaybePause('failed', result.reason ?? 'auto-error');
+          if (stoppedEarly) {
+            break;
+          }
         }
       }
     } finally {
       setAutoRunning(false);
-      if (attempted > 0) {
+      if (stoppedEarly && pausedFieldLabel) {
+        setAutoSummary(
+          t('sidepanel.auto.paused', [String(filled), String(attempted), pausedFieldLabel]),
+        );
+      } else if (attempted > 0) {
         setAutoSummary(t('sidepanel.auto.summary', [String(filled), String(attempted)]));
       }
     }

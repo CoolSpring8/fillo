@@ -30,6 +30,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const adapters = useMemo(() => listAvailableAdapters(), []);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(adapters.map((adapter) => adapter.id));
+  const [autoFallback, setAutoFallback] = useState<'skip' | 'pause'>('skip');
   const { t } = i18n;
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export default function App() {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
     }
     setActiveAdapters(settings.adapters.length > 0 ? settings.adapters : adapters.map((adapter) => adapter.id));
+    setAutoFallback(settings.autoFallback ?? 'skip');
   };
 
   const handleSave = async () => {
@@ -61,8 +63,8 @@ export default function App() {
       const selectedAdapters = activeAdapters.length > 0 ? activeAdapters : adapters.map((adapter) => adapter.id);
       const nextSettings: AppSettings =
         provider === 'openai'
-          ? { provider: createOpenAIProvider(apiKey, model, baseUrl), adapters: selectedAdapters }
-          : { provider: { kind: 'on-device' }, adapters: selectedAdapters };
+          ? { provider: createOpenAIProvider(apiKey, model, baseUrl), adapters: selectedAdapters, autoFallback }
+          : { provider: { kind: 'on-device' }, adapters: selectedAdapters, autoFallback };
       await saveSettings(nextSettings);
       setFeedback({ kind: 'success', message: t('options.feedback.saved') });
     } catch (error) {
@@ -193,6 +195,31 @@ export default function App() {
             );
           })}
         </div>
+      </section>
+
+      <section className="card">
+        <h2>{t('options.autofill.heading')}</h2>
+        <p>{t('options.autofill.description')}</p>
+        <label className="field radio">
+          <input
+            type="radio"
+            name="auto-fallback"
+            value="skip"
+            checked={autoFallback === 'skip'}
+            onChange={() => setAutoFallback('skip')}
+          />
+          <span>{t('options.autofill.skip')}</span>
+        </label>
+        <label className="field radio">
+          <input
+            type="radio"
+            name="auto-fallback"
+            value="pause"
+            checked={autoFallback === 'pause'}
+            onChange={() => setAutoFallback('pause')}
+          />
+          <span>{t('options.autofill.pause')}</span>
+        </label>
       </section>
 
       <div className="actions">

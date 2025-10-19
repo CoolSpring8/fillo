@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     kind: 'on-device',
   },
   adapters: getAllAdapterIds(),
+  autoFallback: 'skip',
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -18,15 +19,18 @@ export async function getSettings(): Promise<AppSettings> {
     return DEFAULT_SETTINGS;
   }
   const adapters = Array.isArray(settings.adapters) && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
+  const autoFallback: AppSettings['autoFallback'] = settings.autoFallback === 'pause' ? 'pause' : 'skip';
   if (settings.provider.kind === 'openai') {
     return {
       provider: normalizeOpenAIProvider(settings.provider),
       adapters,
+      autoFallback,
     };
   }
   return {
     provider: settings.provider,
     adapters,
+    autoFallback,
   };
 }
 
@@ -34,8 +38,8 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   const adapters = settings.adapters && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
   const normalized: AppSettings =
     settings.provider.kind === 'openai'
-      ? { provider: normalizeOpenAIProvider(settings.provider), adapters }
-      : { provider: settings.provider, adapters };
+      ? { provider: normalizeOpenAIProvider(settings.provider), adapters, autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip' }
+      : { provider: settings.provider, adapters, autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip' };
   await browser.storage.local.set({ [SETTINGS_KEY]: normalized });
 }
 

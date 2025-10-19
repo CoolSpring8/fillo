@@ -44,11 +44,12 @@ function buildSettings(
   model: string,
   apiBaseUrl: string,
   adapters: string[],
+  autoFallback: AppSettings['autoFallback'],
 ): AppSettings {
   if (kind === 'openai') {
-    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl), adapters };
+    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl), adapters, autoFallback };
   }
-  return { provider: { kind: 'on-device' }, adapters };
+  return { provider: { kind: 'on-device' }, adapters, autoFallback };
 }
 
 export default function App() {
@@ -163,14 +164,16 @@ export default function App() {
     if (value === 'on-device') {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
       const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adapters);
+      const fallback = settings?.autoFallback ?? 'skip';
+      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adapters, fallback);
       setSettings(next);
       await saveSettings(next);
     } else {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       setApiBaseUrl(nextBase);
       const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const next = buildSettings('openai', apiKey, model, nextBase, adapters);
+      const fallback = settings?.autoFallback ?? 'skip';
+      const next = buildSettings('openai', apiKey, model, nextBase, adapters, fallback);
       setSettings(next);
       await saveSettings(next);
     }
@@ -181,7 +184,8 @@ export default function App() {
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const next = buildSettings('openai', value, model, nextBase, adapters);
+      const fallback = settings?.autoFallback ?? 'skip';
+      const next = buildSettings('openai', value, model, nextBase, adapters, fallback);
       setSettings(next);
       void saveSettings(next);
     }
@@ -192,7 +196,8 @@ export default function App() {
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const next = buildSettings('openai', apiKey, value, nextBase, adapters);
+      const fallback = settings?.autoFallback ?? 'skip';
+      const next = buildSettings('openai', apiKey, value, nextBase, adapters, fallback);
       setSettings(next);
       void saveSettings(next);
     }
@@ -202,7 +207,8 @@ export default function App() {
     setApiBaseUrl(value);
     if (selectedProvider === 'openai') {
       const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const next = buildSettings('openai', apiKey, model, value, adapters);
+      const fallback = settings?.autoFallback ?? 'skip';
+      const next = buildSettings('openai', apiKey, model, value, adapters, fallback);
       setSettings(next);
       void saveSettings(next);
     }
@@ -252,12 +258,14 @@ export default function App() {
       await refreshProfiles(id);
 
       const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const fallback = settings?.autoFallback ?? 'skip';
       const nextSettings = buildSettings(
         selectedProvider,
         apiKey,
         model,
         apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
         adapterIds,
+        fallback,
       );
       setSettings(nextSettings);
       await saveSettings(nextSettings);
@@ -333,12 +341,14 @@ export default function App() {
       await refreshProfiles(profile.id);
 
       const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
+      const fallback = settings?.autoFallback ?? 'skip';
       const nextSettings = buildSettings(
         selectedProvider,
         apiKey,
         model,
         apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
         adapterIds,
+        fallback,
       );
       setSettings(nextSettings);
       await saveSettings(nextSettings);

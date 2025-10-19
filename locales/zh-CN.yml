@@ -30,6 +30,11 @@ options:
     saving: 正在保存…
   feedback:
     saved: 设置已保存。
+  autofill:
+    heading: 自动填充行为
+    description: 选择自动填充遇到问题时的处理方式。
+    skip: 跳过问题并继续
+    pause: 暂停，等待手动处理
 popup:
   title: ApplyPilot 简历
   description: 在 ApplyPilot 中导入一次，之后可在任何应用流程中重复使用。
@@ -111,6 +116,7 @@ sidepanel:
     noModel: 本地 AI 不可用，请更新 Chrome 以启用。
     noKeys: 暂无可用于自动填充的简历数据。
     summary: 已填写 $1 / $2 个字段。
+    paused: 已填写 $1 / $2 个字段，暂停于"$3"。
   preview:
     file: 将打开文件选择器以上传简历。
     select: 请在审核面板中选择一个值。

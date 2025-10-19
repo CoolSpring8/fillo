@@ -51,6 +51,7 @@ export interface ProfileRecord {
 export interface AppSettings {
   provider: ProviderConfig;
   adapters: string[];
+  autoFallback: 'skip' | 'pause';
 }
 
 export type ChatMessageRole = 'system' | 'user' | 'assistant';

@@ -30,6 +30,11 @@ options:
     saving: Saving…
   feedback:
     saved: Settings saved.
+  autofill:
+    heading: Auto fill behavior
+    description: Decide how ApplyPilot handles fields that need attention during auto fill.
+    skip: Skip issues and continue automatically
+    pause: Pause for manual review
 popup:
   title: ApplyPilot Profiles
   description: Import once in ApplyPilot and reuse it wherever you apply.
@@ -111,6 +116,7 @@ sidepanel:
     noModel: On-device AI unavailable. Update Chrome to enable auto fill.
     noKeys: No resume data available for auto fill.
     summary: Filled $1 of $2 fields.
+    paused: Paused after filling $1 of $2 fields at "$3".
   preview:
     file: Open the file picker to upload your resume.
     select: Select a value in the approval panel.
