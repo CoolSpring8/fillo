@@ -182,6 +182,31 @@ export default defineContentScript({
         return;
       }
 
+      if (message.mode === 'fill' && (!message.options || message.options.length === 0)) {
+        const value = typeof message.value === 'string' ? message.value : '';
+        if (!value.trim()) {
+          send({
+            kind: 'FILL_RESULT',
+            requestId: message.requestId,
+            fieldId: message.fieldId,
+            status: 'failed',
+            reason: 'empty-value',
+          });
+          clearOverlay();
+          return;
+        }
+        const filled = fillField(message.fieldId, value);
+        send({
+          kind: 'FILL_RESULT',
+          requestId: message.requestId,
+          fieldId: message.fieldId,
+          status: filled ? 'filled' : 'failed',
+          reason: filled ? undefined : 'fill-failed',
+        });
+        clearOverlay();
+        return;
+      }
+
       showPrompt(element, {
         label: message.label || meta.label,
         preview: message.preview,

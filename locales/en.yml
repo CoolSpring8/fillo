@@ -100,6 +100,8 @@ sidepanel:
     copyAll: Copy all
     review: Review & fill
     openPicker: Open picker
+    highlight: Highlight field
+    fillField: Fill field
   feedback:
     noMapped: No mapped fields ready to fill.
     autofill:
@@ -119,7 +121,7 @@ sidepanel:
     paused: Paused after filling $1 of $2 fields at "$3".
   preview:
     file: Open the file picker to upload your resume.
-    select: Select a value in the approval panel.
+    select: Select a value in the side panel.
   field:
     noLabel: (No label)
     unmapped: unmapped
@@ -127,7 +129,10 @@ sidepanel:
     fileSummary: 'File upload: you will be prompted to choose a file.'
     suggestedProfile: 'Suggested (profile): $1'
     suggestedAI: 'Suggested (AI): $1'
-    chooseValue: Choose a value in the approval popup.
+    selectedValue: 'Selected: $1'
+    chooseValue: Select a value from the side panel dropdown.
+    selectorLabel: Stored data
+    selectPlaceholder: Select a value…
     noValues: No stored values available. Update the profile to enable autofill.
     aiNote: 'AI note: $1'
     meta: $1 · $2 · frame $3

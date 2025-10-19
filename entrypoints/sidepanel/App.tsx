@@ -7,6 +7,7 @@ import {
   Card,
   Group,
   NativeSelect,
+  Select,
   Paper,
   ScrollArea,
   Stack,
@@ -46,6 +47,7 @@ type RuntimePort = ReturnType<typeof browser.runtime.connect>;
 interface FieldEntry {
   field: ScannedField;
   slot: FieldSlot | null;
+  selectedSlot: PromptOptionSlot | null;
   suggestion?: string;
   status: FieldStatus;
   reason?: string;
@@ -661,26 +663,75 @@ export default function App() {
     }
   };
 
-  const handleReview = (entry: FieldEntry) => {
-    const options = entry.field.kind === 'file' ? [] : manualOptions;
+  const handleHighlight = (entry: FieldEntry) => {
+    sendMessage({
+      kind: 'HIGHLIGHT_FIELD',
+      fieldId: entry.field.id,
+      frameId: entry.field.frameId,
+      label: entry.field.label,
+    });
+  };
 
-    if (entry.field.kind !== 'file' && options.length === 0) {
+  const handleSlotSelectionChange = (fieldId: string, slot: PromptOptionSlot | null) => {
+    setFields((current) =>
+      current.map((entry) =>
+        entry.field.id === fieldId
+          ? {
+              ...entry,
+              selectedSlot: slot,
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const handleReview = (entry: FieldEntry) => {
+    if (entry.field.kind === 'file') {
+      const requestId = crypto.randomUUID();
+      sendMessage({
+        kind: 'PROMPT_FILL',
+        requestId,
+        fieldId: entry.field.id,
+        frameId: entry.field.frameId,
+        label: entry.field.label,
+        mode: 'click',
+        preview: t('sidepanel.preview.file'),
+      });
+      setFields((current) =>
+        current.map((item) =>
+          item.field.id === entry.field.id
+            ? {
+                ...item,
+                status: 'pending',
+                reason: undefined,
+              }
+            : item,
+        ),
+      );
+      return;
+    }
+
+    if (manualOptions.length === 0) {
       setFeedback(t('sidepanel.feedback.noValues'));
       return;
     }
 
-    const defaultSlot =
-      entry.field.kind === 'file'
-        ? null
-        : entry.slot && options.some((opt) => opt.slot === entry.slot)
-        ? entry.slot
-        : options[0]?.slot ?? null;
-    const defaultValue =
-      entry.field.kind === 'file'
-        ? ''
-        : defaultSlot
-        ? options.find((opt) => opt.slot === defaultSlot)?.value ?? ''
-        : '';
+    const selected =
+      entry.selectedSlot !== null
+        ? manualOptions.find((option) => option.slot === entry.selectedSlot) ?? null
+        : null;
+    const fallback =
+      entry.slot && manualOptions.some((option) => option.slot === entry.slot)
+        ? manualOptions.find((option) => option.slot === entry.slot) ?? null
+        : null;
+    const selectedValue = selected?.value ?? fallback?.value ?? entry.suggestion ?? '';
+    const normalizedValue = selectedValue.trim();
+
+    if (!normalizedValue) {
+      setFeedback(t('sidepanel.feedback.noValues'));
+      return;
+    }
+
     const requestId = crypto.randomUUID();
     sendMessage({
       kind: 'PROMPT_FILL',
@@ -688,14 +739,9 @@ export default function App() {
       fieldId: entry.field.id,
       frameId: entry.field.frameId,
       label: entry.field.label,
-      mode: entry.field.kind === 'file' ? 'click' : 'fill',
-      value: entry.field.kind === 'file' ? '' : defaultValue,
-      preview:
-        entry.field.kind === 'file'
-          ? t('sidepanel.preview.file')
-          : defaultValue || entry.suggestion || t('sidepanel.preview.select'),
-      options: entry.field.kind === 'file' ? undefined : options,
-      defaultSlot,
+      mode: 'fill',
+      value: normalizedValue,
+      preview: normalizedValue,
     });
     setFields((current) =>
       current.map((item) =>
@@ -777,12 +823,14 @@ export default function App() {
             return entry;
           }
           const suggestion = slotValuesRef.current[match.slot] ?? entry.suggestion;
+          const shouldUpdateSelection = entry.selectedSlot === entry.slot || entry.selectedSlot === null;
           return {
             ...entry,
             slot: match.slot,
             suggestion,
             slotSource: 'model',
             slotNote: match.reason,
+            selectedSlot: suggestion && shouldUpdateSelection ? match.slot : entry.selectedSlot,
           };
         }),
       );
@@ -1018,8 +1066,17 @@ export default function App() {
   }
 
   function renderFieldCard(entry: FieldEntry, options: { showReviewButton?: boolean } = {}) {
-    const hasOptions = manualOptions.length > 0;
+    const hasOptions = entry.field.kind !== 'file' && manualOptions.length > 0;
     const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
+    const selectedOption =
+      entry.field.kind === 'file' || entry.selectedSlot === null
+        ? null
+        : manualOptions.find((option) => option.slot === entry.selectedSlot) ?? null;
+    const fallbackOption =
+      entry.field.kind === 'file' || !entry.slot
+        ? null
+        : manualOptions.find((option) => option.slot === entry.slot) ?? null;
+    const hasValue = (value?: string | null) => typeof value === 'string' && value.trim().length > 0;
     const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
     const slotLabel =
       entry.slot && entry.slotSource === 'model'
@@ -1028,6 +1085,8 @@ export default function App() {
     const summary =
       entry.field.kind === 'file'
         ? t('sidepanel.field.fileSummary')
+        : selectedOption
+        ? t('sidepanel.field.selectedValue', [truncate(selectedOption.value)])
         : suggestedValue
         ? entry.slotSource === 'model'
           ? t('sidepanel.field.suggestedAI', [truncate(suggestedValue)])
@@ -1036,7 +1095,6 @@ export default function App() {
         ? t('sidepanel.field.chooseValue')
         : t('sidepanel.field.noValues');
 
-    const disabled = entry.field.kind !== 'file' && !hasOptions;
     const showReview = options.showReviewButton ?? false;
     const autoInfo: string[] = [];
     const autoConfidencePercent =
@@ -1103,13 +1161,45 @@ export default function App() {
               {line}
             </Text>
           ))}
-          {showReview && (
-            <Group justify="flex-end">
-              <Button size="xs" disabled={disabled} onClick={() => handleReview(entry)}>
-                {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.review')}
-              </Button>
-            </Group>
+          {hasOptions && (
+            <Select
+              label={t('sidepanel.field.selectorLabel')}
+              placeholder={t('sidepanel.field.selectPlaceholder')}
+              data={manualOptions.map((option) => ({
+                value: option.slot,
+                label: `${option.label} · ${truncate(option.value)}`,
+              }))}
+              value={entry.selectedSlot ?? null}
+              onChange={(value) =>
+                handleSlotSelectionChange(entry.field.id, value ? (value as PromptOptionSlot) : null)
+              }
+              size="xs"
+              clearable
+              searchable={manualOptions.length > 7}
+              comboboxProps={{ withinPortal: true }}
+            />
           )}
+          <Group justify="flex-end" gap="xs">
+            <Button variant="light" size="xs" onClick={() => handleHighlight(entry)}>
+              {t('sidepanel.buttons.highlight')}
+            </Button>
+            {showReview && (
+              <Button
+                size="xs"
+                disabled={
+                  entry.field.kind !== 'file' &&
+                  !(
+                    hasValue(selectedOption?.value) ||
+                    hasValue(fallbackOption?.value) ||
+                    hasValue(entry.suggestion)
+                  )
+                }
+                onClick={() => handleReview(entry)}
+              >
+                {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.fillField')}
+              </Button>
+            )}
+          </Group>
         </Stack>
       </Card>
     );
@@ -1168,6 +1258,7 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
     return {
       field,
       slot,
+      selectedSlot: suggestion ? slot : null,
       suggestion,
       status: 'idle',
       reason: undefined,

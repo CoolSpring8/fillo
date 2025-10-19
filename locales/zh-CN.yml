@@ -100,6 +100,8 @@ sidepanel:
     copyAll: 全部复制
     review: 审核并填写
     openPicker: 打开选择器
+    highlight: 高亮字段
+    fillField: 填写字段
   feedback:
     noMapped: 没有可直接填写的字段。
     autofill:
@@ -119,7 +121,7 @@ sidepanel:
     paused: 已填写 $1 / $2 个字段，暂停于"$3"。
   preview:
     file: 将打开文件选择器以上传简历。
-    select: 请在审核面板中选择一个值。
+    select: 请在侧边栏选择一个值。
   field:
     noLabel: （无标签）
     unmapped: 未映射
@@ -127,7 +129,10 @@ sidepanel:
     fileSummary: 文件上传：点击后将打开选择对话框。
     suggestedProfile: 推荐（简历）：$1
     suggestedAI: 推荐（AI）：$1
-    chooseValue: 请在审核弹窗中选择一个值。
+    selectedValue: 已选择：$1
+    chooseValue: 请在侧边栏下拉列表中选择一个值。
+    selectorLabel: 存储的数据
+    selectPlaceholder: 请选择一个值…
     noValues: 暂无存储的值，请更新简历信息后重试。
     aiNote: AI 备注：$1
     meta: $1 · $2 · 第 $3 帧
