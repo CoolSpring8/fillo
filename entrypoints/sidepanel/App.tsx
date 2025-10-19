@@ -69,6 +69,7 @@ export default function App() {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [mode, setMode] = useState<PanelMode>('dom');
   const [fields, setFields] = useState<FieldEntry[]>([]);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [scanRequestId, setScanRequestId] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>({ loadingProfiles: true });
   const [scanning, setScanning] = useState(false);
@@ -90,6 +91,8 @@ export default function App() {
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
   const providerRef = useRef<ProviderConfig | null>(null);
+  const selectedFieldRef = useRef<string | null>(null);
+  const lastFocusedFieldRef = useRef<string | null>(null);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -105,6 +108,20 @@ export default function App() {
   useEffect(() => {
     fieldsRef.current = fields;
   }, [fields]);
+
+  useEffect(() => {
+    if (fields.length === 0) {
+      setSelectedFieldId(null);
+      return;
+    }
+    if (!selectedFieldRef.current || !fields.some((entry) => entry.field.id === selectedFieldRef.current)) {
+      setSelectedFieldId(fields[0].field.id);
+    }
+  }, [fields]);
+
+  useEffect(() => {
+    selectedFieldRef.current = selectedFieldId;
+  }, [selectedFieldId]);
 
   useEffect(() => {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
@@ -290,6 +307,20 @@ export default function App() {
     port.postMessage(payload);
   }, []);
 
+  const focusField = useCallback(
+    (entry: FieldEntry | null) => {
+      if (!entry) {
+        return;
+      }
+      sendMessage({
+        kind: 'FOCUS_FIELD',
+        fieldId: entry.field.id,
+        frameId: entry.field.frameId,
+      });
+    },
+    [sendMessage],
+  );
+
   const setFieldStatus = useCallback((fieldId: string, status: FieldStatus, reason?: string) => {
     setFields((current) =>
       current.map((entry) =>
@@ -360,6 +391,7 @@ export default function App() {
       })),
     );
   }, []);
+
 
   const handleAutoFill = useCallback(() => {
     const targets = fields.filter(
@@ -633,6 +665,7 @@ export default function App() {
     scanRequestIdRef.current = requestId;
     setScanning(true);
     setFields([]);
+    setSelectedFieldId(null);
     sendMessage({ kind: 'SCAN_FIELDS', requestId });
   };
 
@@ -663,15 +696,6 @@ export default function App() {
     }
   };
 
-  const handleHighlight = (entry: FieldEntry) => {
-    sendMessage({
-      kind: 'HIGHLIGHT_FIELD',
-      fieldId: entry.field.id,
-      frameId: entry.field.frameId,
-      label: entry.field.label,
-    });
-  };
-
   const handleSlotSelectionChange = (fieldId: string, slot: PromptOptionSlot | null) => {
     setFields((current) =>
       current.map((entry) =>
@@ -683,6 +707,10 @@ export default function App() {
           : entry,
       ),
     );
+  };
+
+  const handleSelectField = (entry: FieldEntry) => {
+    setSelectedFieldId(entry.field.id);
   };
 
   const handleReview = (entry: FieldEntry) => {
@@ -716,18 +744,8 @@ export default function App() {
       return;
     }
 
-    const selected =
-      entry.selectedSlot !== null
-        ? manualOptions.find((option) => option.slot === entry.selectedSlot) ?? null
-        : null;
-    const fallback =
-      entry.slot && manualOptions.some((option) => option.slot === entry.slot)
-        ? manualOptions.find((option) => option.slot === entry.slot) ?? null
-        : null;
-    const selectedValue = selected?.value ?? fallback?.value ?? entry.suggestion ?? '';
-    const normalizedValue = selectedValue.trim();
-
-    if (!normalizedValue) {
+    const { value } = resolveEntryData(entry);
+    if (!value) {
       setFeedback(t('sidepanel.feedback.noValues'));
       return;
     }
@@ -740,8 +758,8 @@ export default function App() {
       frameId: entry.field.frameId,
       label: entry.field.label,
       mode: 'fill',
-      value: normalizedValue,
-      preview: normalizedValue,
+      value,
+      preview: value,
     });
     setFields((current) =>
       current.map((item) =>
@@ -806,6 +824,46 @@ export default function App() {
     },
     [slotValues, manualLeaves],
   );
+
+  const selectedEntry = useMemo(
+    () => fields.find((entry) => entry.field.id === selectedFieldId) ?? null,
+    [fields, selectedFieldId],
+  );
+
+  const resolveEntryData = useCallback(
+    (entry: FieldEntry) => {
+      if (entry.field.kind === 'file') {
+        return {
+          selectedOption: null as PromptOption | null,
+          fallbackOption: null as PromptOption | null,
+          value: '',
+        };
+      }
+      const selectedOption =
+        entry.selectedSlot !== null
+          ? manualOptions.find((option) => option.slot === entry.selectedSlot) ?? null
+          : null;
+      const fallbackOption =
+        entry.slot !== null
+          ? manualOptions.find((option) => option.slot === entry.slot) ?? null
+          : null;
+      const value = (selectedOption?.value ?? fallbackOption?.value ?? entry.suggestion ?? '').trim();
+      return { selectedOption, fallbackOption, value };
+    },
+    [manualOptions],
+  );
+
+  useEffect(() => {
+    if (!selectedEntry) {
+      lastFocusedFieldRef.current = null;
+      return;
+    }
+    if (lastFocusedFieldRef.current === selectedEntry.field.id) {
+      return;
+    }
+    focusField(selectedEntry);
+    lastFocusedFieldRef.current = selectedEntry.field.id;
+  }, [focusField, selectedEntry]);
 
   const classifyAndApply = useCallback(async (descriptors: FieldDescriptor[]): Promise<boolean> => {
     if (descriptors.length === 0) {
@@ -993,8 +1051,37 @@ export default function App() {
             <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="dom" style={{ flex: 1, overflow: 'hidden' }}>
-            {renderPanel(renderDomMode())}
+          <Tabs.Panel
+            value="dom"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+          >
+            <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
+              <ScrollArea style={{ flex: 1 }} px="md" py="md">
+                <Stack gap="md">
+                  {feedback && (
+                    <Alert
+                      color="blue"
+                      variant="light"
+                      radius="lg"
+                      onClose={() => setFeedback(null)}
+                      withCloseButton
+                    >
+                      {feedback}
+                    </Alert>
+                  )}
+                  {renderDomMode()}
+                </Stack>
+              </ScrollArea>
+              <Paper
+                px="md"
+                py="sm"
+                withBorder
+                shadow="sm"
+                style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
+              >
+                {renderSelectionFooter()}
+              </Paper>
+            </Stack>
           </Tabs.Panel>
           <Tabs.Panel value="auto" style={{ flex: 1, overflow: 'hidden' }}>
             {renderPanel(renderAutoMode())}
@@ -1025,7 +1112,7 @@ export default function App() {
     }
     return (
       <Stack gap="sm">
-        {fields.map((entry) => renderFieldCard(entry, { showReviewButton: true }))}
+        {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
       </Stack>
     );
   }
@@ -1059,43 +1146,34 @@ export default function App() {
         </Group>
         {autoSummary && renderStateAlert(autoSummary)}
         <Stack gap="sm">
-          {fields.map((entry) => renderFieldCard(entry))}
+          {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
         </Stack>
       </Stack>
     );
   }
 
-  function renderFieldCard(entry: FieldEntry, options: { showReviewButton?: boolean } = {}) {
-    const hasOptions = entry.field.kind !== 'file' && manualOptions.length > 0;
-    const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
-    const selectedOption =
-      entry.field.kind === 'file' || entry.selectedSlot === null
-        ? null
-        : manualOptions.find((option) => option.slot === entry.selectedSlot) ?? null;
-    const fallbackOption =
-      entry.field.kind === 'file' || !entry.slot
-        ? null
-        : manualOptions.find((option) => option.slot === entry.slot) ?? null;
-    const hasValue = (value?: string | null) => typeof value === 'string' && value.trim().length > 0;
+  function renderFieldCard(entry: FieldEntry, options: { isSelected?: boolean } = {}) {
+    const { selectedOption, value } = resolveEntryData(entry);
     const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
     const slotLabel =
       entry.slot && entry.slotSource === 'model'
         ? `${baseSlotLabel}${t('sidepanel.field.aiSuffix')}`
         : baseSlotLabel;
-    const summary =
-      entry.field.kind === 'file'
-        ? t('sidepanel.field.fileSummary')
-        : selectedOption
-        ? t('sidepanel.field.selectedValue', [truncate(selectedOption.value)])
-        : suggestedValue
-        ? entry.slotSource === 'model'
-          ? t('sidepanel.field.suggestedAI', [truncate(suggestedValue)])
-          : t('sidepanel.field.suggestedProfile', [truncate(suggestedValue)])
-        : hasOptions
-        ? t('sidepanel.field.chooseValue')
-        : t('sidepanel.field.noValues');
+    const summary = (() => {
+      if (entry.field.kind === 'file') {
+        return t('sidepanel.field.fileSummary');
+      }
+      if (selectedOption) {
+        return t('sidepanel.field.selectedValue', [truncate(selectedOption.value)]);
+      }
+      if (value) {
+        return entry.slotSource === 'model'
+          ? t('sidepanel.field.suggestedAI', [truncate(value)])
+          : t('sidepanel.field.suggestedProfile', [truncate(value)]);
+      }
+      return manualOptions.length > 0 ? t('sidepanel.field.chooseValue') : t('sidepanel.field.noValues');
+    })();
 
-    const showReview = options.showReviewButton ?? false;
     const autoInfo: string[] = [];
     const autoConfidencePercent =
       typeof entry.autoConfidence === 'number' ? Math.round(entry.autoConfidence * 100) : null;
@@ -1110,9 +1188,40 @@ export default function App() {
       autoInfo.push(t('sidepanel.field.autoReason', [entry.autoNote]));
     }
 
+    const isSelected = options.isSelected ?? false;
+    const statusColor =
+      entry.status === 'filled'
+        ? 'green'
+        : entry.status === 'failed'
+          ? 'red'
+          : entry.status === 'pending'
+            ? 'blue'
+            : 'gray';
+
     return (
-      <Card key={entry.field.id} withBorder radius="md" shadow="sm">
-        <Stack gap="sm">
+      <Card
+        key={entry.field.id}
+        withBorder
+        radius="md"
+        p="sm"
+        shadow={isSelected ? 'sm' : 'xs'}
+        role="button"
+        tabIndex={0}
+        onClick={() => handleSelectField(entry)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleSelectField(entry);
+          }
+        }}
+        style={{
+          cursor: 'pointer',
+          borderColor: isSelected ? 'var(--mantine-color-blue-5)' : undefined,
+          backgroundColor: isSelected ? 'rgba(76, 159, 254, 0.08)' : undefined,
+          outline: 'none',
+        }}
+      >
+        <Stack gap="xs">
           <Group justify="space-between" align="flex-start">
             <Stack gap={4} flex={1}>
               <Text fw={600} fz="sm">
@@ -1126,26 +1235,16 @@ export default function App() {
                   String(entry.field.frameId),
                 ])}
               </Text>
+              <Text fz="xs" c="dimmed">
+                {summary}
+              </Text>
             </Stack>
             {entry.status !== 'idle' && (
-              <Badge
-                color={
-                  entry.status === 'filled'
-                    ? 'green'
-                    : entry.status === 'failed'
-                      ? 'red'
-                      : entry.status === 'pending'
-                        ? 'blue'
-                        : 'gray'
-                }
-                variant="light"
-                size="sm"
-              >
+              <Badge color={statusColor} variant="light" size="sm">
                 {t(`sidepanel.status.${entry.status}`)}
               </Badge>
             )}
           </Group>
-          <Text fz="sm">{summary}</Text>
           {entry.slotNote && (
             <Text fz="xs" c="dimmed">
               {t('sidepanel.field.aiNote', [entry.slotNote])}
@@ -1161,47 +1260,108 @@ export default function App() {
               {line}
             </Text>
           ))}
-          {hasOptions && (
-            <Select
-              label={t('sidepanel.field.selectorLabel')}
-              placeholder={t('sidepanel.field.selectPlaceholder')}
-              data={manualOptions.map((option) => ({
-                value: option.slot,
-                label: `${option.label} · ${truncate(option.value)}`,
-              }))}
-              value={entry.selectedSlot ?? null}
-              onChange={(value) =>
-                handleSlotSelectionChange(entry.field.id, value ? (value as PromptOptionSlot) : null)
-              }
-              size="xs"
-              clearable
-              searchable={manualOptions.length > 7}
-              comboboxProps={{ withinPortal: true }}
-            />
-          )}
-          <Group justify="flex-end" gap="xs">
-            <Button variant="light" size="xs" onClick={() => handleHighlight(entry)}>
-              {t('sidepanel.buttons.highlight')}
-            </Button>
-            {showReview && (
-              <Button
-                size="xs"
-                disabled={
-                  entry.field.kind !== 'file' &&
-                  !(
-                    hasValue(selectedOption?.value) ||
-                    hasValue(fallbackOption?.value) ||
-                    hasValue(entry.suggestion)
-                  )
-                }
-                onClick={() => handleReview(entry)}
-              >
-                {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.fillField')}
-              </Button>
-            )}
-          </Group>
         </Stack>
       </Card>
+    );
+  }
+
+  function renderSelectionFooter() {
+    if (viewState.loadingProfiles) {
+      return (
+        <Text fz="sm" c="dimmed">
+          {t('sidepanel.states.loadingProfiles')}
+        </Text>
+      );
+    }
+    if (viewState.error) {
+      return (
+        <Text fz="sm" c="red">
+          {t('sidepanel.states.error', [viewState.error])}
+        </Text>
+      );
+    }
+    if (!selectedEntry) {
+      const baseMessage =
+        scanning && fields.length === 0
+          ? t('sidepanel.toolbar.scanning')
+          : fields.length === 0
+            ? t('sidepanel.states.noFields')
+            : t('sidepanel.footer.noSelection');
+      return (
+        <Text fz="sm" c="dimmed">
+          {baseMessage}
+        </Text>
+      );
+    }
+
+    if (selectedEntry.field.kind === 'file') {
+      return (
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4} flex={1}>
+            <Text fw={600} fz="sm">
+              {selectedEntry.field.label || t('sidepanel.field.noLabel')}
+              {selectedEntry.field.required ? ' *' : ''}
+            </Text>
+            <Text fz="xs" c="dimmed">
+              {t('sidepanel.field.fileSummary')}
+            </Text>
+          </Stack>
+          <Button
+            size="sm"
+            onClick={() => handleReview(selectedEntry)}
+            disabled={selectedEntry.status === 'pending'}
+          >
+            {t('sidepanel.buttons.openPicker')}
+          </Button>
+        </Group>
+      );
+    }
+
+    const { fallbackOption, value } = resolveEntryData(selectedEntry);
+    const currentSlot =
+      selectedEntry.selectedSlot ??
+      (fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : null);
+    const fillDisabled = selectedEntry.status === 'pending' || !value;
+
+    return (
+      <Stack gap="sm">
+        <Stack gap={4}>
+          <Text fw={600} fz="sm">
+            {selectedEntry.field.label || t('sidepanel.field.noLabel')}
+            {selectedEntry.field.required ? ' *' : ''}
+          </Text>
+          <Text fz="xs" c="dimmed">
+            {t('sidepanel.footer.selectionHint')}
+          </Text>
+        </Stack>
+        <Select
+          label={t('sidepanel.field.selectorLabel')}
+          placeholder={t('sidepanel.field.selectPlaceholder')}
+          data={manualOptions.map((option) => ({
+            value: option.slot,
+            label: `${option.label} · ${truncate(option.value)}`,
+          }))}
+          value={currentSlot}
+          onChange={(slot) =>
+            handleSlotSelectionChange(
+              selectedEntry.field.id,
+              slot ? (slot as PromptOptionSlot) : null,
+            )
+          }
+          size="sm"
+          clearable
+          searchable={manualOptions.length > 7}
+          comboboxProps={{ withinPortal: true }}
+        />
+        <Text fz="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>
+          {value ? truncate(value, 200) : t('sidepanel.field.chooseValue')}
+        </Text>
+        <Group justify="flex-end">
+          <Button size="sm" disabled={fillDisabled} onClick={() => handleReview(selectedEntry)}>
+            {t('sidepanel.buttons.fillField')}
+          </Button>
+        </Group>
+      </Stack>
     );
   }
 

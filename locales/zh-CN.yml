@@ -111,6 +111,9 @@ sidepanel:
     noClipboard: 无法写入剪贴板
     classificationUpdated: 字段归类已更新
     noValues: 暂无可用字段，请先完善简历。
+  footer:
+    noSelection: 请选择一个字段以查看可填数据。
+    selectionHint: 选择要填入该字段的数据。
   auto:
     description: 使用本地模型自动匹配简历字段并逐项填写。
     start: 开始自动填充

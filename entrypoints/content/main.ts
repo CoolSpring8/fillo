@@ -19,6 +19,10 @@ type ContentInboundMessage =
     }
   | {
       kind: 'CLEAR_OVERLAY';
+    }
+  | {
+      kind: 'FOCUS_FIELD';
+      fieldId: string;
     };
 
 type ContentOutboundMessage =
@@ -81,6 +85,9 @@ export default defineContentScript({
           break;
         case 'CLEAR_OVERLAY':
           clearOverlay();
+          break;
+        case 'FOCUS_FIELD':
+          handleFocus(message.fieldId);
           break;
       }
     });
@@ -255,6 +262,26 @@ export default defineContentScript({
         return;
       }
       showHighlight(target, { label });
+    }
+
+    function handleFocus(fieldId: string): void {
+      const target = getElement(fieldId);
+      if (!target || !(target instanceof HTMLElement)) {
+        return;
+      }
+      clearOverlay();
+      try {
+        target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      } catch (error) {
+        console.warn('scrollIntoView failed', error);
+      }
+      queueMicrotask(() => {
+        try {
+          target.focus({ preventScroll: true });
+        } catch {
+          // Element might not be focusable; ignore.
+        }
+      });
     }
   },
 });

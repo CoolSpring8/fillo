@@ -161,6 +161,9 @@ async function handleSidePanelMessage(port: RuntimePort, raw: unknown): Promise<
     case 'PROMPT_FILL':
       await handlePromptFill(port, message);
       break;
+    case 'FOCUS_FIELD':
+      await handleFocusField(port, message);
+      break;
     case 'HIGHLIGHT_FIELD':
       await handleHighlight(port, message);
       break;
@@ -286,6 +289,20 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
     message.defaultSlot = defaultSlot;
   }
   framePort.postMessage({ kind: 'PROMPT_FILL', ...message });
+}
+
+async function handleFocusField(_: RuntimePort, payload: Record<string, unknown>): Promise<void> {
+  const fieldId = typeof payload.fieldId === 'string' ? payload.fieldId : null;
+  const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
+  if (!fieldId) {
+    return;
+  }
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const framePort = contentPorts.get(tab.id)?.get(frameId);
+  framePort?.postMessage({ kind: 'FOCUS_FIELD', fieldId });
 }
 
 async function handleHighlight(port: RuntimePort, payload: Record<string, unknown>): Promise<void> {

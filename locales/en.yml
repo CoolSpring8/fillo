@@ -111,6 +111,9 @@ sidepanel:
     noClipboard: Unable to copy to clipboard
     classificationUpdated: Classification updated
     noValues: No stored values available. Update the profile first.
+  footer:
+    noSelection: Select a field to review values.
+    selectionHint: Choose the data to fill this field.
   auto:
     description: Let the on-device model match resume keys and fill fields automatically.
     start: Start auto fill
