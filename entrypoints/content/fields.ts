@@ -1,5 +1,5 @@
 import { computeAccessibleName } from 'dom-accessibility-api';
-import type { FieldKind, FieldRect } from '../../shared/apply/types';
+import type { FieldAttributes, FieldKind, FieldRect } from '../../shared/apply/types';
 import { clearRegistry, registerElement } from './registry';
 
 type SupportedElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -13,6 +13,8 @@ export interface InternalField {
   autocomplete?: string;
   required: boolean;
   rect: FieldRect;
+  attributes: FieldAttributes;
+  hasValue: boolean;
 }
 
 export function scanFields(): InternalField[] {
@@ -44,6 +46,8 @@ export function scanFields(): InternalField[] {
     const id = crypto.randomUUID();
     const autocomplete = (element as HTMLInputElement).autocomplete;
     const context = buildContext(element, label);
+    const attributes = extractAttributes(element);
+    const hasValue = elementHasValue(element);
 
     registerElement(id, element);
     candidates.push({
@@ -55,6 +59,8 @@ export function scanFields(): InternalField[] {
       rect,
       required: isRequired(element),
       autocomplete: autocomplete && autocomplete !== 'on' ? autocomplete : undefined,
+      attributes,
+      hasValue,
     });
   }
 
@@ -255,6 +261,66 @@ function buildContext(element: SupportedElement, label: string): string {
 
   const combined = Array.from(parts).join('|');
   return combined.length > 2000 ? combined.slice(0, 2000) : combined;
+}
+
+function extractAttributes(element: SupportedElement): FieldAttributes {
+  const tagName = element.tagName.toLowerCase();
+  const normalize = (value: string | null | undefined) => {
+    if (!value) {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+
+  const attributes: FieldAttributes = {
+    tagName,
+    ariaLabel: normalize(element.getAttribute('aria-label')),
+  };
+
+  if (element instanceof HTMLInputElement) {
+    attributes.type = normalize(element.type);
+    attributes.name = normalize(element.name);
+    attributes.id = normalize(element.id);
+    attributes.placeholder = normalize(element.placeholder);
+    attributes.maxLength = element.maxLength > 0 ? element.maxLength : undefined;
+  } else if (element instanceof HTMLTextAreaElement) {
+    attributes.name = normalize(element.name);
+    attributes.id = normalize(element.id);
+    attributes.placeholder = normalize(element.placeholder);
+    attributes.maxLength = element.maxLength > 0 ? element.maxLength : undefined;
+  } else if (element instanceof HTMLSelectElement) {
+    attributes.name = normalize(element.name);
+    attributes.id = normalize(element.id);
+    const options = Array.from(element.options)
+      .slice(0, 20)
+      .map((option) => ({
+        value: normalize(option.value) ?? '',
+        label: normalize(option.textContent) ?? '',
+      }))
+      .filter((entry) => entry.label || entry.value);
+    if (options.length > 0) {
+      attributes.options = options;
+    }
+  }
+
+  return attributes;
+}
+
+function elementHasValue(element: SupportedElement): boolean {
+  if (element instanceof HTMLInputElement) {
+    if (element.type === 'checkbox' || element.type === 'radio') {
+      return element.checked;
+    }
+    return element.value.trim().length > 0;
+  }
+  if (element instanceof HTMLTextAreaElement) {
+    return element.value.trim().length > 0;
+  }
+  if (element instanceof HTMLSelectElement) {
+    return element.value.trim().length > 0;
+  }
+  return false;
 }
 
 function normalizeContext(value: string): string {

@@ -1,5 +1,12 @@
 import { browser } from 'wxt/browser';
-import type { FieldKind, FillResultMessage, PromptFillRequest, PromptOption, ScannedField } from '../shared/apply/types';
+import type {
+  FieldAttributes,
+  FieldKind,
+  FillResultMessage,
+  PromptFillRequest,
+  PromptOption,
+  ScannedField,
+} from '../shared/apply/types';
 
 type BrowserApi = typeof browser;
 type RuntimePort = ReturnType<BrowserApi['runtime']['connect']>;
@@ -343,6 +350,8 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
       rect: normalizeRect(entry.rect),
       frameId,
       frameUrl,
+      attributes: normalizeAttributes(entry.attributes),
+      hasValue: Boolean(entry.hasValue),
     }));
     pending.fields.push(...enriched);
     if (pending.received >= pending.expected) {
@@ -443,6 +452,63 @@ function normalizeRect(value: unknown): ScannedField['rect'] {
     };
   }
   return { top: 0, left: 0, width: 0, height: 0 };
+}
+
+function normalizeAttributes(value: unknown): FieldAttributes | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const raw = value as Record<string, unknown>;
+  const tagName = typeof raw.tagName === 'string' ? raw.tagName : undefined;
+  if (!tagName) {
+    return undefined;
+  }
+
+  const attributes: FieldAttributes = { tagName };
+
+  if (typeof raw.type === 'string') {
+    attributes.type = raw.type;
+  }
+  if (typeof raw.name === 'string') {
+    attributes.name = raw.name;
+  }
+  if (typeof raw.id === 'string') {
+    attributes.id = raw.id;
+  }
+  if (typeof raw.placeholder === 'string') {
+    attributes.placeholder = raw.placeholder;
+  }
+  if (typeof raw.ariaLabel === 'string') {
+    attributes.ariaLabel = raw.ariaLabel;
+  }
+  const maxLength = Number(raw.maxLength);
+  if (Number.isFinite(maxLength) && maxLength > 0) {
+    attributes.maxLength = maxLength;
+  }
+  if (Array.isArray(raw.options)) {
+    const options = raw.options
+      .map((option: unknown) => {
+        if (!option || typeof option !== 'object') {
+          return null;
+        }
+        const entry = option as Record<string, unknown>;
+        const valueText = typeof entry.value === 'string' ? entry.value : undefined;
+        const labelText = typeof entry.label === 'string' ? entry.label : undefined;
+        if (!valueText && !labelText) {
+          return null;
+        }
+        return {
+          value: valueText ?? '',
+          label: labelText ?? '',
+        };
+      })
+      .filter((item): item is { value: string; label: string } => item !== null);
+    if (options.length > 0) {
+      attributes.options = options;
+    }
+  }
+
+  return attributes;
 }
 
 function parseFillStatus(value: unknown): FillResultMessage['status'] {

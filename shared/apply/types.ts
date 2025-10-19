@@ -10,6 +10,17 @@ export type FieldKind =
   | 'radio'
   | 'file';
 
+export interface FieldAttributes {
+  tagName: string;
+  type?: string;
+  name?: string;
+  id?: string;
+  placeholder?: string;
+  ariaLabel?: string;
+  maxLength?: number;
+  options?: Array<{ value: string; label: string }>;
+}
+
 export interface FieldRect {
   top: number;
   left: number;
@@ -27,6 +38,8 @@ export interface ScannedField {
   rect: FieldRect;
   frameId: number;
   frameUrl: string;
+  attributes?: FieldAttributes;
+  hasValue: boolean;
 }
 
 import type { FieldSlot } from './slotTypes';

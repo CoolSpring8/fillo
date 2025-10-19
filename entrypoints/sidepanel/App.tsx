@@ -15,8 +15,9 @@ import {
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
 import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
 import { getSettings } from '../../shared/storage/settings';
+import { judgeAutoFill, hasAutoFillModel, type AutoFillKey } from './autoFillJudge';
 
-type PanelMode = 'dom' | 'manual';
+type PanelMode = 'dom' | 'auto' | 'manual';
 
 type FieldStatus = 'idle' | 'pending' | 'filled' | 'skipped' | 'failed';
 
@@ -47,6 +48,8 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [classifying, setClassifying] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoSummary, setAutoSummary] = useState<string | null>(null);
   const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
   const { t } = i18n;
@@ -56,6 +59,8 @@ export default function App() {
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
   const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
+  const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
+  const fieldsRef = useRef<FieldEntry[]>([]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -67,6 +72,10 @@ export default function App() {
   useEffect(() => {
     slotValuesRef.current = slotValues;
   }, [slotValues]);
+
+  useEffect(() => {
+    fieldsRef.current = fields;
+  }, [fields]);
 
   useEffect(() => {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
@@ -83,6 +92,15 @@ export default function App() {
       'click-failed': t('sidepanel.reason.clickFailed'),
       'no-selection': t('sidepanel.reason.noSelection'),
       'empty-value': t('sidepanel.reason.emptyValue'),
+      'auto-no-model': t('sidepanel.reason.autoNoModel'),
+      'auto-no-keys': t('sidepanel.reason.autoNoKeys'),
+      'auto-no-decision': t('sidepanel.reason.autoNoDecision'),
+      'auto-invalid-key': t('sidepanel.reason.autoInvalidKey'),
+      'auto-missing-value': t('sidepanel.reason.autoMissingValue'),
+      'auto-non-empty': t('sidepanel.reason.autoNonEmpty'),
+      'auto-unsupported': t('sidepanel.reason.autoUnsupported'),
+      'auto-timeout': t('sidepanel.reason.autoTimeout'),
+      'auto-error': t('sidepanel.reason.autoError'),
     };
     return map[reason] ?? reason;
   };
@@ -235,6 +253,46 @@ export default function App() {
     port.postMessage(payload);
   }, []);
 
+  const setFieldStatus = useCallback((fieldId: string, status: FieldStatus, reason?: string) => {
+    setFields((current) =>
+      current.map((entry) =>
+        entry.field.id === fieldId
+          ? {
+              ...entry,
+              status,
+              reason,
+            }
+          : entry,
+      ),
+    );
+  }, []);
+
+  const waitForFillCompletion = useCallback((requestId: string, timeoutMs = 5000) => {
+    return new Promise<FillResultMessage | null>((resolve) => {
+      const timeout = window.setTimeout(() => {
+        fillResolversRef.current.delete(requestId);
+        resolve(null);
+      }, timeoutMs);
+      fillResolversRef.current.set(requestId, (message) => {
+        clearTimeout(timeout);
+        resolve(message);
+      });
+    });
+  }, []);
+
+  const buildAutoFillKeys = useCallback((): AutoFillKey[] => {
+    const entries = Object.entries(slotValuesRef.current) as Array<[
+      FieldSlot,
+      string | undefined
+    ]>;
+    return entries
+      .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+      .map(([slot]) => ({
+        key: slot,
+        label: formatSlotLabel(slot),
+      }));
+  }, []);
+
   const handleAutoFill = useCallback(() => {
     const targets = fields.filter(
       (entry) =>
@@ -276,6 +334,133 @@ export default function App() {
     setFeedback(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
   }, [fields, sendMessage, t]);
 
+  const handleAutoModeRun = useCallback(async () => {
+    if (autoRunning) {
+      return;
+    }
+
+    if (!hasAutoFillModel()) {
+      setAutoSummary(t('sidepanel.auto.noModel'));
+      setFeedback(t('sidepanel.auto.noModel'));
+      return;
+    }
+
+    const availableKeys = buildAutoFillKeys();
+    if (availableKeys.length === 0) {
+      setAutoSummary(t('sidepanel.auto.noKeys'));
+      return;
+    }
+
+    if (fieldsRef.current.length === 0) {
+      setAutoSummary(t('sidepanel.states.noFields'));
+      return;
+    }
+
+    const supportedKinds: Set<ScannedField['kind']> = new Set([
+      'text',
+      'email',
+      'tel',
+      'number',
+      'date',
+      'select',
+      'textarea',
+    ]);
+
+    setAutoRunning(true);
+    setAutoSummary(null);
+
+    const usedKeys = new Set<string>();
+    const snapshot = [...fieldsRef.current];
+    let attempted = 0;
+    let filled = 0;
+
+    try {
+      for (const entry of snapshot) {
+        if (entry.status === 'filled') {
+          continue;
+        }
+        if (!supportedKinds.has(entry.field.kind)) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-unsupported');
+          continue;
+        }
+        if (entry.field.hasValue) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-non-empty');
+          continue;
+        }
+
+        attempted += 1;
+
+        const available = availableKeys.filter((key) => !usedKeys.has(key.key));
+        if (available.length === 0) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-no-keys');
+          continue;
+        }
+
+        let decision = null;
+        for (let round = 1; round <= 3; round += 1) {
+          const result = await judgeAutoFill({
+            field: entry.field,
+            keys: available,
+            usedKeys: Array.from(usedKeys),
+            round,
+          });
+          if (result) {
+            decision = result;
+            break;
+          }
+        }
+
+        if (!decision || decision.decision !== 'fill' || !decision.key) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-no-decision');
+          continue;
+        }
+
+        const slotValue = slotValuesRef.current[decision.key as FieldSlot];
+        if (!slotValue) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-invalid-key');
+          continue;
+        }
+        const value = slotValue.trim();
+        if (!value) {
+          setFieldStatus(entry.field.id, 'skipped', 'auto-missing-value');
+          continue;
+        }
+
+        const requestId = crypto.randomUUID();
+        setFieldStatus(entry.field.id, 'pending');
+        sendMessage({
+          kind: 'PROMPT_FILL',
+          requestId,
+          fieldId: entry.field.id,
+          frameId: entry.field.frameId,
+          label: entry.field.label,
+          mode: 'auto',
+          value,
+        });
+
+        const result = await waitForFillCompletion(requestId);
+        if (!result) {
+          setFieldStatus(entry.field.id, 'failed', 'auto-timeout');
+          continue;
+        }
+
+        if (result.status === 'filled') {
+          filled += 1;
+          usedKeys.add(decision.key);
+        } else if (result.status === 'skipped') {
+          setFieldStatus(entry.field.id, 'skipped', result.reason ?? 'auto-no-decision');
+        } else {
+          setFieldStatus(entry.field.id, 'failed', result.reason ?? 'auto-error');
+        }
+      }
+    } finally {
+      setAutoRunning(false);
+      if (attempted > 0) {
+        setAutoSummary(t('sidepanel.auto.summary', [String(filled), String(attempted)]));
+      }
+    }
+  }, [autoRunning, buildAutoFillKeys, fieldsRef, sendMessage, setFieldStatus, slotValuesRef, t, waitForFillCompletion]);
+
   const requestScan = () => {
     if (!portRef.current) {
       return;
@@ -307,6 +492,12 @@ export default function App() {
         };
       }),
     );
+
+    const resolver = fillResolversRef.current.get(message.requestId);
+    if (resolver) {
+      fillResolversRef.current.delete(message.requestId);
+      resolver(message);
+    }
   };
 
   const handleReview = (entry: FieldEntry) => {
@@ -528,6 +719,14 @@ export default function App() {
             {t('sidepanel.tabs.dom')}
           </div>
           <div
+            className={`mode-tab ${mode === 'auto' ? 'active' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => setMode('auto')}
+          >
+            {t('sidepanel.tabs.auto')}
+          </div>
+          <div
             className={`mode-tab ${mode === 'manual' ? 'active' : ''}`}
             role="button"
             tabIndex={0}
@@ -539,6 +738,7 @@ export default function App() {
         <div className="content">
           {feedback && <div className="info-state">{feedback}</div>}
           {mode === 'dom' && renderDomMode()}
+          {mode === 'auto' && renderAutoMode()}
           {mode === 'manual' && renderManualMode()}
         </div>
       </div>
@@ -561,52 +761,93 @@ export default function App() {
     if (fields.length === 0) {
       return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
     }
-    return fields.map((entry) => {
-      const hasOptions = manualOptions.length > 0;
-      const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
-      const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
-      const slotLabel =
-        entry.slot && entry.slotSource === 'model'
-          ? `${baseSlotLabel}${t('sidepanel.field.aiSuffix')}`
-          : baseSlotLabel;
-      const summary =
-        entry.field.kind === 'file'
-          ? t('sidepanel.field.fileSummary')
-          : suggestedValue
-          ? entry.slotSource === 'model'
-            ? t('sidepanel.field.suggestedAI', [truncate(suggestedValue)])
-            : t('sidepanel.field.suggestedProfile', [truncate(suggestedValue)])
-          : hasOptions
-          ? t('sidepanel.field.chooseValue')
-          : t('sidepanel.field.noValues');
+    return fields.map((entry) => renderFieldCard(entry, { showReviewButton: true }));
+  }
 
-      const disabled = entry.field.kind !== 'file' && !hasOptions;
+  function renderAutoMode() {
+    if (viewState.loadingProfiles) {
+      return <div className="info-state">{t('sidepanel.states.loadingProfiles')}</div>;
+    }
+    if (viewState.error) {
+      return <div className="error-state">{t('sidepanel.states.error', [viewState.error])}</div>;
+    }
+    if (!selectedProfile) {
+      return <div className="empty-state">{t('sidepanel.states.noProfile')}</div>;
+    }
+    if (scanning) {
+      return <div className="info-state">{t('sidepanel.toolbar.scanning')}</div>;
+    }
+    if (fields.length === 0) {
+      return <div className="empty-state">{t('sidepanel.states.noFields')}</div>;
+    }
 
-      return (
-        <article key={entry.field.id} className={`field-card ${entry.status !== 'idle' ? entry.status : ''}`}>
-          <header>
-            <div>
-              <div className="field-title">
-                {entry.field.label || t('sidepanel.field.noLabel')}
-                {entry.field.required && ' *'}
-              </div>
-              <div className="field-meta">
-                {t('sidepanel.field.meta', [
-                  t(`sidepanel.fieldKind.${entry.field.kind}`),
-                  slotLabel,
-                  String(entry.field.frameId),
-                ])}
-              </div>
+    return (
+      <div className="auto-mode">
+        <p className="info-state">{t('sidepanel.auto.description')}</p>
+        <div className="auto-controls">
+          <button
+            type="button"
+            className="primary"
+            disabled={autoRunning || scanning}
+            onClick={handleAutoModeRun}
+          >
+            {autoRunning ? t('sidepanel.auto.running') : t('sidepanel.auto.start')}
+          </button>
+        </div>
+        {autoSummary && <div className="info-state">{autoSummary}</div>}
+        {fields.map((entry) => renderFieldCard(entry))}
+      </div>
+    );
+  }
+
+  function renderFieldCard(entry: FieldEntry, options: { showReviewButton?: boolean } = {}) {
+    const hasOptions = manualOptions.length > 0;
+    const suggestedValue = entry.slot ? slotValues[entry.slot] : undefined;
+    const baseSlotLabel = entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped');
+    const slotLabel =
+      entry.slot && entry.slotSource === 'model'
+        ? `${baseSlotLabel}${t('sidepanel.field.aiSuffix')}`
+        : baseSlotLabel;
+    const summary =
+      entry.field.kind === 'file'
+        ? t('sidepanel.field.fileSummary')
+        : suggestedValue
+        ? entry.slotSource === 'model'
+          ? t('sidepanel.field.suggestedAI', [truncate(suggestedValue)])
+          : t('sidepanel.field.suggestedProfile', [truncate(suggestedValue)])
+        : hasOptions
+        ? t('sidepanel.field.chooseValue')
+        : t('sidepanel.field.noValues');
+
+    const disabled = entry.field.kind !== 'file' && !hasOptions;
+    const showReview = options.showReviewButton ?? false;
+
+    return (
+      <article key={entry.field.id} className={`field-card ${entry.status !== 'idle' ? entry.status : ''}`}>
+        <header>
+          <div>
+            <div className="field-title">
+              {entry.field.label || t('sidepanel.field.noLabel')}
+              {entry.field.required && ' *'}
             </div>
-            {entry.status !== 'idle' && (
-              <span className={`status-tag status-${entry.status}`}>
-                {t(`sidepanel.status.${entry.status}`)}
-              </span>
-            )}
-          </header>
-          <div className="field-suggestion">{summary}</div>
-          {entry.slotNote && <div className="field-meta">{t('sidepanel.field.aiNote', [entry.slotNote])}</div>}
-          {entry.reason && <div className="field-meta">{formatFillReason(entry.reason)}</div>}
+            <div className="field-meta">
+              {t('sidepanel.field.meta', [
+                t(`sidepanel.fieldKind.${entry.field.kind}`),
+                slotLabel,
+                String(entry.field.frameId),
+              ])}
+            </div>
+          </div>
+          {entry.status !== 'idle' && (
+            <span className={`status-tag status-${entry.status}`}>
+              {t(`sidepanel.status.${entry.status}`)}
+            </span>
+          )}
+        </header>
+        <div className="field-suggestion">{summary}</div>
+        {entry.slotNote && <div className="field-meta">{t('sidepanel.field.aiNote', [entry.slotNote])}</div>}
+        {entry.reason && <div className="field-meta">{formatFillReason(entry.reason)}</div>}
+        {showReview && (
           <div className="field-actions">
             <button
               type="button"
@@ -617,9 +858,9 @@ export default function App() {
               {entry.field.kind === 'file' ? t('sidepanel.buttons.openPicker') : t('sidepanel.buttons.review')}
             </button>
           </div>
-        </article>
-      );
-    });
+        )}
+      </article>
+    );
   }
 
   function renderManualMode() {

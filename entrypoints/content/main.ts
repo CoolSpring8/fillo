@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import type { FillResultStatus, PromptFillRequest } from '../../shared/apply/types';
+import type { FieldAttributes, FillResultStatus, PromptFillRequest } from '../../shared/apply/types';
 import { fillField, triggerClick } from './fill';
 import type { InternalField } from './fields';
 import { scanFields } from './fields';
@@ -49,6 +49,8 @@ interface SerializedField {
     width: number;
     height: number;
   };
+  attributes?: FieldAttributes;
+  hasValue: boolean;
 }
 
 export default defineContentScript({
@@ -241,5 +243,7 @@ function serialize(fields: InternalField[]): SerializedField[] {
     autocomplete: field.autocomplete,
     required: field.required,
     rect: field.rect,
+    attributes: field.attributes,
+    hasValue: field.hasValue,
   }));
 }

@@ -76,6 +76,7 @@ sidepanel:
     manageProfiles: 管理简历
   tabs:
     dom: 字段审核
+    auto: 自动填充
     manual: 手动复制
   states:
     noProfilesOption: 暂无简历
@@ -103,6 +104,13 @@ sidepanel:
     noClipboard: 无法写入剪贴板
     classificationUpdated: 字段归类已更新
     noValues: 暂无可用字段，请先完善简历。
+  auto:
+    description: 使用本地模型自动匹配简历字段并逐项填写。
+    start: 开始自动填充
+    running: 正在填充…
+    noModel: 本地 AI 不可用，请更新 Chrome 以启用。
+    noKeys: 暂无可用于自动填充的简历数据。
+    summary: 已填写 $1 / $2 个字段。
   preview:
     file: 将打开文件选择器以上传简历。
     select: 请在审核面板中选择一个值。
@@ -143,6 +151,15 @@ sidepanel:
     clickFailed: 点击失败
     noSelection: 未选择任何值
     emptyValue: 值为空
+    autoNoModel: 本地 AI 不可用
+    autoNoKeys: 没有可用的简历字段
+    autoNoDecision: 模型未能选择值
+    autoInvalidKey: 模型选择了未知字段
+    autoMissingValue: 选定字段没有存储的值
+    autoNonEmpty: 字段已有内容
+    autoUnsupported: 字段类型暂不支持自动填充
+    autoTimeout: 等待页面响应超时
+    autoError: 自动填充失败
   profile:
     unnamed: 未命名的简历
     label: $1 · $2

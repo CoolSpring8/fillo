@@ -76,6 +76,7 @@ sidepanel:
     manageProfiles: Manage profiles
   tabs:
     dom: Field Review
+    auto: Auto Fill
     manual: Manual Copy
   states:
     noProfilesOption: No profiles available
@@ -103,6 +104,13 @@ sidepanel:
     noClipboard: Unable to copy to clipboard
     classificationUpdated: Classification updated
     noValues: No stored values available. Update the profile first.
+  auto:
+    description: Let the on-device model match resume keys and fill fields automatically.
+    start: Start auto fill
+    running: Filling…
+    noModel: On-device AI unavailable. Update Chrome to enable auto fill.
+    noKeys: No resume data available for auto fill.
+    summary: Filled $1 of $2 fields.
   preview:
     file: Open the file picker to upload your resume.
     select: Select a value in the approval panel.
@@ -143,6 +151,15 @@ sidepanel:
     clickFailed: Click failed
     noSelection: No selection made
     emptyValue: Value was empty
+    autoNoModel: On-device AI unavailable
+    autoNoKeys: No resume keys left to use
+    autoNoDecision: Model could not choose a value
+    autoInvalidKey: Model chose an unknown key
+    autoMissingValue: No stored value for the selected key
+    autoNonEmpty: Field already contains a value
+    autoUnsupported: Field type unsupported for auto fill
+    autoTimeout: Timed out waiting for the page to respond
+    autoError: Auto fill failed
   profile:
     unnamed: Unnamed profile
     label: $1 · $2
