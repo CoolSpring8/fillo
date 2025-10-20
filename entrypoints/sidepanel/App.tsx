@@ -14,6 +14,11 @@ import {
   Tabs,
   Text,
   Title,
+  Tree,
+  getTreeExpandedState,
+  useTree,
+  type RenderTreeNodePayload,
+  type TreeNodeData,
 } from '@mantine/core';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -1606,79 +1611,90 @@ interface ManualTreeViewProps {
   onCopy: (label: string, value: string) => void;
 }
 
-interface ManualNodeProps {
-  node: ManualValueNode;
-  depth: number;
-  copyLabel: string;
-  onCopy: (label: string, value: string) => void;
-}
+type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
 
 function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
   if (nodes.length === 0) {
     return null;
   }
-  return (
-    <Stack gap="sm">
-      {nodes.map((node) => (
-        <ManualNode key={node.id} node={node} depth={0} copyLabel={copyLabel} onCopy={onCopy} />
-      ))}
-    </Stack>
+
+  const treeData = useMemo<ManualTreeNodeData[]>(() => nodes.map(mapManualNodeToTreeNode), [nodes]);
+  const initialExpandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
+  const tree = useTree({ initialExpandedState });
+
+  const { setExpandedState, clearSelected, setHoveredNode } = tree;
+  useEffect(() => {
+    setExpandedState(initialExpandedState);
+    clearSelected();
+    setHoveredNode(null);
+  }, [initialExpandedState, setExpandedState, clearSelected, setHoveredNode]);
+
+  const renderNode = useCallback(
+    ({ node, elementProps, hasChildren }: RenderTreeNodePayload) => {
+      const manualNode = (node as ManualTreeNodeData).manualNode;
+      const { className, style, ...rest } = elementProps;
+
+      if (!hasChildren && typeof manualNode.value === 'string') {
+        const value = manualNode.value;
+        return (
+          <div className={className} style={{ ...style, paddingBlock: 'var(--mantine-spacing-xs)' }} {...rest}>
+            <Card withBorder radius="md" shadow="sm">
+              <Stack gap="sm">
+                <Group justify="space-between" align="flex-start">
+                  <Stack gap={2}>
+                    <Text fw={600} fz="sm">
+                      {manualNode.label}
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      {manualNode.displayPath}
+                    </Text>
+                  </Stack>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCopy(manualNode.displayPath, value);
+                    }}
+                  >
+                    {copyLabel}
+                  </Button>
+                </Group>
+                <Text fz="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {value}
+                </Text>
+              </Stack>
+            </Card>
+          </div>
+        );
+      }
+
+      return (
+        <div className={className} style={{ ...style, paddingBlock: 'var(--mantine-spacing-xs)' }} {...rest}>
+          <Group gap="xs" align="center">
+            <Text fw={600} fz="sm">
+              {manualNode.label}
+            </Text>
+            <Badge variant="light" color="gray" size="sm">
+              {(manualNode.children?.length ?? 0).toLocaleString()}
+            </Badge>
+          </Group>
+        </div>
+      );
+    },
+    [copyLabel, onCopy],
   );
+
+  return <Tree data={treeData} tree={tree} levelOffset="md" renderNode={renderNode} />;
 }
 
-function ManualNode({ node, depth, copyLabel, onCopy }: ManualNodeProps): JSX.Element {
-  const hasChildren = node.children && node.children.length > 0;
-  const offset = depth > 0 ? { marginLeft: `${Math.min(depth, 6) * 16}px` } : undefined;
-
-  if (!hasChildren && typeof node.value === 'string') {
-    const value = node.value;
-    return (
-      <Card withBorder radius="md" shadow="sm" style={offset}>
-        <Stack gap="sm">
-          <Group justify="space-between" align="flex-start">
-            <Stack gap={2}>
-              <Text fw={600} fz="sm">
-                {node.label}
-              </Text>
-              <Text fz="xs" c="dimmed">
-                {node.displayPath}
-              </Text>
-            </Stack>
-            <Button size="xs" variant="light" onClick={() => onCopy(node.displayPath, value)}>
-              {copyLabel}
-            </Button>
-          </Group>
-          <Text fz="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {value}
-          </Text>
-        </Stack>
-      </Card>
-    );
-  }
-
-  return (
-    <Stack gap="sm" style={offset}>
-      <Group gap="xs" align="center">
-        <Text fw={600} fz="sm">
-          {node.label}
-        </Text>
-        <Badge variant="light" color="gray" size="sm">
-          {(node.children?.length ?? 0).toLocaleString()}
-        </Badge>
-      </Group>
-      <Stack gap="sm">
-        {node.children?.map((child) => (
-          <ManualNode
-            key={child.id}
-            node={child}
-            depth={depth + 1}
-            copyLabel={copyLabel}
-            onCopy={onCopy}
-          />
-        ))}
-      </Stack>
-    </Stack>
-  );
+function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
+  return {
+    value: node.id,
+    label: node.label,
+    manualNode: node,
+    children: node.children?.map(mapManualNodeToTreeNode),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
