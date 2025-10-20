@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { MantineProvider, createTheme } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
 
 const theme = createTheme({
   fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -32,6 +34,7 @@ interface AppProvidersProps {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <MantineProvider theme={theme} defaultColorScheme="light">
+      <Notifications position="top-center" />
       {children}
     </MantineProvider>
   );

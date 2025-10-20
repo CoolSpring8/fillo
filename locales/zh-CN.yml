@@ -95,6 +95,7 @@ sidepanel:
     rawLabel: 原始简历文本
     resumeRoot: 简历数据
     customRoot: 自定义字段
+    copyHint: 点击复制
   buttons:
     copy: 复制
     copyAll: 全部复制

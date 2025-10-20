@@ -95,6 +95,7 @@ sidepanel:
     rawLabel: Raw resume text
     resumeRoot: Resume data
     customRoot: Custom fields
+    copyHint: Click to copy
   buttons:
     copy: Copy
     copyAll: Copy all

@@ -15,12 +15,16 @@ import {
   Text,
   Title,
   Tree,
+  Tooltip,
   getTreeExpandedState,
   useTree,
+  useMantineTheme,
+  useComputedColorScheme,
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
 import { ChevronRight } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord, ProviderConfig } from '../../shared/types';
@@ -79,7 +83,6 @@ export default function App() {
   const [scanRequestId, setScanRequestId] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>({ loadingProfiles: true });
   const [scanning, setScanning] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [classifying, setClassifying] = useState(false);
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoSummary, setAutoSummary] = useState<string | null>(null);
@@ -297,20 +300,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProfileId]);
 
-  useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-    const timeout = setTimeout(() => setFeedback(null), 2000);
-    return () => clearTimeout(timeout);
-  }, [feedback]);
-
   const sendMessage = useCallback((payload: Record<string, unknown>) => {
     const port = portRef.current;
     if (!port) {
       return;
     }
     port.postMessage(payload);
+  }, []);
+
+  const notify = useCallback((message: string, tone: 'info' | 'success' | 'error' = 'info') => {
+    const colorMap: Record<'info' | 'success' | 'error', 'blue' | 'green' | 'red'> = {
+      info: 'blue',
+      success: 'green',
+      error: 'red',
+    };
+    notifications.show({
+      message,
+      color: colorMap[tone],
+      autoClose: 2500,
+      withCloseButton: true,
+    });
   }, []);
 
   const focusField = useCallback(
@@ -409,7 +418,7 @@ export default function App() {
         entry.status !== 'filled',
     );
     if (targets.length === 0) {
-      setFeedback(t('sidepanel.feedback.noMapped'));
+      notify(t('sidepanel.feedback.noMapped'));
       return;
     }
     const pendingIds = new Set<string>();
@@ -437,8 +446,8 @@ export default function App() {
           : entry,
       ),
     );
-    setFeedback(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
-  }, [fields, sendMessage, t]);
+    notify(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
+  }, [fields, notify, sendMessage, t]);
 
   const handleAutoModeRun = useCallback(async () => {
     if (autoRunning) {
@@ -448,7 +457,7 @@ export default function App() {
     if (!hasAutoFillModel(providerRef.current)) {
       const message = t('sidepanel.auto.noModel');
       setAutoSummary(message);
-      setFeedback(message);
+      notify(message, 'error');
       return;
     }
 
@@ -626,14 +635,14 @@ export default function App() {
         error instanceof ProviderInvocationError
       ) {
         setAutoSummary(error.message);
-        setFeedback(error.message);
+        notify(error.message, 'error');
         summaryLocked = true;
       } else {
         console.warn('Auto mode run failed', error);
         const message =
           error instanceof Error ? error.message : t('sidepanel.auto.noModel');
         setAutoSummary(message);
-        setFeedback(message);
+        notify(message, 'error');
         summaryLocked = true;
       }
     } finally {
@@ -658,6 +667,7 @@ export default function App() {
     setFieldAutoDecision,
     setFieldStatus,
     slotValuesRef,
+    notify,
     t,
     waitForFillCompletion,
   ]);
@@ -746,13 +756,13 @@ export default function App() {
     }
 
     if (manualOptions.length === 0) {
-      setFeedback(t('sidepanel.feedback.noValues'));
+      notify(t('sidepanel.feedback.noValues'), 'info');
       return;
     }
 
     const { value } = resolveEntryData(entry);
     if (!value) {
-      setFeedback(t('sidepanel.feedback.noValues'));
+      notify(t('sidepanel.feedback.noValues'), 'info');
       return;
     }
 
@@ -783,10 +793,10 @@ export default function App() {
   const handleCopy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setFeedback(t('sidepanel.feedback.copied', [label]));
+      notify(t('sidepanel.feedback.copied', [label]), 'success');
     } catch (error) {
       console.error('Failed to copy', error);
-      setFeedback(t('sidepanel.feedback.noClipboard'));
+      notify(t('sidepanel.feedback.noClipboard'), 'error');
     }
   };
 
@@ -906,13 +916,13 @@ export default function App() {
         error instanceof ProviderAvailabilityError ||
         error instanceof ProviderInvocationError
       ) {
-        setFeedback(error.message);
+        notify(error.message, 'error');
         return false;
       }
       console.warn('Field classification failed', error);
       return false;
     }
-  }, []);
+  }, [notify]);
 
   const handleClassify = useCallback(async () => {
     if (classifying) {
@@ -926,12 +936,12 @@ export default function App() {
     try {
       const updated = await classifyAndApply(descriptors);
       if (updated) {
-        setFeedback(t('sidepanel.feedback.classificationUpdated'));
+        notify(t('sidepanel.feedback.classificationUpdated'), 'success');
       }
     } finally {
       setClassifying(false);
     }
-  }, [classifying, classifyAndApply]);
+  }, [classifying, classifyAndApply, notify, t]);
 
   const openProfilesPage = () => {
     browser.tabs
@@ -980,14 +990,7 @@ export default function App() {
 
   const renderPanel = (content: ReactNode) => (
     <ScrollArea style={{ height: '100%' }} px="md" py="md">
-      <Stack gap="md">
-        {feedback && (
-          <Alert color="blue" variant="light" radius="lg" onClose={() => setFeedback(null)} withCloseButton>
-            {feedback}
-          </Alert>
-        )}
-        {content}
-      </Stack>
+      <Stack gap="md">{content}</Stack>
     </ScrollArea>
   );
 
@@ -1064,17 +1067,6 @@ export default function App() {
             <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
               <ScrollArea style={{ flex: 1 }} px="md" py="md">
                 <Stack gap="md">
-                  {feedback && (
-                    <Alert
-                      color="blue"
-                      variant="light"
-                      radius="lg"
-                      onClose={() => setFeedback(null)}
-                      withCloseButton
-                    >
-                      {feedback}
-                    </Alert>
-                  )}
                   {renderDomMode()}
                 </Stack>
               </ScrollArea>
@@ -1384,7 +1376,9 @@ export default function App() {
     return (
       <Stack gap="md">
         {manualTree.length === 0 && renderStateAlert(t('sidepanel.states.noManualValues'))}
-        {manualTree.length > 0 && <ManualTreeView nodes={manualTree} onCopy={handleCopy} />}
+        {manualTree.length > 0 && (
+          <ManualTreeView nodes={manualTree} tooltipLabel={t('sidepanel.manual.copyHint')} onCopy={handleCopy} />
+        )}
         <Card withBorder radius="md" shadow="sm">
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
@@ -1606,16 +1600,23 @@ function truncate(value: string, limit = 120): string {
 
 interface ManualTreeViewProps {
   nodes: ManualValueNode[];
+  tooltipLabel: string;
   onCopy: (label: string, value: string) => void;
 }
 
 type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
 
-function ManualTreeView({ nodes, onCopy }: ManualTreeViewProps) {
+function ManualTreeView({ nodes, tooltipLabel, onCopy }: ManualTreeViewProps) {
   if (nodes.length === 0) {
     return null;
   }
 
+  const theme = useMantineTheme();
+  const colorScheme = useComputedColorScheme('light');
+  const hoverBackground =
+    colorScheme === 'dark'
+      ? theme.colors.dark?.[6] ?? theme.colors.dark?.[5] ?? '#2c2e33'
+      : theme.colors.gray?.[1] ?? theme.colors.gray?.[2] ?? '#f1f3f5';
   const treeData = useMemo<ManualTreeNodeData[]>(() => nodes.map(mapManualNodeToTreeNode), [nodes]);
   const initialExpandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
   const tree = useTree({ initialExpandedState });
@@ -1629,43 +1630,50 @@ function ManualTreeView({ nodes, onCopy }: ManualTreeViewProps) {
   const renderNode = useCallback(
     ({ node, elementProps, hasChildren, expanded }: RenderTreeNodePayload) => {
       const manualNode = (node as ManualTreeNodeData).manualNode;
+      const isHovered = elementProps['data-hovered'] === true;
       const { className, style, onClick, ...rest } = elementProps;
 
       if (!hasChildren && typeof manualNode.value === 'string') {
         const value = manualNode.value;
         return (
-          <div
-            className={className}
-            style={{
-              ...style,
-              paddingBlock: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '2px',
-            }}
-            {...rest}
-            onClick={(event) => {
-              onCopy(manualNode.displayPath, value);
-              onClick?.(event);
-            }}
-          >
-            <Text
-              fz="sm"
-              fw={500}
-              style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          <Tooltip label={tooltipLabel} position="right" withArrow openDelay={250}>
+            <div
+              className={className}
+              style={{
+                ...style,
+                paddingBlock: '4px',
+                paddingInlineEnd: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '2px',
+                borderRadius: 'var(--mantine-radius-sm)',
+                backgroundColor: isHovered ? hoverBackground : 'transparent',
+                transition: 'background-color 120ms ease',
+              }}
+              {...rest}
+              onClick={(event) => {
+                onCopy(manualNode.displayPath, value);
+                onClick?.(event);
+              }}
             >
-              {manualNode.label}
-            </Text>
-            <Text
-              fz="xs"
-              c="dimmed"
-              style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-            >
-              {value}
-            </Text>
-          </div>
+              <Text
+                fz="sm"
+                fw={500}
+                style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {manualNode.label}
+              </Text>
+              <Text
+                fz="xs"
+                c="dimmed"
+                style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {value}
+              </Text>
+            </div>
+          </Tooltip>
         );
       }
 
@@ -1675,9 +1683,14 @@ function ManualTreeView({ nodes, onCopy }: ManualTreeViewProps) {
           style={{
             ...style,
             paddingBlock: '4px',
+            paddingInlineEnd: '8px',
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--mantine-spacing-xs)',
+            cursor: 'pointer',
+            borderRadius: 'var(--mantine-radius-sm)',
+            backgroundColor: isHovered ? hoverBackground : 'transparent',
+            transition: 'background-color 120ms ease',
           }}
           onClick={onClick}
           {...rest}
@@ -1698,7 +1711,7 @@ function ManualTreeView({ nodes, onCopy }: ManualTreeViewProps) {
         </div>
       );
     },
-    [onCopy],
+    [hoverBackground, onCopy, tooltipLabel],
   );
 
   return <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />;
