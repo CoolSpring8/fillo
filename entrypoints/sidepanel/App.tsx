@@ -1621,7 +1621,6 @@ function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
   const treeData = useMemo<ManualTreeNodeData[]>(() => nodes.map(mapManualNodeToTreeNode), [nodes]);
   const initialExpandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
   const tree = useTree({ initialExpandedState });
-
   const { setExpandedState, clearSelected, setHoveredNode } = tree;
   useEffect(() => {
     setExpandedState(initialExpandedState);
@@ -1632,60 +1631,55 @@ function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
   const renderNode = useCallback(
     ({ node, elementProps, hasChildren }: RenderTreeNodePayload) => {
       const manualNode = (node as ManualTreeNodeData).manualNode;
-      const { className, style, ...rest } = elementProps;
+      const { className, style, onClick, ...rest } = elementProps;
+      const baseStyle = {
+        ...style,
+        paddingBlock: '4px',
+        cursor: !hasChildren ? 'pointer' : style?.cursor,
+      };
 
       if (!hasChildren && typeof manualNode.value === 'string') {
         const value = manualNode.value;
         return (
-          <div className={className} style={{ ...style, paddingBlock: 'var(--mantine-spacing-xs)' }} {...rest}>
-            <Card withBorder radius="md" shadow="sm">
-              <Stack gap="sm">
-                <Group justify="space-between" align="flex-start">
-                  <Stack gap={2}>
-                    <Text fw={600} fz="sm">
-                      {manualNode.label}
-                    </Text>
-                    <Text fz="xs" c="dimmed">
-                      {manualNode.displayPath}
-                    </Text>
-                  </Stack>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCopy(manualNode.displayPath, value);
-                    }}
-                  >
-                    {copyLabel}
-                  </Button>
-                </Group>
-                <Text fz="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {value}
-                </Text>
-              </Stack>
-            </Card>
+          <div
+            className={className}
+            style={baseStyle}
+            {...rest}
+            onClick={(event) => {
+              onCopy(manualNode.displayPath, value);
+              onClick?.(event);
+            }}
+          >
+            <Text
+              fz="sm"
+              fw={500}
+              style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            >
+              {manualNode.label}
+            </Text>
+            <Text
+              fz="xs"
+              c="dimmed"
+              style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            >
+              {value}
+            </Text>
           </div>
         );
       }
 
       return (
-        <div className={className} style={{ ...style, paddingBlock: 'var(--mantine-spacing-xs)' }} {...rest}>
-          <Group gap="xs" align="center">
-            <Text fw={600} fz="sm">
-              {manualNode.label}
-            </Text>
-            <Badge variant="light" color="gray" size="sm">
-              {(manualNode.children?.length ?? 0).toLocaleString()}
-            </Badge>
-          </Group>
+        <div className={className} style={baseStyle} onClick={onClick} {...rest}>
+          <Text fw={600} fz="sm" style={{ margin: 0 }}>
+            {manualNode.label}
+          </Text>
         </div>
       );
     },
-    [copyLabel, onCopy],
+    [onCopy],
   );
 
-  return <Tree data={treeData} tree={tree} levelOffset="md" renderNode={renderNode} />;
+  return <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />;
 }
 
 function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
