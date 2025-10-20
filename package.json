@@ -23,6 +23,7 @@
     "ajv": "^8.17.1",
     "dom-accessibility-api": "^0.7.0",
     "idb-keyval": "^6.2.2",
+    "lucide-react": "^0.546.0",
     "pdfjs-dist": "^4.7.108",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

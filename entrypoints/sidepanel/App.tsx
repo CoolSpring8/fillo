@@ -20,6 +20,7 @@ import {
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
+import { ChevronRight } from 'lucide-react';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord, ProviderConfig } from '../../shared/types';
@@ -1383,9 +1384,7 @@ export default function App() {
     return (
       <Stack gap="md">
         {manualTree.length === 0 && renderStateAlert(t('sidepanel.states.noManualValues'))}
-        {manualTree.length > 0 && (
-          <ManualTreeView nodes={manualTree} copyLabel={t('sidepanel.buttons.copy')} onCopy={handleCopy} />
-        )}
+        {manualTree.length > 0 && <ManualTreeView nodes={manualTree} onCopy={handleCopy} />}
         <Card withBorder radius="md" shadow="sm">
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
@@ -1607,13 +1606,12 @@ function truncate(value: string, limit = 120): string {
 
 interface ManualTreeViewProps {
   nodes: ManualValueNode[];
-  copyLabel: string;
   onCopy: (label: string, value: string) => void;
 }
 
 type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
 
-function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
+function ManualTreeView({ nodes, onCopy }: ManualTreeViewProps) {
   if (nodes.length === 0) {
     return null;
   }
@@ -1629,21 +1627,24 @@ function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
   }, [initialExpandedState, setExpandedState, clearSelected, setHoveredNode]);
 
   const renderNode = useCallback(
-    ({ node, elementProps, hasChildren }: RenderTreeNodePayload) => {
+    ({ node, elementProps, hasChildren, expanded }: RenderTreeNodePayload) => {
       const manualNode = (node as ManualTreeNodeData).manualNode;
       const { className, style, onClick, ...rest } = elementProps;
-      const baseStyle = {
-        ...style,
-        paddingBlock: '4px',
-        cursor: !hasChildren ? 'pointer' : style?.cursor,
-      };
 
       if (!hasChildren && typeof manualNode.value === 'string') {
         const value = manualNode.value;
         return (
           <div
             className={className}
-            style={baseStyle}
+            style={{
+              ...style,
+              paddingBlock: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '2px',
+            }}
             {...rest}
             onClick={(event) => {
               onCopy(manualNode.displayPath, value);
@@ -1669,7 +1670,28 @@ function ManualTreeView({ nodes, copyLabel, onCopy }: ManualTreeViewProps) {
       }
 
       return (
-        <div className={className} style={baseStyle} onClick={onClick} {...rest}>
+        <div
+          className={className}
+          style={{
+            ...style,
+            paddingBlock: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--mantine-spacing-xs)',
+          }}
+          onClick={onClick}
+          {...rest}
+        >
+          <ChevronRight
+            size={16}
+            strokeWidth={2}
+            aria-hidden
+            style={{
+              transition: 'transform 150ms ease',
+              transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              flexShrink: 0,
+            }}
+          />
           <Text fw={600} fz="sm" style={{ margin: 0 }}>
             {manualNode.label}
           </Text>
