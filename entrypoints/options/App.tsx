@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Container, Loader, Stack, Text, Title } from '@mantine/core';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Container, Loader, Stack, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   ensureOnDeviceAvailability,
   type LanguageModelAvailability,
@@ -18,11 +19,6 @@ import { AutofillCard } from './components/AutofillCard';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
-interface FeedbackState {
-  kind: 'success' | 'error';
-  message: string;
-}
-
 export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [provider, setProvider] = useState<'on-device' | 'openai'>('on-device');
@@ -30,7 +26,6 @@ export default function App() {
   const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
   const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [busy, setBusy] = useState(false);
   const adapters = useMemo(() => listAvailableAdapters(), []);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(adapters.map((adapter) => adapter.id));
@@ -59,9 +54,21 @@ export default function App() {
     setAutoFallback(settings.autoFallback ?? 'skip');
   };
 
+  const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
+    const colorMap: Record<'success' | 'error', 'green' | 'red'> = {
+      success: 'green',
+      error: 'red',
+    };
+    notifications.show({
+      message,
+      color: colorMap[tone],
+      autoClose: 2500,
+      withCloseButton: true,
+    });
+  }, []);
+
   const handleSave = async () => {
     setBusy(true);
-    setFeedback(null);
     try {
       const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const selectedAdapters = activeAdapters.length > 0 ? activeAdapters : adapters.map((adapter) => adapter.id);
@@ -70,10 +77,10 @@ export default function App() {
           ? { provider: createOpenAIProvider(apiKey, model, baseUrl), adapters: selectedAdapters, autoFallback }
           : { provider: { kind: 'on-device' }, adapters: selectedAdapters, autoFallback };
       await saveSettings(nextSettings);
-      setFeedback({ kind: 'success', message: t('options.feedback.saved') });
+      notify(t('options.feedback.saved'), 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setFeedback({ kind: 'error', message });
+      notify(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -113,18 +120,6 @@ export default function App() {
       return current.filter((item) => item !== id);
     });
   };
-
-  const feedbackAlert = feedback ? (
-    <Alert
-      color={feedback.kind === 'success' ? 'green' : 'red'}
-      variant="light"
-      radius="lg"
-      withCloseButton
-      onClose={() => setFeedback(null)}
-    >
-      {feedback.message}
-    </Alert>
-  ) : null;
 
   const saveDisabled = provider === 'openai' && !apiKey;
 
@@ -198,8 +193,6 @@ export default function App() {
             {busy ? t('options.actions.saving') : t('options.actions.save')}
           </Button>
         </Stack>
-
-        {feedbackAlert}
       </Stack>
     </Container>
   );
