@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -23,7 +24,20 @@ import {
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
-import { ChevronRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
+  Eraser,
+  Highlighter,
+  ListChecks,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Settings2,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -766,43 +780,27 @@ export default function App() {
       </Paper>
       <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
         <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <Stack gap="sm">
-            <NativeSelect
-              label={t('popup.title')}
-              value={selectedProfileId ?? ''}
-              onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
-              data={selectOptions}
-              size="sm"
-            />
-            <Group gap="sm" wrap="wrap">
-              <Button variant="light" size="sm" onClick={requestScan} disabled={scanning}>
-                {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
-              </Button>
-              <Button
-                variant="light"
+          <Stack gap="xs">
+            <Group gap="xs" justify="space-between" align="flex-end" wrap="nowrap">
+              <NativeSelect
+                label={t('popup.title')}
+                value={selectedProfileId ?? ''}
+                onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
+                data={selectOptions}
                 size="sm"
-                onClick={handleClassify}
-                disabled={classifyDisabled}
-              >
-                {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAutoFill}
-                disabled={fillDisabled}
-              >
-                {t('sidepanel.toolbar.fillMapped')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
-              >
-                {t('sidepanel.toolbar.clearOverlay')}
-              </Button>
-              <Button variant="light" size="sm" onClick={openProfilesPage}>
-                {t('sidepanel.toolbar.manageProfiles')}
-              </Button>
+                style={{ flex: 1 }}
+              />
+              <Tooltip label={t('sidepanel.toolbar.manageProfiles')} withinPortal>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="lg"
+                  onClick={openProfilesPage}
+                  aria-label={t('sidepanel.toolbar.manageProfiles')}
+                >
+                  <Settings2 size={18} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
           </Stack>
         </Paper>
@@ -870,8 +868,81 @@ export default function App() {
     }
     return (
       <Stack gap="sm">
-        {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
+        {renderDomToolbar()}
+        <Stack gap="sm">
+          {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
+        </Stack>
       </Stack>
+    );
+  }
+
+  function renderDomToolbar() {
+    const status = scanning
+      ? { color: 'blue', label: t('sidepanel.toolbar.scanning') }
+      : classifying
+        ? { color: 'grape', label: t('sidepanel.toolbar.classifying') }
+        : null;
+
+    const actions = [
+      {
+        key: 'rescan',
+        label: t('sidepanel.toolbar.rescan'),
+        onClick: requestScan,
+        disabled: scanning,
+        color: 'blue',
+        icon: <RefreshCw size={16} />,
+      },
+      {
+        key: 'classify',
+        label: t('sidepanel.toolbar.classify'),
+        onClick: handleClassify,
+        disabled: classifyDisabled,
+        color: 'violet',
+        icon: <Sparkles size={16} />,
+      },
+      {
+        key: 'fill',
+        label: t('sidepanel.toolbar.fillMapped'),
+        onClick: handleAutoFill,
+        disabled: fillDisabled,
+        color: 'green',
+        icon: <Wand2 size={16} />,
+      },
+      {
+        key: 'clear-overlay',
+        label: t('sidepanel.toolbar.clearOverlay'),
+        onClick: () => sendMessage({ kind: 'CLEAR_OVERLAY' }),
+        color: 'gray',
+        icon: <Eraser size={16} />,
+      },
+    ];
+
+    return (
+      <Card withBorder radius="md" p="sm">
+        <Group justify="space-between" align="center" gap="xs" wrap="wrap">
+          <Group gap="xs" wrap="wrap">
+            {actions.map((action) => (
+              <Tooltip key={action.key} label={action.label} withinPortal>
+                <ActionIcon
+                  size="lg"
+                  variant="light"
+                  color={action.color}
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  aria-label={action.label}
+                >
+                  {action.icon}
+                </ActionIcon>
+              </Tooltip>
+            ))}
+          </Group>
+          {status && (
+            <Badge size="sm" variant="light" color={status.color}>
+              {status.label}
+            </Badge>
+          )}
+        </Group>
+      </Card>
     );
   }
 
@@ -904,35 +975,94 @@ export default function App() {
         <Alert color="blue" variant="light" radius="lg">
           {t('sidepanel.guided.description')}
         </Alert>
-        <Group gap="sm" wrap="wrap">
+        <Card withBorder radius="md" p="sm">
           {!guidedStarted ? (
-            <Button size="sm" onClick={startGuided}>{t('sidepanel.guided.start')}</Button>
+            <Button
+              size="sm"
+              fullWidth
+              variant="light"
+              onClick={startGuided}
+              leftSection={<Play size={16} />}
+            >
+              {t('sidepanel.guided.start')}
+            </Button>
           ) : (
-            <>
+            <Stack gap="xs">
               <Badge variant="light" color="gray">
-                {t('sidepanel.guided.paused', [current?.field.label || t('sidepanel.field.noLabel'), String(guidedIndex + 1), String(guidedTotal)])}
+                {t('sidepanel.guided.paused', [
+                  current?.field.label || t('sidepanel.field.noLabel'),
+                  String(guidedIndex + 1),
+                  String(guidedTotal),
+                ])}
               </Badge>
-              <Button size="sm" variant="light" onClick={navPrev} disabled={isFirst}>
-                {t('sidepanel.guided.back')}
-              </Button>
-              <Button size="sm" variant="light" onClick={navNext} disabled={isLast}>
-                {t('sidepanel.guided.next')}
-              </Button>
-              <Button size="sm" variant="light" onClick={navToFirstUnfilled}>
-                {t('sidepanel.guided.jumpToUnfilled')}
-              </Button>
-              <Button size="sm" variant="light" onClick={restartGuided}>
-                {t('sidepanel.guided.restart')}
-              </Button>
-              <Button size="sm" variant="light" onClick={() => highlightCurrent(current)}>
-                {t('sidepanel.buttons.highlight')}
-              </Button>
-              <Button size="sm" color="green" variant="filled" onClick={finishGuided}>
-                {t('sidepanel.guided.done')}
-              </Button>
-            </>
+              <Group justify="space-between" align="center" gap="xs" wrap="wrap">
+                <Group gap="xs" wrap="wrap">
+                  <Tooltip label={t('sidepanel.guided.back')} withinPortal>
+                    <ActionIcon
+                      size="lg"
+                      variant="light"
+                      color="gray"
+                      onClick={navPrev}
+                      disabled={isFirst}
+                      aria-label={t('sidepanel.guided.back')}
+                    >
+                      <ArrowLeft size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.next')} withinPortal>
+                    <ActionIcon
+                      size="lg"
+                      variant="light"
+                      color="gray"
+                      onClick={navNext}
+                      disabled={isLast}
+                      aria-label={t('sidepanel.guided.next')}
+                    >
+                      <ArrowRight size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.jumpToUnfilled')} withinPortal>
+                    <ActionIcon
+                      size="lg"
+                      variant="light"
+                      color="blue"
+                      onClick={navToFirstUnfilled}
+                      aria-label={t('sidepanel.guided.jumpToUnfilled')}
+                    >
+                      <ListChecks size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.restart')} withinPortal>
+                    <ActionIcon
+                      size="lg"
+                      variant="light"
+                      color="gray"
+                      onClick={restartGuided}
+                      aria-label={t('sidepanel.guided.restart')}
+                    >
+                      <RotateCcw size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.buttons.highlight')} withinPortal>
+                    <ActionIcon
+                      size="lg"
+                      variant="light"
+                      color="yellow"
+                      onClick={() => current && highlightCurrent(current)}
+                      disabled={!current}
+                      aria-label={t('sidepanel.buttons.highlight')}
+                    >
+                      <Highlighter size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+                <Button size="sm" color="green" variant="filled" onClick={finishGuided}>
+                  {t('sidepanel.guided.done')}
+                </Button>
+              </Group>
+            </Stack>
           )}
-        </Group>
+        </Card>
         <Text fz="xs" c="dimmed">{progressText}</Text>
 
         <Stack gap="sm">
