@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -23,7 +24,23 @@ import {
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
-import { ChevronRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ChevronRight,
+  Copy,
+  Eraser,
+  ListChecks,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Sparkles,
+  Target,
+  Trash2,
+  Users,
+  Wand2,
+} from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -754,6 +771,80 @@ export default function App() {
     </ScrollArea>
   );
 
+  const renderDomToolbar = () => {
+    const iconSize = 18;
+    const baseDisabled = viewState.loadingProfiles || !selectedProfile;
+    const statusBadge = scanning
+      ? { color: 'blue' as const, label: t('sidepanel.toolbar.scanning') }
+      : classifying
+        ? { color: 'violet' as const, label: t('sidepanel.toolbar.classifying') }
+        : null;
+
+    const renderIconButton = (
+      label: string,
+      options: {
+        onClick: () => void;
+        disabled?: boolean;
+        color?: string;
+        variant?: 'subtle' | 'light' | 'filled';
+        icon: JSX.Element;
+      },
+    ) => (
+      <Tooltip key={label} label={label} withArrow>
+        <ActionIcon
+          aria-label={label}
+          onClick={options.onClick}
+          disabled={baseDisabled || options.disabled}
+          variant={options.variant ?? 'light'}
+          color={options.color ?? 'gray'}
+          radius="md"
+          size="lg"
+        >
+          {options.icon}
+        </ActionIcon>
+      </Tooltip>
+    );
+
+    return (
+      <Group justify="space-between" align="center" gap="xs" wrap="wrap">
+        <Group gap="xs" wrap="wrap">
+          {renderIconButton(scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan'), {
+            onClick: requestScan,
+            disabled: scanning,
+            color: 'blue',
+            variant: scanning ? 'filled' : 'light',
+            icon: <RefreshCcw size={iconSize} />,
+          })}
+          {renderIconButton(classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify'), {
+            onClick: handleClassify,
+            disabled: classifyDisabled,
+            color: 'violet',
+            variant: classifying ? 'filled' : 'light',
+            icon: <Wand2 size={iconSize} />,
+          })}
+          {renderIconButton(t('sidepanel.toolbar.fillMapped'), {
+            onClick: handleAutoFill,
+            disabled: fillDisabled,
+            color: 'blue',
+            variant: 'filled',
+            icon: <Sparkles size={iconSize} />,
+          })}
+          {renderIconButton(t('sidepanel.toolbar.clearOverlay'), {
+            onClick: () => sendMessage({ kind: 'CLEAR_OVERLAY' }),
+            color: 'gray',
+            variant: 'subtle',
+            icon: <Eraser size={iconSize} />,
+          })}
+        </Group>
+        {statusBadge && (
+          <Badge color={statusBadge.color} variant="light" size="sm">
+            {statusBadge.label}
+          </Badge>
+        )}
+      </Group>
+    );
+  };
+
   return (
     <Stack gap={0} style={{ height: '100vh' }}>
       <Paper shadow="sm" withBorder={false} px="md" py="sm">
@@ -766,45 +857,28 @@ export default function App() {
       </Paper>
       <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
         <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <Stack gap="sm">
+          <Group gap="xs" wrap="nowrap" align="flex-end">
             <NativeSelect
               label={t('popup.title')}
               value={selectedProfileId ?? ''}
               onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
               data={selectOptions}
               size="sm"
+              style={{ flex: 1 }}
             />
-            <Group gap="sm" wrap="wrap">
-              <Button variant="light" size="sm" onClick={requestScan} disabled={scanning}>
-                {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={handleClassify}
-                disabled={classifyDisabled}
+            <Tooltip label={t('sidepanel.toolbar.manageProfiles')} withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="lg"
+                radius="md"
+                onClick={openProfilesPage}
+                aria-label={t('sidepanel.toolbar.manageProfiles')}
               >
-                {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAutoFill}
-                disabled={fillDisabled}
-              >
-                {t('sidepanel.toolbar.fillMapped')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
-              >
-                {t('sidepanel.toolbar.clearOverlay')}
-              </Button>
-              <Button variant="light" size="sm" onClick={openProfilesPage}>
-                {t('sidepanel.toolbar.manageProfiles')}
-              </Button>
-            </Group>
-          </Stack>
+                <Users size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Paper>
         <Tabs
           value={mode}
@@ -825,6 +899,15 @@ export default function App() {
             style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
             <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
+              <Paper
+                px="md"
+                py="sm"
+                withBorder
+                shadow="xs"
+                style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+              >
+                {renderDomToolbar()}
+              </Paper>
               <ScrollArea style={{ flex: 1 }} px="md" py="md">
                 <Stack gap="md">
                   {renderDomMode()}
@@ -904,36 +987,99 @@ export default function App() {
         <Alert color="blue" variant="light" radius="lg">
           {t('sidepanel.guided.description')}
         </Alert>
-        <Group gap="sm" wrap="wrap">
-          {!guidedStarted ? (
-            <Button size="sm" onClick={startGuided}>{t('sidepanel.guided.start')}</Button>
-          ) : (
-            <>
-              <Badge variant="light" color="gray">
-                {t('sidepanel.guided.paused', [current?.field.label || t('sidepanel.field.noLabel'), String(guidedIndex + 1), String(guidedTotal)])}
-              </Badge>
-              <Button size="sm" variant="light" onClick={navPrev} disabled={isFirst}>
-                {t('sidepanel.guided.back')}
+        <Stack gap={4}>
+          <Group gap="xs" wrap="wrap" align="center">
+            {!guidedStarted ? (
+              <Button size="sm" leftSection={<Play size={16} />} onClick={startGuided}>
+                {t('sidepanel.guided.start')}
               </Button>
-              <Button size="sm" variant="light" onClick={navNext} disabled={isLast}>
-                {t('sidepanel.guided.next')}
-              </Button>
-              <Button size="sm" variant="light" onClick={navToFirstUnfilled}>
-                {t('sidepanel.guided.jumpToUnfilled')}
-              </Button>
-              <Button size="sm" variant="light" onClick={restartGuided}>
-                {t('sidepanel.guided.restart')}
-              </Button>
-              <Button size="sm" variant="light" onClick={() => highlightCurrent(current)}>
-                {t('sidepanel.buttons.highlight')}
-              </Button>
-              <Button size="sm" color="green" variant="filled" onClick={finishGuided}>
-                {t('sidepanel.guided.done')}
-              </Button>
-            </>
-          )}
-        </Group>
-        <Text fz="xs" c="dimmed">{progressText}</Text>
+            ) : (
+              <>
+                <Badge variant="light" color="gray">
+                  {t('sidepanel.guided.paused', [
+                    current?.field.label || t('sidepanel.field.noLabel'),
+                    String(guidedIndex + 1),
+                    String(guidedTotal),
+                  ])}
+                </Badge>
+                <Group gap="xs" wrap="wrap" align="center">
+                  <Tooltip label={t('sidepanel.guided.back')} withArrow>
+                    <ActionIcon
+                      aria-label={t('sidepanel.guided.back')}
+                      size="lg"
+                      radius="md"
+                      variant="light"
+                      color="gray"
+                      onClick={navPrev}
+                      disabled={isFirst}
+                    >
+                      <ArrowLeft size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.next')} withArrow>
+                    <ActionIcon
+                      aria-label={t('sidepanel.guided.next')}
+                      size="lg"
+                      radius="md"
+                      variant="light"
+                      color="gray"
+                      onClick={navNext}
+                      disabled={isLast}
+                    >
+                      <ArrowRight size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.jumpToUnfilled')} withArrow>
+                    <ActionIcon
+                      aria-label={t('sidepanel.guided.jumpToUnfilled')}
+                      size="lg"
+                      radius="md"
+                      variant="light"
+                      color="gray"
+                      onClick={navToFirstUnfilled}
+                    >
+                      <ListChecks size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.guided.restart')} withArrow>
+                    <ActionIcon
+                      aria-label={t('sidepanel.guided.restart')}
+                      size="lg"
+                      radius="md"
+                      variant="light"
+                      color="gray"
+                      onClick={restartGuided}
+                    >
+                      <RotateCcw size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={t('sidepanel.buttons.highlight')} withArrow>
+                    <ActionIcon
+                      aria-label={t('sidepanel.buttons.highlight')}
+                      size="lg"
+                      radius="md"
+                      variant="light"
+                      color="gray"
+                      onClick={() => highlightCurrent(current)}
+                      disabled={!current}
+                    >
+                      <Target size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Button
+                    size="sm"
+                    color="green"
+                    leftSection={<CheckCircle2 size={16} />}
+                    onClick={finishGuided}
+                  >
+                    {t('sidepanel.guided.done')}
+                  </Button>
+                </Group>
+              </>
+            )}
+          </Group>
+          <Text fz="xs" c="dimmed">{progressText}</Text>
+        </Stack>
 
         <Stack gap="sm">
           {guidedStarted && current && renderGuidedControls(current)}
@@ -943,9 +1089,18 @@ export default function App() {
           <Stack gap="sm">
             <Group justify="space-between">
               <Text fw={600}>{t('sidepanel.guided.memory.heading')}</Text>
-              <Button size="xs" variant="light" onClick={refreshMemory}>
-                {t('sidepanel.guided.memory.refresh')}
-              </Button>
+              <Tooltip label={t('sidepanel.guided.memory.refresh')} withArrow>
+                <ActionIcon
+                  aria-label={t('sidepanel.guided.memory.refresh')}
+                  size="lg"
+                  radius="md"
+                  variant="light"
+                  color="gray"
+                  onClick={refreshMemory}
+                >
+                  <RefreshCcw size={18} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
             {memoryList.length === 0 ? (
               <Text fz="sm" c="dimmed">{t('sidepanel.guided.memory.empty')}</Text>
@@ -956,13 +1111,28 @@ export default function App() {
                     <Text fz="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
                       {key} · {association.preferredSlot ?? ''} {association.lastValue ? `· ${truncate(association.lastValue, 60)}` : ''}
                     </Text>
-                    <Button size="xs" variant="subtle" onClick={() => removeMemory(key)}>
-                      {t('sidepanel.guided.memory.delete')}
-                    </Button>
+                    <Tooltip label={t('sidepanel.guided.memory.delete')} withArrow>
+                      <ActionIcon
+                        aria-label={t('sidepanel.guided.memory.delete')}
+                        size="md"
+                        radius="md"
+                        variant="subtle"
+                        color="red"
+                        onClick={() => removeMemory(key)}
+                      >
+                        <Trash2 size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                   </Group>
                 ))}
                 <Group justify="flex-end">
-                  <Button size="xs" color="red" variant="light" onClick={clearMemory}>
+                  <Button
+                    size="xs"
+                    color="red"
+                    variant="light"
+                    leftSection={<Trash2 size={14} />}
+                    onClick={clearMemory}
+                  >
                     {t('sidepanel.guided.memory.clearAll')}
                   </Button>
                 </Group>
@@ -1420,13 +1590,18 @@ export default function App() {
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
               <Text fw={600}>{t('sidepanel.manual.rawLabel')}</Text>
-              <Button
-                size="xs"
-                variant="light"
-                onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}
-              >
-                {t('sidepanel.buttons.copyAll')}
-              </Button>
+              <Tooltip label={t('sidepanel.buttons.copyAll')} withArrow>
+                <ActionIcon
+                  aria-label={t('sidepanel.buttons.copyAll')}
+                  size="lg"
+                  radius="md"
+                  variant="light"
+                  color="gray"
+                  onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}
+                >
+                  <Copy size={18} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
             <Paper withBorder radius="md" p="sm">
               <ScrollArea h={220}>
