@@ -40,10 +40,9 @@ popup:
   description: Import once in ApplyPilot and reuse it wherever you apply.
   loading: Loading profiles…
   error: Unable to load profiles ($1)
-  empty: No profiles stored yet. Import a PDF via the onboarding page to get started.
+  empty: No profiles stored yet. Import a PDF via the workspace to get started.
   buttons:
-    openOnboarding: Open onboarding
-    settings: Settings
+    openWorkspace: Open workspace
     openSidePanel: Open side panel
     viewDetails: View details
     hideDetails: Hide details
@@ -65,7 +64,7 @@ popup:
     rawText: Raw text
     validationWarnings: Validation warnings
   info:
-    noStructured: No structured resume stored yet. Run AI parsing from onboarding to populate this section.
+    noStructured: No structured resume stored yet. Run AI parsing from the workspace to populate this section.
 sidepanel:
   title: Resume Helper
   subtitle: Select a profile and review each field before filling.
@@ -85,8 +84,8 @@ sidepanel:
     noProfilesOption: No profiles available
     loadingProfiles: Loading profiles…
     error: Unable to load profiles ($1)
-    noProfile: Import a resume in onboarding to populate autofill data.
-    noProfileManual: Import a resume to access manual copy helpers.
+    noProfile: Import a resume in the workspace to populate autofill data.
+    noProfileManual: Import a resume in the workspace to access manual copy helpers.
     noFields: No fillable fields detected on this page.
     noManualValues: No structured fields available. Copy from raw text below.
   manual:
@@ -232,8 +231,8 @@ overlay:
     fill: Fill
     skip: Skip
 onboarding:
-  title: Resume Workspace
-  description: Import resumes, parse them with AI, and curate structured data for autofill.
+  title: ApplyPilot workspace
+  description: Import resumes, configure AI providers, and fine-tune autofill settings in one place.
   buttons:
     working: Working…
   manage:
@@ -253,13 +252,13 @@ onboarding:
     parsedOnDevice: Parsed on-device
     parsedOnDeviceAt: Parsed on-device · $1
   upload:
-    heading: 1. Upload Resume PDF
+    heading: Upload resume PDF
     button: Extract text
     helper: All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
     current: Active profile "$1" has $2 characters of raw text.
   parse:
-    heading: 2. (Optional) Parse With AI
-    helper: Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
+    heading: Parse with AI (optional)
+    helper: Improve structured data using on-device or OpenAI providers. Adjust settings and rerun whenever you like.
     button: Parse resume
     needProfile: Select or create a profile to enable parsing.
     needsSave: Save your edits before parsing.

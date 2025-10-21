@@ -61,12 +61,8 @@ export default function App() {
     }
   };
 
-  const openOnboarding = () => {
+  const openWorkspace = () => {
     void browser.tabs.create({ url: browser.runtime.getURL('/onboarding.html') });
-  };
-
-  const openOptions = () => {
-    void browser.tabs.create({ url: browser.runtime.getURL('/options.html') });
   };
 
   const profileItems = useMemo<ProfileAccordionItem[]>(() => {
@@ -178,11 +174,8 @@ export default function App() {
             )}
 
             <Stack gap="xs">
-              <Button variant="light" fullWidth onClick={openOnboarding}>
-                {t('popup.buttons.openOnboarding')}
-              </Button>
-              <Button variant="light" fullWidth onClick={openOptions}>
-                {t('popup.buttons.settings')}
+              <Button variant="light" fullWidth onClick={openWorkspace}>
+                {t('popup.buttons.openWorkspace')}
               </Button>
               <Button fullWidth onClick={() => openSidePanel()}>
                 {t('popup.buttons.openSidePanel')}
