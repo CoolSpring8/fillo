@@ -28,10 +28,7 @@ export interface StoredFileReference {
   storageKey: string;
 }
 
-export interface ResumeExtractionResult {
-  resume: unknown;
-  custom: Record<string, unknown>;
-}
+export type ResumeExtractionResult = Record<string, unknown>;
 
 export interface ProfileRecord {
   id: string;
@@ -41,7 +38,6 @@ export interface ProfileRecord {
   sourceFile?: StoredFileReference;
   rawText: string;
   resume?: unknown;
-  custom?: Record<string, unknown>;
   validation?: {
     valid: boolean;
     errors?: string[];

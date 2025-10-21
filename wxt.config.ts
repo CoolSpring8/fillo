@@ -3,6 +3,11 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   srcDir: '.',
   modules: ['@wxt-dev/i18n/module', '@wxt-dev/module-react'],
+  vite: () => ({
+    optimizeDeps: {
+      include: ['@/shared/schema/jsonresume-v1.validate.cjs'],
+    },
+  }),
   manifest: {
     default_locale: 'en',
     name: 'ApplyPilot',

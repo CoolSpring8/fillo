@@ -59,15 +59,17 @@ const baseProfile: ProfileRecord = {
         keywords: ['Calculus', 'Logic'],
       },
     ],
-  },
-  custom: {
-    expectedSalary: '100000',
-    preferredLocation: {
-      city: 'London',
-      country: 'United Kingdom',
+    meta: {
+      custom: {
+        expectedSalary: '100000',
+        preferredLocation: {
+          city: 'London',
+          country: 'United Kingdom',
+        },
+        availabilityDate: '2024-03-01',
+        jobType: 'Full time',
+      },
     },
-    availabilityDate: '2024-03-01',
-    jobType: 'Full time',
   },
 };
 
@@ -106,6 +108,22 @@ describe('buildSlotValues', () => {
     expect(slots.jobType).toBe('full-time');
   });
 
+  it('supports legacy profile.custom data', () => {
+    const legacyProfile: ProfileRecord = {
+      ...baseProfile,
+      resume: {
+        ...(baseProfile.resume as Record<string, unknown>),
+        meta: undefined,
+      },
+    };
+    (legacyProfile as { custom?: Record<string, unknown> }).custom = {
+      expectedSalary: '95000',
+    };
+
+    const slots = buildSlotValues(legacyProfile);
+    expect(slots.expectedSalary).toBe('95000');
+  });
+
   it('formats skills into a readable string', () => {
     const slots = buildSlotValues(baseProfile);
     expect(slots.skills).toBe('Mathematics, Calculus, Logic');
@@ -115,7 +133,6 @@ describe('buildSlotValues', () => {
     const emptyProfile: ProfileRecord = {
       ...baseProfile,
       resume: undefined,
-      custom: undefined,
     };
     const slots = buildSlotValues(emptyProfile);
     expect(Object.keys(slots).length).toBe(0);

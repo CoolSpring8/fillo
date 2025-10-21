@@ -23,13 +23,9 @@ export interface ProfileAccordionItem {
   resumeJson: string;
   hasResumeData: boolean;
   resumeEmptyLabel: string;
-  customJson: string;
-  hasCustomData: boolean;
-  customEmptyLabel: string;
   rawText: string;
   rawLabel: string;
   resumeLabel: string;
-  customLabel: string;
   validationHeading: string;
 }
 
@@ -112,29 +108,6 @@ export function ProfileAccordion({
                 ) : (
                   <Alert variant="light" color="gray">
                     {item.resumeEmptyLabel}
-                  </Alert>
-                )}
-              </Stack>
-
-              <Stack gap="xs">
-                <Text fw={600} fz="sm">
-                  {item.customLabel}
-                </Text>
-                {item.hasCustomData ? (
-                  <Paper withBorder radius="md" p="sm">
-                    <ScrollArea h={180} type="hover">
-                      <Text
-                        component="pre"
-                        fz="sm"
-                        style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                      >
-                        {item.customJson}
-                      </Text>
-                    </ScrollArea>
-                  </Paper>
-                ) : (
-                  <Alert variant="light" color="gray">
-                    {item.customEmptyLabel}
                   </Alert>
                 )}
               </Stack>

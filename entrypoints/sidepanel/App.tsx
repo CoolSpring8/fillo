@@ -804,7 +804,6 @@ export default function App() {
     () =>
       buildManualValueTree(selectedProfile, {
         resumeLabel: t('sidepanel.manual.resumeRoot'),
-        customLabel: t('sidepanel.manual.customRoot'),
       }),
     [selectedProfile, t],
   );

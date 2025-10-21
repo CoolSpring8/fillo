@@ -19,7 +19,7 @@ import {
   OPENAI_DEFAULT_BASE_URL,
 } from '../../shared/storage/settings';
 import { getAllAdapterIds } from '../../shared/apply/slots';
-import { OUTPUT_SCHEMA } from '../../shared/schema/outputSchema';
+import resumeSchema from '../../shared/schema/jsonresume-v1.json';
 import { validateResume } from '../../shared/validate';
 import type {
   AppSettings,
@@ -79,7 +79,6 @@ export default function App() {
   const [busyAction, setBusyAction] = useState<'extract' | 'parse' | 'edit' | null>(null);
   const [rawDraft, setRawDraft] = useState('');
   const [resumeDraft, setResumeDraft] = useState('');
-  const [customDraft, setCustomDraft] = useState('');
   const [draftDirty, setDraftDirty] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const { t } = i18n;
@@ -128,14 +127,12 @@ export default function App() {
     if (!selectedProfile) {
       setRawDraft('');
       setResumeDraft('');
-      setCustomDraft('');
       setDraftDirty(false);
       setDraftError(null);
       return;
     }
     setRawDraft(selectedProfile.rawText);
     setResumeDraft(formatJson(selectedProfile.resume));
-    setCustomDraft(formatJson(selectedProfile.custom));
     setDraftDirty(false);
     setDraftError(null);
   }, [selectedProfile]);
@@ -313,15 +310,13 @@ export default function App() {
           : createOnDeviceProvider();
 
       const raw = await invokeWithProvider(providerConfig, messages, {
-        responseSchema: OUTPUT_SCHEMA,
+        responseSchema: resumeSchema,
         temperature: 0,
       });
 
-      const parsed = JSON.parse(raw) as ResumeExtractionResult;
-      const result: ResumeExtractionResult = {
-        resume: parsed.resume ?? {},
-        custom: parsed.custom ?? {},
-      };
+      const parsed = JSON.parse(raw) as unknown;
+      const resume: ResumeExtractionResult =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as ResumeExtractionResult) : {};
 
       const providerSnapshot: ProviderSnapshot =
         providerConfig.kind === 'openai'
@@ -329,14 +324,13 @@ export default function App() {
           : { kind: 'on-device' };
 
       setStatus({ phase: 'saving', message: t('onboarding.status.savingParsing') });
-      const validation = validateResume(result.resume);
+      const validation = validateResume(resume);
 
       const profile: ProfileRecord = {
         ...selectedProfile,
         provider: providerSnapshot,
         parsedAt: new Date().toISOString(),
-        resume: result.resume ?? {},
-        custom: result.custom ?? {},
+        resume,
         validation: {
           valid: validation.valid,
           errors: validation.errors,
@@ -403,7 +397,6 @@ export default function App() {
       createdAt: new Date().toISOString(),
       rawText: '',
       resume: {},
-      custom: {},
     };
     await saveProfile(profile);
     setStatus({ phase: 'complete', message: t('onboarding.status.profileCreated') });
@@ -421,18 +414,12 @@ export default function App() {
     setDraftDirty(true);
   };
 
-  const handleCustomDraftChange = (value: string) => {
-    setCustomDraft(value);
-    setDraftDirty(true);
-  };
-
   const handleResetDrafts = () => {
     if (!selectedProfile) {
       return;
     }
     setRawDraft(selectedProfile.rawText);
     setResumeDraft(formatJson(selectedProfile.resume));
-    setCustomDraft(formatJson(selectedProfile.custom));
     setDraftDirty(false);
     setDraftError(null);
   };
@@ -443,7 +430,6 @@ export default function App() {
     }
     try {
       const nextResume = parseResumeDraft(resumeDraft);
-      const nextCustom = parseCustomDraft(customDraft);
       setBusy(true);
       setBusyAction('edit');
       setStatus({ phase: 'saving', message: t('onboarding.status.savingEdits') });
@@ -454,7 +440,6 @@ export default function App() {
         ...selectedProfile,
         rawText: rawDraft,
         resume: nextResume,
-        custom: nextCustom,
         parsedAt: nextResume ? new Date().toISOString() : selectedProfile.parsedAt,
         validation: nextResume
           ? {
@@ -650,31 +635,27 @@ export default function App() {
         />
 
         {selectedProfile && (
-          <EditProfileCard
-            title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
-            helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
-            rawLabel={t('onboarding.edit.rawLabel')}
-            rawValue={rawDraft}
-            rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
-            resumeLabel={t('onboarding.edit.resumeLabel')}
-            resumeValue={resumeDraft}
-            resumeHelper={t('onboarding.edit.resumeHelper')}
-            customLabel={t('onboarding.edit.customLabel')}
-            customValue={customDraft}
-            customHelper={t('onboarding.edit.customHelper')}
-            saveLabel={t('onboarding.edit.save')}
-            resetLabel={t('onboarding.edit.reset')}
-            workingLabel={workingLabel}
-            disabledSave={!draftDirty || busy}
-            disabledReset={!draftDirty || busy}
-            isWorking={editWorking}
-            errorMessage={draftError}
-            onSave={handleSaveDrafts}
-            onReset={handleResetDrafts}
-            onRawChange={handleRawDraftChange}
-            onResumeChange={handleResumeDraftChange}
-            onCustomChange={handleCustomDraftChange}
-          />
+        <EditProfileCard
+          title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
+          helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
+          rawLabel={t('onboarding.edit.rawLabel')}
+          rawValue={rawDraft}
+          rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
+          resumeLabel={t('onboarding.edit.resumeLabel')}
+          resumeValue={resumeDraft}
+          resumeHelper={t('onboarding.edit.resumeHelper')}
+          saveLabel={t('onboarding.edit.save')}
+          resetLabel={t('onboarding.edit.reset')}
+          workingLabel={workingLabel}
+          disabledSave={!draftDirty || busy}
+          disabledReset={!draftDirty || busy}
+          isWorking={editWorking}
+          errorMessage={draftError}
+          onSave={handleSaveDrafts}
+          onReset={handleResetDrafts}
+          onRawChange={handleRawDraftChange}
+          onResumeChange={handleResumeDraftChange}
+        />
         )}
 
         {status.message && (
@@ -724,18 +705,6 @@ function parseResumeDraft(source: string): unknown {
     return undefined;
   }
   return JSON.parse(trimmed);
-}
-
-function parseCustomDraft(source: string): Record<string, unknown> | undefined {
-  const trimmed = source.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  const parsed = JSON.parse(trimmed);
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    return parsed as Record<string, unknown>;
-  }
-  throw new SyntaxError('Custom fields must be a JSON object');
 }
 
 function formatDateTime(value: string | undefined): string {

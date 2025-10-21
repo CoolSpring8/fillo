@@ -121,13 +121,9 @@ export default function App() {
         resumeJson: formatJson(profile.resume ?? {}),
         hasResumeData: Boolean(profile.provider),
         resumeEmptyLabel: t('popup.info.noStructured'),
-        customJson: formatJson(profile.custom ?? {}),
-        hasCustomData: Boolean(profile.provider),
-        customEmptyLabel: t('popup.info.noCustom'),
         rawText: profile.rawText,
         rawLabel: t('popup.sections.rawText'),
         resumeLabel: t('popup.sections.jsonResume'),
-        customLabel: t('popup.sections.customFields'),
         validationHeading: t('popup.sections.validationWarnings'),
       } satisfies ProfileAccordionItem;
     });

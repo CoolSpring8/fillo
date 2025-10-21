@@ -9,9 +9,6 @@ interface EditProfileCardProps {
   resumeLabel: string;
   resumeValue: string;
   resumeHelper: string;
-  customLabel: string;
-  customValue: string;
-  customHelper: string;
   saveLabel: string;
   resetLabel: string;
   workingLabel: string;
@@ -23,7 +20,6 @@ interface EditProfileCardProps {
   onReset: () => void;
   onRawChange: (value: string) => void;
   onResumeChange: (value: string) => void;
-  onCustomChange: (value: string) => void;
 }
 
 export function EditProfileCard({
@@ -35,9 +31,6 @@ export function EditProfileCard({
   resumeLabel,
   resumeValue,
   resumeHelper,
-  customLabel,
-  customValue,
-  customHelper,
   saveLabel,
   resetLabel,
   workingLabel,
@@ -49,7 +42,6 @@ export function EditProfileCard({
   onReset,
   onRawChange,
   onResumeChange,
-  onCustomChange,
 }: EditProfileCardProps) {
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
@@ -79,7 +71,7 @@ export function EditProfileCard({
           </Alert>
         )}
 
-        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
           <Textarea
             label={rawLabel}
             value={rawValue}
@@ -96,15 +88,6 @@ export function EditProfileCard({
             minRows={12}
             autosize
             description={resumeHelper}
-            spellCheck={false}
-          />
-          <Textarea
-            label={customLabel}
-            value={customValue}
-            onChange={(event) => onCustomChange(event.currentTarget.value)}
-            minRows={12}
-            autosize
-            description={customHelper}
             spellCheck={false}
           />
         </SimpleGrid>

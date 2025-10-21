@@ -23,12 +23,10 @@ interface BuildContext {
 
 export interface ManualTreeConfig {
   resumeLabel: string;
-  customLabel: string;
 }
 
 const DEFAULT_CONFIG: ManualTreeConfig = {
   resumeLabel: 'Resume',
-  customLabel: 'Custom',
 };
 
 export function buildManualValueTree(
@@ -39,18 +37,13 @@ export function buildManualValueTree(
     return [];
   }
 
-  const { resumeLabel, customLabel } = config;
+  const { resumeLabel } = config;
   const context: BuildContext = { seen: new WeakSet() };
   const roots: ManualValueNode[] = [];
 
   const resumeNode = buildNode(profile.resume, ['resume'], resumeLabel, resumeLabel, context);
   if (resumeNode) {
     roots.push(resumeNode);
-  }
-
-  const customNode = buildNode(profile.custom, ['custom'], customLabel, customLabel, context);
-  if (customNode) {
-    roots.push(customNode);
   }
 
   return roots;

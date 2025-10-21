@@ -17,6 +17,7 @@ interface SlotContext {
   location?: Record<string, unknown>;
   work: Record<string, unknown>[];
   education: Record<string, unknown>[];
+  meta?: Record<string, unknown>;
   custom?: Record<string, unknown>;
 }
 
@@ -175,7 +176,12 @@ export function buildSlotValues(profile: ProfileRecord | null | undefined): Slot
   const location = extractObject(basics?.location);
   const work = toPrimaryArray(resume?.work).map((entry) => extractObject(entry) ?? {});
   const education = toPrimaryArray(resume?.education).map((entry) => extractObject(entry) ?? {});
-  const custom = extractObject(profile.custom);
+  const meta = extractObject(resume?.meta);
+  const custom = mergeCustomSources([
+    extractObject((profile as { custom?: unknown }).custom),
+    resume ? extractObject((resume as { custom?: unknown }).custom) : undefined,
+    extractObject(meta?.custom),
+  ]);
 
   const context: SlotContext = {
     profile,
@@ -184,6 +190,7 @@ export function buildSlotValues(profile: ProfileRecord | null | undefined): Slot
     location,
     work,
     education,
+    meta,
     custom,
   };
 
@@ -200,6 +207,17 @@ export function buildSlotValues(profile: ProfileRecord | null | undefined): Slot
   }
 
   return slots;
+}
+
+function mergeCustomSources(sources: Array<Record<string, unknown> | undefined>): Record<string, unknown> | undefined {
+  const merged: Record<string, unknown> = {};
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    Object.assign(merged, source);
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 function extractObject(value: unknown): Record<string, unknown> | undefined {

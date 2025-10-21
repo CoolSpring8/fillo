@@ -62,12 +62,10 @@ popup:
     validationWarning: Validation warnings available
   sections:
     jsonResume: JSON Resume
-    customFields: Custom fields
     rawText: Raw text
     validationWarnings: Validation warnings
   info:
     noStructured: No structured resume stored yet. Run AI parsing from onboarding to populate this section.
-    noCustom: No custom fields available without structured parsing.
 sidepanel:
   title: Resume Helper
   subtitle: Select a profile and review each field before filling.
@@ -94,7 +92,6 @@ sidepanel:
   manual:
     rawLabel: Raw resume text
     resumeRoot: Resume data
-    customRoot: Custom fields
     copyHint: Click to copy
   buttons:
     copy: Copy
@@ -275,8 +272,6 @@ onboarding:
     rawSummary: $1 characters
     resumeLabel: Structured resume (JSON)
     resumeHelper: Paste or edit JSON Resume fields. Leave blank to clear structured data.
-    customLabel: Custom fields (JSON)
-    customHelper: Add any additional fields you want available during autofill.
     save: Save changes
     reset: Reset
     invalidJson: Invalid JSON. Check for balanced braces and quotes, then try again.
