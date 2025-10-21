@@ -233,7 +233,7 @@ overlay:
     skip: Skip
 onboarding:
   title: Resume Workspace
-  description: Import resumes, parse them with AI, and curate structured data for autofill.
+  description: Import resumes, configure AI parsing, and fine-tune autofill preferences in one place.
   buttons:
     working: Working…
   manage:
@@ -253,12 +253,12 @@ onboarding:
     parsedOnDevice: Parsed on-device
     parsedOnDeviceAt: Parsed on-device · $1
   upload:
-    heading: 1. Upload Resume PDF
+    heading: Import resume PDF
     button: Extract text
     helper: All processing happens in this browser session. Scanned PDFs without selectable text are not supported.
     current: Active profile "$1" has $2 characters of raw text.
   parse:
-    heading: 2. (Optional) Parse With AI
+    heading: AI parsing & provider
     helper: Improve structured data using on-device or OpenAI providers. You can revisit this step anytime.
     button: Parse resume
     needProfile: Select or create a profile to enable parsing.
@@ -302,10 +302,19 @@ onboarding:
     savingEdits: Saving edits…
     savedEdits: Changes saved.
     editFailed: Failed to save edits.
+    settingsFailed: Unable to save settings.
   validation:
     heading: JSON Resume validation warnings
   errors:
     noText: No extractable text found in the PDF. Is it a scanned document?
+  adapters:
+    heading: Label adapters
+    description: Choose which label adapters ApplyPilot should use when matching fields. All matching runs locally.
+  autofill:
+    heading: Autofill behavior
+    description: Decide how ApplyPilot handles fields that need attention during auto fill.
+    skip: Skip issues and continue automatically
+    pause: Pause for manual review
 adapters:
   items:
     en_default:
