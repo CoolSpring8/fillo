@@ -18,6 +18,7 @@ options:
   adapters:
     heading: 字段匹配适配器
     description: 选择 ApplyPilot 需要启用的字段标签适配器。所有匹配均在本地完成。
+    requireOne: 请至少启用一个适配器。
     items:
       en_default:
         name: 英文（默认）
@@ -233,7 +234,7 @@ overlay:
     skip: 跳过
 onboarding:
   title: 简历工作台
-  description: 导入简历、使用 AI 解析，并维护结构化数据以便自动填写。
+  description: 导入简历、使用 AI 解析，并在同一页面调节自动填写设置。
   buttons:
     working: 正在处理…
   manage:

@@ -18,6 +18,7 @@ options:
   adapters:
     heading: Field adapters
     description: Choose which label adapters ApplyPilot should use when matching fields. All matching runs locally.
+    requireOne: Keep at least one adapter enabled.
     items:
       en_default:
         name: English (default)
@@ -233,7 +234,7 @@ overlay:
     skip: Skip
 onboarding:
   title: Resume Workspace
-  description: Import resumes, parse them with AI, and curate structured data for autofill.
+  description: Import resumes, parse them with AI, and tune autofill settings in one place.
   buttons:
     working: Working…
   manage:

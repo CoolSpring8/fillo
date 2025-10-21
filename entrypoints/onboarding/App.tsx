@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Container, List, Stack, Text, Title } from '@mantine/core';
+import { Alert, Container, List, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
@@ -18,7 +18,7 @@ import {
   saveSettings,
   OPENAI_DEFAULT_BASE_URL,
 } from '../../shared/storage/settings';
-import { getAllAdapterIds } from '../../shared/apply/slots';
+import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.json';
 import { validateResume } from '../../shared/validate';
 import type {
@@ -32,6 +32,8 @@ import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCar
 import { UploadCard } from './components/UploadCard';
 import { ProviderCard } from './components/ProviderCard';
 import { EditProfileCard } from './components/EditProfileCard';
+import { AdaptersCard, type AdapterItem } from '../options/components/AdaptersCard';
+import { AutofillCard } from '../options/components/AutofillCard';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -61,12 +63,18 @@ function buildSettings(
 }
 
 export default function App() {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai'>('on-device');
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
   const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
+  const adaptersCatalog = useMemo(() => listAvailableAdapters(), []);
+  const defaultAdapterIds = useMemo(
+    () => adaptersCatalog.map((adapter) => adapter.id),
+    [adaptersCatalog],
+  );
+  const [activeAdapters, setActiveAdapters] = useState<string[]>(defaultAdapterIds);
+  const [autoFallback, setAutoFallback] = useState<AppSettings['autoFallback']>('skip');
   const [file, setFile] = useState<File | null>(null);
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [profilesState, setProfilesState] = useState<{ loading: boolean; error?: string }>({
@@ -86,6 +94,81 @@ export default function App() {
     'on-device': t('options.provider.onDevice'),
     openai: t('options.provider.openai'),
   };
+
+  const applySettings = useCallback(
+    (next: AppSettings) => {
+      setActiveAdapters(next.adapters.length > 0 ? next.adapters : defaultAdapterIds);
+      setAutoFallback(next.autoFallback ?? 'skip');
+    },
+    [defaultAdapterIds],
+  );
+
+  const resolveBaseUrl = useCallback(
+    (value?: string) => {
+      const source = value ?? apiBaseUrl;
+      const trimmed = source.trim();
+      return trimmed.length > 0 ? trimmed : OPENAI_DEFAULT_BASE_URL;
+    },
+    [apiBaseUrl],
+  );
+
+  const buildCurrentSettings = useCallback(
+    (
+      overrides?: Partial<{
+        provider: 'on-device' | 'openai';
+        apiKey: string;
+        model: string;
+        apiBaseUrl: string;
+        adapters: string[];
+        autoFallback: AppSettings['autoFallback'];
+      }>,
+    ): AppSettings => {
+      const provider = overrides?.provider ?? selectedProvider;
+      const adapters = overrides?.adapters ?? activeAdapters;
+      const normalizedAdapters = adapters.length > 0 ? adapters : defaultAdapterIds;
+      const fallback = overrides?.autoFallback ?? autoFallback;
+
+      if (provider === 'openai') {
+        const key = overrides?.apiKey ?? apiKey;
+        const providerModel = overrides?.model ?? model;
+        const baseUrl = resolveBaseUrl(overrides?.apiBaseUrl);
+        return buildSettings('openai', key, providerModel, baseUrl, normalizedAdapters, fallback);
+      }
+
+      return buildSettings(
+        'on-device',
+        '',
+        OPENAI_DEFAULT_MODEL,
+        OPENAI_DEFAULT_BASE_URL,
+        normalizedAdapters,
+        fallback,
+      );
+    },
+    [
+      selectedProvider,
+      activeAdapters,
+      defaultAdapterIds,
+      autoFallback,
+      apiKey,
+      model,
+      resolveBaseUrl,
+    ],
+  );
+
+  const persistSettings = useCallback(
+    async (next: AppSettings) => {
+      applySettings(next);
+      await saveSettings(next);
+    },
+    [applySettings],
+  );
+
+  const notifySettingsSaved = useCallback(() => {
+    if (!busy) {
+      setStatus({ phase: 'complete', message: t('options.feedback.saved') });
+      setErrorDetails(null);
+    }
+  }, [busy, t]);
 
   const refreshProfiles = useCallback(
     async (preferredId?: string) => {
@@ -139,7 +222,7 @@ export default function App() {
 
   useEffect(() => {
     getSettings().then((loaded) => {
-      setSettings(loaded);
+      applySettings(loaded);
       if (loaded.provider.kind === 'openai') {
         setSelectedProvider('openai');
         setApiKey(loaded.provider.apiKey);
@@ -152,68 +235,63 @@ export default function App() {
     });
     ensureOnDeviceAvailability().then(setAvailability);
     void refreshProfiles();
-  }, [refreshProfiles]);
+  }, [applySettings, refreshProfiles]);
 
   useEffect(() => {
     const listener = () => {
       void refreshProfiles();
+      getSettings().then((loaded) => {
+        applySettings(loaded);
+        if (loaded.provider.kind === 'openai') {
+          setSelectedProvider('openai');
+          setApiKey(loaded.provider.apiKey);
+          setModel(loaded.provider.model);
+          setApiBaseUrl(loaded.provider.apiBaseUrl);
+        } else {
+          setSelectedProvider('on-device');
+          setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
+        }
+      });
     };
     browser.storage.onChanged.addListener(listener);
     return () => browser.storage.onChanged.removeListener(listener);
-  }, [refreshProfiles]);
+  }, [applySettings, refreshProfiles]);
 
   const handleProviderChange = async (value: 'on-device' | 'openai') => {
     setSelectedProvider(value);
     if (value === 'on-device') {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adapters, fallback);
-      setSettings(next);
-      await saveSettings(next);
+      const next = buildCurrentSettings({ provider: 'on-device' });
+      await persistSettings(next);
     } else {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       setApiBaseUrl(nextBase);
-      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const next = buildSettings('openai', apiKey, model, nextBase, adapters, fallback);
-      setSettings(next);
-      await saveSettings(next);
+      const next = buildCurrentSettings({ provider: 'openai', apiBaseUrl: nextBase });
+      await persistSettings(next);
     }
   };
 
   const handleApiKeyChange = (value: string) => {
     setApiKey(value);
     if (selectedProvider === 'openai') {
-      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const next = buildSettings('openai', value, model, nextBase, adapters, fallback);
-      setSettings(next);
-      void saveSettings(next);
+      const next = buildCurrentSettings({ apiKey: value });
+      void persistSettings(next);
     }
   };
 
   const handleModelChange = (value: string) => {
     setModel(value);
     if (selectedProvider === 'openai') {
-      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const next = buildSettings('openai', apiKey, value, nextBase, adapters, fallback);
-      setSettings(next);
-      void saveSettings(next);
+      const next = buildCurrentSettings({ model: value });
+      void persistSettings(next);
     }
   };
 
   const handleApiBaseUrlChange = (value: string) => {
     setApiBaseUrl(value);
     if (selectedProvider === 'openai') {
-      const adapters = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const next = buildSettings('openai', apiKey, model, value, adapters, fallback);
-      setSettings(next);
-      void saveSettings(next);
+      const next = buildCurrentSettings({ apiBaseUrl: value });
+      void persistSettings(next);
     }
   };
 
@@ -252,18 +330,8 @@ export default function App() {
       await saveProfile(profile);
       await refreshProfiles(id);
 
-      const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const nextSettings = buildSettings(
-        selectedProvider,
-        apiKey,
-        model,
-        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
-        adapterIds,
-        fallback,
-      );
-      setSettings(nextSettings);
-      await saveSettings(nextSettings);
+      const nextSettings = buildCurrentSettings();
+      await persistSettings(nextSettings);
 
       setStatus({
         phase: 'complete',
@@ -303,7 +371,7 @@ export default function App() {
       setStatus({ phase: 'parsing', message: t('onboarding.status.parsing') });
       const messages = buildResumePrompt(selectedProfile.rawText);
 
-      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const baseUrl = resolveBaseUrl();
       const providerConfig: ProviderConfig =
         selectedProvider === 'openai'
           ? createOpenAIProvider(apiKey, model, baseUrl)
@@ -340,18 +408,8 @@ export default function App() {
       await saveProfile(profile);
       await refreshProfiles(profile.id);
 
-      const adapterIds = settings?.adapters?.length ? settings.adapters : getAllAdapterIds();
-      const fallback = settings?.autoFallback ?? 'skip';
-      const nextSettings = buildSettings(
-        selectedProvider,
-        apiKey,
-        model,
-        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
-        adapterIds,
-        fallback,
-      );
-      setSettings(nextSettings);
-      await saveSettings(nextSettings);
+      const nextSettings = buildCurrentSettings();
+      await persistSettings(nextSettings);
 
       setStatus({
         phase: 'complete',
@@ -378,6 +436,41 @@ export default function App() {
       setBusyAction(null);
     }
   };
+
+  const handleToggleAdapter = (id: string, checked: boolean) => {
+    const base = checked
+      ? Array.from(new Set([...activeAdapters, id]))
+      : activeAdapters.filter((item) => item !== id);
+    const normalized = base.length > 0 ? base : defaultAdapterIds;
+    const next = buildCurrentSettings({ adapters: normalized });
+    void persistSettings(next);
+    if (base.length === 0) {
+      if (!busy) {
+        setStatus({ phase: 'error', message: t('options.adapters.requireOne') });
+        setErrorDetails(null);
+      }
+    } else {
+      notifySettingsSaved();
+    }
+  };
+
+  const handleAutoFallbackChange = (value: 'skip' | 'pause') => {
+    setAutoFallback(value);
+    const next = buildCurrentSettings({ autoFallback: value });
+    void persistSettings(next);
+    notifySettingsSaved();
+  };
+
+  const adapterItems = useMemo<AdapterItem[]>(
+    () =>
+      adaptersCatalog.map((adapter) => ({
+        id: adapter.id,
+        name: t(adapter.nameKey),
+        description: adapter.descriptionKey ? t(adapter.descriptionKey) : null,
+        checked: activeAdapters.includes(adapter.id),
+      })),
+    [adaptersCatalog, activeAdapters, t],
+  );
 
   const handleSelectProfile = (id: string) => {
     setSelectedProfileId(id);
@@ -575,88 +668,117 @@ export default function App() {
           <Text c="dimmed">{t('onboarding.description')}</Text>
         </Stack>
 
-        <ProfilesCard
-          title={t('onboarding.manage.heading')}
-          countLabel={t('onboarding.manage.count', [profileCountLabel])}
-          addLabel={t('onboarding.manage.addProfile')}
-          loadingLabel={t('onboarding.manage.loading')}
-          emptyLabel={t('onboarding.manage.empty')}
-          deleteLabel={t('onboarding.manage.delete')}
-          errorLabel={profilesErrorLabel}
-          profiles={profilesData}
-          isLoading={profilesState.loading}
-          busy={busy}
-          onCreate={handleCreateProfile}
-          onSelect={handleSelectProfile}
-          onDelete={handleDeleteProfile}
-        />
+        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
+          <Stack gap="xl">
+            <ProfilesCard
+              title={t('onboarding.manage.heading')}
+              countLabel={t('onboarding.manage.count', [profileCountLabel])}
+              addLabel={t('onboarding.manage.addProfile')}
+              loadingLabel={t('onboarding.manage.loading')}
+              emptyLabel={t('onboarding.manage.empty')}
+              deleteLabel={t('onboarding.manage.delete')}
+              errorLabel={profilesErrorLabel}
+              profiles={profilesData}
+              isLoading={profilesState.loading}
+              busy={busy}
+              onCreate={handleCreateProfile}
+              onSelect={handleSelectProfile}
+              onDelete={handleDeleteProfile}
+            />
 
-        <UploadCard
-          title={t('onboarding.upload.heading')}
-          helper={t('onboarding.upload.helper')}
-          buttonLabel={t('onboarding.upload.button')}
-          workingLabel={workingLabel}
-          isWorking={uploadWorking}
-          currentSummary={currentSummary}
-          file={file}
-          busy={busy}
-          onExtract={handleExtract}
-          onFileSelect={handleFileSelect}
-        />
+            <UploadCard
+              title={t('onboarding.upload.heading')}
+              helper={t('onboarding.upload.helper')}
+              buttonLabel={t('onboarding.upload.button')}
+              workingLabel={workingLabel}
+              isWorking={uploadWorking}
+              currentSummary={currentSummary}
+              file={file}
+              busy={busy}
+              onExtract={handleExtract}
+              onFileSelect={handleFileSelect}
+            />
 
-        <ProviderCard
-          title={t('onboarding.parse.heading')}
-          helper={t('onboarding.parse.helper')}
-          providerLabels={providerLabels}
-          selectedProvider={selectedProvider}
-          canUseOnDevice={canUseOnDevice}
-          onDeviceNote={onDeviceNote}
-          apiKeyLabel={t('onboarding.openai.apiKey')}
-          apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
-          modelLabel={t('onboarding.openai.model')}
-          baseUrlLabel={t('onboarding.openai.baseUrl')}
-          baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
-          openAiHelper={t('onboarding.openai.helper')}
-          apiKey={apiKey}
-          model={model}
-          apiBaseUrl={apiBaseUrl}
-          workingLabel={workingLabel}
-          parseButtonLabel={t('onboarding.parse.button')}
-          parseWarning={parseWarning}
-          parseHint={parseHint}
-          needProfileMessage={needProfileMessage}
-          isWorking={parseWorking}
-          disabled={parseDisabled}
-          onProviderChange={handleProviderChange}
-          onApiKeyChange={handleApiKeyChange}
-          onModelChange={handleModelChange}
-          onApiBaseUrlChange={handleApiBaseUrlChange}
-          onParse={handleParse}
-        />
+            {selectedProfile && (
+              <EditProfileCard
+                title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
+                helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
+                rawLabel={t('onboarding.edit.rawLabel')}
+                rawValue={rawDraft}
+                rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
+                resumeLabel={t('onboarding.edit.resumeLabel')}
+                resumeValue={resumeDraft}
+                resumeHelper={t('onboarding.edit.resumeHelper')}
+                saveLabel={t('onboarding.edit.save')}
+                resetLabel={t('onboarding.edit.reset')}
+                workingLabel={workingLabel}
+                disabledSave={!draftDirty || busy}
+                disabledReset={!draftDirty || busy}
+                isWorking={editWorking}
+                errorMessage={draftError}
+                onSave={handleSaveDrafts}
+                onReset={handleResetDrafts}
+                onRawChange={handleRawDraftChange}
+                onResumeChange={handleResumeDraftChange}
+              />
+            )}
+          </Stack>
 
-        {selectedProfile && (
-        <EditProfileCard
-          title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
-          helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
-          rawLabel={t('onboarding.edit.rawLabel')}
-          rawValue={rawDraft}
-          rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
-          resumeLabel={t('onboarding.edit.resumeLabel')}
-          resumeValue={resumeDraft}
-          resumeHelper={t('onboarding.edit.resumeHelper')}
-          saveLabel={t('onboarding.edit.save')}
-          resetLabel={t('onboarding.edit.reset')}
-          workingLabel={workingLabel}
-          disabledSave={!draftDirty || busy}
-          disabledReset={!draftDirty || busy}
-          isWorking={editWorking}
-          errorMessage={draftError}
-          onSave={handleSaveDrafts}
-          onReset={handleResetDrafts}
-          onRawChange={handleRawDraftChange}
-          onResumeChange={handleResumeDraftChange}
-        />
-        )}
+          <Stack gap="xl">
+            <Stack gap={4}>
+              <Title order={3}>{t('options.title')}</Title>
+              <Text fz="sm" c="dimmed">
+                {t('options.description')}
+              </Text>
+            </Stack>
+
+            <ProviderCard
+              title={t('onboarding.parse.heading')}
+              helper={t('onboarding.parse.helper')}
+              providerLabels={providerLabels}
+              selectedProvider={selectedProvider}
+              canUseOnDevice={canUseOnDevice}
+              onDeviceNote={onDeviceNote}
+              apiKeyLabel={t('onboarding.openai.apiKey')}
+              apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
+              modelLabel={t('onboarding.openai.model')}
+              baseUrlLabel={t('onboarding.openai.baseUrl')}
+              baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
+              openAiHelper={t('onboarding.openai.helper')}
+              apiKey={apiKey}
+              model={model}
+              apiBaseUrl={apiBaseUrl}
+              workingLabel={workingLabel}
+              parseButtonLabel={t('onboarding.parse.button')}
+              parseWarning={parseWarning}
+              parseHint={parseHint}
+              needProfileMessage={needProfileMessage}
+              isWorking={parseWorking}
+              disabled={parseDisabled}
+              onProviderChange={handleProviderChange}
+              onApiKeyChange={handleApiKeyChange}
+              onModelChange={handleModelChange}
+              onApiBaseUrlChange={handleApiBaseUrlChange}
+              onParse={handleParse}
+            />
+
+            <AdaptersCard
+              title={t('options.adapters.heading')}
+              description={t('options.adapters.description')}
+              items={adapterItems}
+              onToggle={handleToggleAdapter}
+            />
+
+            <AutofillCard
+              title={t('options.autofill.heading')}
+              description={t('options.autofill.description')}
+              value={autoFallback}
+              skipLabel={t('options.autofill.skip')}
+              pauseLabel={t('options.autofill.pause')}
+              onChange={handleAutoFallbackChange}
+            />
+          </Stack>
+        </SimpleGrid>
 
         {status.message && (
           <Alert variant="light" color={statusColor}>
