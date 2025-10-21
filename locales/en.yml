@@ -79,7 +79,7 @@ sidepanel:
     manageProfiles: Manage profiles
   tabs:
     dom: Field Review
-    auto: Auto Fill
+    guided: Guided
     manual: Manual Copy
   states:
     noProfilesOption: No profiles available
@@ -112,14 +112,19 @@ sidepanel:
   footer:
     noSelection: Select a field to review values.
     selectionHint: Choose the data to fill this field.
-  auto:
-    description: Let the on-device model match resume keys and fill fields automatically.
-    start: Start auto fill
-    running: Filling…
-    noModel: AI provider unavailable. Configure a provider in ApplyPilot options.
-    noKeys: No resume data available for auto fill.
-    summary: Filled $1 of $2 fields.
-    paused: Paused after filling $1 of $2 fields at "$3".
+  guided:
+    description: Step through fields one by one, confirm each fill, and learn from your choices.
+    start: Start guided fill
+    accept: Fill & next
+    skip: Skip & next
+    paused: Paused at "$1" ($2 of $3)
+    progress: Progress — filled $1 of $2 · skipped $3
+    memory:
+      heading: Memory
+      refresh: Refresh
+      clearAll: Clear all
+      delete: Delete
+      empty: No learned associations yet.
   preview:
     file: Open the file picker to upload your resume.
     select: Select a value in the side panel.

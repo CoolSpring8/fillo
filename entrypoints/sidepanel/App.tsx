@@ -40,7 +40,7 @@ import {
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
 import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
 import { getSettings } from '../../shared/storage/settings';
-import { judgeAutoFill, hasAutoFillModel, type AutoFillKey } from './autoFillJudge';
+// Auto mode removed; new guided mode uses side panel controls and shared memory
 import {
   NoProviderConfiguredError,
   ProviderAvailabilityError,
@@ -48,7 +48,7 @@ import {
   ProviderInvocationError,
 } from '../../shared/llm/errors';
 
-type PanelMode = 'dom' | 'auto' | 'manual';
+type PanelMode = 'dom' | 'guided' | 'manual';
 
 type FieldStatus = 'idle' | 'pending' | 'filled' | 'skipped' | 'failed';
 
@@ -84,11 +84,14 @@ export default function App() {
   const [viewState, setViewState] = useState<ViewState>({ loadingProfiles: true });
   const [scanning, setScanning] = useState(false);
   const [classifying, setClassifying] = useState(false);
-  const [autoRunning, setAutoRunning] = useState(false);
-  const [autoSummary, setAutoSummary] = useState<string | null>(null);
   const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
-  const [autoFallback, setAutoFallback] = useState<'skip' | 'pause'>('skip');
+  // Guided mode state
+  const [guidedStarted, setGuidedStarted] = useState(false);
+  const [guidedIndex, setGuidedIndex] = useState<number>(0);
+  const [guidedFilled, setGuidedFilled] = useState<number>(0);
+  const [guidedSkipped, setGuidedSkipped] = useState<number>(0);
+  const [memoryList, setMemoryList] = useState<Array<{ key: string; association: any }>>([]);
   const { t } = i18n;
 
   const portRef = useRef<RuntimePort | null>(null);
@@ -96,7 +99,7 @@ export default function App() {
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
   const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
-  const autoFallbackRef = useRef<'skip' | 'pause'>('skip');
+  const guidedIndexRef = useRef<number>(0);
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
   const providerRef = useRef<ProviderConfig | null>(null);
@@ -137,8 +140,8 @@ export default function App() {
   }, [activeAdapterIds, defaultAdapterIds]);
 
   useEffect(() => {
-    autoFallbackRef.current = autoFallback;
-  }, [autoFallback]);
+    guidedIndexRef.current = guidedIndex;
+  }, [guidedIndex]);
 
   const formatFillReason = (reason: string): string => {
     const map: Record<string, string> = {
@@ -209,14 +212,9 @@ export default function App() {
     const loadSettings = async () => {
       try {
         const settings = await getSettings();
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         providerRef.current = settings.provider;
         setActiveAdapterIds(settings.adapters.length > 0 ? settings.adapters : defaultAdapterIds);
-        const fallback = settings.autoFallback ?? 'skip';
-        setAutoFallback(fallback);
-        autoFallbackRef.current = fallback;
       } catch (error) {
         console.warn('Failed to load settings', error);
       }
@@ -225,16 +223,13 @@ export default function App() {
     loadSettings().catch(console.error);
 
     const listener = (changes: Record<string, unknown>, area: string) => {
-      if (area !== 'local') {
-        return;
-      }
+      if (area !== 'local') return;
       if ('settings:app' in changes) {
         loadSettings().catch(console.error);
       }
     };
 
     browser.storage.onChanged.addListener(listener);
-
     return () => {
       cancelled = true;
       browser.storage.onChanged.removeListener(listener);
@@ -252,13 +247,36 @@ export default function App() {
 
       if (message.kind === 'FIELDS') {
         const parsed = parseFieldsResponse(message);
-        if (!parsed) {
-          return;
-        }
-        if (scanRequestIdRef.current && parsed.requestId !== scanRequestIdRef.current) {
-          return;
-        }
-        setFields(buildFieldEntries(parsed.fields, slotValuesRef.current, adapterIdsRef.current));
+        if (!parsed) return;
+        if (scanRequestIdRef.current && parsed.requestId !== scanRequestIdRef.current) return;
+
+        // Apply heuristics first, then augment with memory preferences
+        const initial = buildFieldEntries(parsed.fields, slotValuesRef.current, adapterIdsRef.current);
+        // Lazy-load memory and apply preferred slots/values
+        void (async () => {
+          const { loadMemory, computeSignatureKey } = await import('../../shared/memory/store');
+          const memory = await loadMemory();
+          const withMemory = initial.map((entry) => {
+            const key = computeSignatureKey(entry.field);
+            const assoc = memory[key];
+            if (!assoc) return entry;
+            let next = { ...entry };
+            if (assoc.preferredSlot) {
+              // If the preferred slot has a value in current profile, use it
+              const pref = slotValuesRef.current[assoc.preferredSlot as any];
+              if (pref && pref.trim().length > 0) {
+                next.selectedSlot = assoc.preferredSlot;
+                next.suggestion = pref;
+              }
+            }
+            if (!next.suggestion && assoc.lastValue && assoc.lastValue.trim().length > 0) {
+              next.suggestion = assoc.lastValue;
+            }
+            return next;
+          });
+          setFields(withMemory);
+        })().catch(console.error);
+
         setScanning(false);
         const descriptors: FieldDescriptor[] = parsed.fields.map((field) => ({
           id: field.id,
@@ -350,24 +368,7 @@ export default function App() {
     );
   }, []);
 
-  const setFieldAutoDecision = useCallback(
-    (fieldId: string, details: { key?: string; keyLabel?: string; note?: string; confidence?: number }) => {
-      setFields((current) =>
-        current.map((entry) =>
-          entry.field.id === fieldId
-            ? {
-                ...entry,
-                autoKey: details.key,
-                autoKeyLabel: details.keyLabel,
-                autoNote: details.note,
-                autoConfidence: details.confidence,
-              }
-            : entry,
-        ),
-      );
-    },
-    [],
-  );
+  // Auto insights removed with Guided mode replacement
 
   const waitForFillCompletion = useCallback((requestId: string, timeoutMs = 5000) => {
     return new Promise<FillResultMessage | null>((resolve) => {
@@ -382,30 +383,9 @@ export default function App() {
     });
   }, []);
 
-  const buildAutoFillKeys = useCallback((): AutoFillKey[] => {
-    const entries = Object.entries(slotValuesRef.current) as Array<[
-      FieldSlot,
-      string | undefined
-    ]>;
-    return entries
-      .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
-      .map(([slot]) => ({
-        key: slot,
-        label: formatSlotLabel(slot),
-      }));
-  }, []);
+  // Auto mode helpers removed
 
-  const resetAutoInsights = useCallback(() => {
-    setFields((current) =>
-      current.map((entry) => ({
-        ...entry,
-        autoKey: undefined,
-        autoKeyLabel: undefined,
-        autoNote: undefined,
-        autoConfidence: undefined,
-      })),
-    );
-  }, []);
+  // Auto mode helpers removed
 
 
   const handleAutoFill = useCallback(() => {
@@ -449,228 +429,7 @@ export default function App() {
     notify(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
   }, [fields, notify, sendMessage, t]);
 
-  const handleAutoModeRun = useCallback(async () => {
-    if (autoRunning) {
-      return;
-    }
-
-    if (!hasAutoFillModel(providerRef.current)) {
-      const message = t('sidepanel.auto.noModel');
-      setAutoSummary(message);
-      notify(message, 'error');
-      return;
-    }
-
-    const availableKeys = buildAutoFillKeys();
-    if (availableKeys.length === 0) {
-      setAutoSummary(t('sidepanel.auto.noKeys'));
-      return;
-    }
-
-    if (fieldsRef.current.length === 0) {
-      setAutoSummary(t('sidepanel.states.noFields'));
-      return;
-    }
-
-    const supportedKinds: Set<ScannedField['kind']> = new Set([
-      'text',
-      'email',
-      'tel',
-      'number',
-      'date',
-      'select',
-      'textarea',
-    ]);
-
-    setAutoRunning(true);
-    setAutoSummary(null);
-
-    const usedKeys = new Set<string>();
-    const snapshot = [...fieldsRef.current];
-    let attempted = 0;
-    let filled = 0;
-    let stoppedEarly = false;
-    let pausedFieldLabel: string | null = null;
-    let summaryLocked = false;
-    const shouldPause = autoFallbackRef.current === 'pause';
-
-    resetAutoInsights();
-
-    try {
-      for (const entry of snapshot) {
-        if (stoppedEarly) {
-          break;
-        }
-        if (entry.status === 'filled') {
-          continue;
-        }
-
-        attempted += 1;
-
-        const markAndMaybePause = (status: FieldStatus, reason: string) => {
-          setFieldStatus(entry.field.id, status, reason);
-          if (shouldPause && !stoppedEarly) {
-            stoppedEarly = true;
-            pausedFieldLabel = entry.field.label || t('sidepanel.field.noLabel');
-          }
-        };
-
-        if (!supportedKinds.has(entry.field.kind)) {
-          markAndMaybePause('skipped', 'auto-unsupported');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-        if (entry.field.hasValue) {
-          markAndMaybePause('skipped', 'auto-non-empty');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-
-        const available = availableKeys.filter((key) => !usedKeys.has(key.key));
-        if (available.length === 0) {
-          markAndMaybePause('skipped', 'auto-no-keys');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-
-        let decision = null;
-        for (let round = 1; round <= 3; round += 1) {
-          const result = await judgeAutoFill(providerRef.current, {
-            field: entry.field,
-            keys: available,
-            usedKeys: Array.from(usedKeys),
-            round,
-          });
-          if (result) {
-            decision = result;
-            break;
-          }
-        }
-
-        if (decision) {
-          const keyLabel =
-            decision.decision === 'fill' && decision.key
-              ? available.find((item) => item.key === decision.key)?.label ?? formatSlotLabel(decision.key as FieldSlot)
-              : undefined;
-          setFieldAutoDecision(entry.field.id, {
-            key: decision.decision === 'fill' ? decision.key : undefined,
-            keyLabel,
-            note: decision.reason,
-            confidence: decision.confidence,
-          });
-        }
-
-        if (!decision || decision.decision !== 'fill' || !decision.key) {
-          markAndMaybePause('skipped', 'auto-no-decision');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-
-        const slotValue = slotValuesRef.current[decision.key as FieldSlot];
-        if (!slotValue) {
-          markAndMaybePause('skipped', 'auto-invalid-key');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-        const value = slotValue.trim();
-        if (!value) {
-          markAndMaybePause('skipped', 'auto-missing-value');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-
-        const requestId = crypto.randomUUID();
-        setFieldStatus(entry.field.id, 'pending');
-        sendMessage({
-          kind: 'PROMPT_FILL',
-          requestId,
-          fieldId: entry.field.id,
-          frameId: entry.field.frameId,
-          label: entry.field.label,
-          mode: 'auto',
-          value,
-        });
-
-        const result = await waitForFillCompletion(requestId);
-        if (!result) {
-          markAndMaybePause('failed', 'auto-timeout');
-          if (stoppedEarly) {
-            break;
-          }
-          continue;
-        }
-
-        if (result.status === 'filled') {
-          filled += 1;
-          usedKeys.add(decision.key);
-        } else if (result.status === 'skipped') {
-          markAndMaybePause('skipped', result.reason ?? 'auto-no-decision');
-          if (stoppedEarly) {
-            break;
-          }
-        } else {
-          markAndMaybePause('failed', result.reason ?? 'auto-error');
-          if (stoppedEarly) {
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      if (
-        error instanceof NoProviderConfiguredError ||
-        error instanceof ProviderConfigurationError ||
-        error instanceof ProviderAvailabilityError ||
-        error instanceof ProviderInvocationError
-      ) {
-        setAutoSummary(error.message);
-        notify(error.message, 'error');
-        summaryLocked = true;
-      } else {
-        console.warn('Auto mode run failed', error);
-        const message =
-          error instanceof Error ? error.message : t('sidepanel.auto.noModel');
-        setAutoSummary(message);
-        notify(message, 'error');
-        summaryLocked = true;
-      }
-    } finally {
-      setAutoRunning(false);
-      if (summaryLocked) {
-        return;
-      }
-      if (stoppedEarly && pausedFieldLabel) {
-        setAutoSummary(
-          t('sidepanel.auto.paused', [String(filled), String(attempted), pausedFieldLabel]),
-        );
-      } else if (attempted > 0) {
-        setAutoSummary(t('sidepanel.auto.summary', [String(filled), String(attempted)]));
-      }
-    }
-  }, [
-    autoRunning,
-    buildAutoFillKeys,
-    fieldsRef,
-    resetAutoInsights,
-    sendMessage,
-    setFieldAutoDecision,
-    setFieldStatus,
-    slotValuesRef,
-    notify,
-    t,
-    waitForFillCompletion,
-  ]);
+  // Auto mode flow removed
 
   const requestScan = () => {
     if (!portRef.current) {
@@ -979,7 +738,7 @@ export default function App() {
     );
 
   const classifyDisabled = classifying || fields.length === 0;
-  const autoButtonDisabled = autoRunning || scanning;
+  const guidedTotal = fields.length;
 
   const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'blue' = 'gray') => (
     <Alert color={tone} variant="light" radius="lg">
@@ -1055,7 +814,7 @@ export default function App() {
         >
           <Tabs.List>
             <Tabs.Tab value="dom">{t('sidepanel.tabs.dom')}</Tabs.Tab>
-            <Tabs.Tab value="auto">{t('sidepanel.tabs.auto')}</Tabs.Tab>
+            <Tabs.Tab value="guided">{t('sidepanel.tabs.guided')}</Tabs.Tab>
             <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
           </Tabs.List>
 
@@ -1080,8 +839,8 @@ export default function App() {
               </Paper>
             </Stack>
           </Tabs.Panel>
-          <Tabs.Panel value="auto" style={{ flex: 1, overflow: 'hidden' }}>
-            {renderPanel(renderAutoMode())}
+          <Tabs.Panel value="guided" style={{ flex: 1, overflow: 'hidden' }}>
+            {renderPanel(renderGuidedMode())}
           </Tabs.Panel>
           <Tabs.Panel value="manual" style={{ flex: 1, overflow: 'hidden' }}>
             {renderPanel(renderManualMode())}
@@ -1114,7 +873,7 @@ export default function App() {
     );
   }
 
-  function renderAutoMode() {
+  function renderGuidedMode() {
     if (viewState.loadingProfiles) {
       return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
     }
@@ -1131,22 +890,204 @@ export default function App() {
       return renderStateAlert(t('sidepanel.states.noFields'));
     }
 
+    const current = guidedStarted ? fields[guidedIndex] : null;
+    const progressText = t('sidepanel.guided.progress', [
+      String(guidedFilled),
+      String(guidedTotal),
+      String(guidedSkipped),
+    ]);
+
     return (
       <Stack gap="sm">
         <Alert color="blue" variant="light" radius="lg">
-          {t('sidepanel.auto.description')}
+          {t('sidepanel.guided.description')}
         </Alert>
         <Group gap="sm" wrap="wrap">
-          <Button onClick={handleAutoModeRun} disabled={autoButtonDisabled} loading={autoRunning} size="sm">
-            {autoRunning ? t('sidepanel.auto.running') : t('sidepanel.auto.start')}
-          </Button>
+          {!guidedStarted ? (
+            <Button size="sm" onClick={startGuided}>{t('sidepanel.guided.start')}</Button>
+          ) : (
+            <>
+              <Badge variant="light" color="gray">
+                {t('sidepanel.guided.paused', [current?.field.label || t('sidepanel.field.noLabel'), String(guidedIndex + 1), String(guidedTotal)])}
+              </Badge>
+              <Button size="sm" variant="light" onClick={() => highlightCurrent(current)}>
+                {t('sidepanel.buttons.highlight')}
+              </Button>
+            </>
+          )}
         </Group>
-        {autoSummary && renderStateAlert(autoSummary)}
+        <Text fz="xs" c="dimmed">{progressText}</Text>
+
         <Stack gap="sm">
-          {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
+          {guidedStarted && current && renderGuidedControls(current)}
         </Stack>
+
+        <Card withBorder radius="md" shadow="sm">
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={600}>{t('sidepanel.guided.memory.heading')}</Text>
+              <Button size="xs" variant="light" onClick={refreshMemory}>
+                {t('sidepanel.guided.memory.refresh')}
+              </Button>
+            </Group>
+            {memoryList.length === 0 ? (
+              <Text fz="sm" c="dimmed">{t('sidepanel.guided.memory.empty')}</Text>
+            ) : (
+              <Stack gap={6}>
+                {memoryList.map(({ key, association }) => (
+                  <Group key={key} justify="space-between" align="center">
+                    <Text fz="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
+                      {key} · {association.preferredSlot ?? ''} {association.lastValue ? `· ${truncate(association.lastValue, 60)}` : ''}
+                    </Text>
+                    <Button size="xs" variant="subtle" onClick={() => removeMemory(key)}>
+                      {t('sidepanel.guided.memory.delete')}
+                    </Button>
+                  </Group>
+                ))}
+                <Group justify="flex-end">
+                  <Button size="xs" color="red" variant="light" onClick={clearMemory}>
+                    {t('sidepanel.guided.memory.clearAll')}
+                  </Button>
+                </Group>
+              </Stack>
+            )}
+          </Stack>
+        </Card>
       </Stack>
     );
+  }
+
+  function renderGuidedControls(entry: FieldEntry) {
+    const { fallbackOption, value } = resolveEntryData(entry);
+    const currentSlot = entry.selectedSlot ?? (fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : null);
+    const fillDisabled = entry.status === 'pending' || !value;
+
+    return (
+      <Card withBorder radius="md" shadow="sm">
+        <Stack gap="sm">
+          <Group justify="space-between" align="flex-start">
+            <Stack gap={4}>
+              <Text fw={600} fz="sm">
+                {entry.field.label || t('sidepanel.field.noLabel')}
+                {entry.field.required ? ' *' : ''}
+              </Text>
+              <Text fz="xs" c="dimmed">
+                {t('sidepanel.field.meta', [t(`sidepanel.fieldKind.${entry.field.kind}`), entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped'), String(entry.field.frameId)])}
+              </Text>
+            </Stack>
+            {entry.status !== 'idle' && (
+              <Badge color={entry.status === 'filled' ? 'green' : entry.status === 'failed' ? 'red' : 'gray'} variant="light" size="sm">
+                {t(`sidepanel.status.${entry.status}`)}
+              </Badge>
+            )}
+          </Group>
+
+          <Select
+            label={t('sidepanel.field.selectorLabel')}
+            placeholder={t('sidepanel.field.selectPlaceholder')}
+            data={manualOptions.map((option) => ({ value: option.slot, label: `${option.label} · ${truncate(option.value)}` }))}
+            value={currentSlot}
+            onChange={(slot) => handleSlotSelectionChange(entry.field.id, slot ? (slot as PromptOptionSlot) : null)}
+            size="sm"
+            clearable
+            searchable={manualOptions.length > 7}
+            comboboxProps={{ withinPortal: true }}
+          />
+          <Text fz="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>
+            {value ? truncate(value, 200) : t('sidepanel.field.chooseValue')}
+          </Text>
+          <Group gap="sm" justify="flex-end">
+            <Button size="sm" variant="default" onClick={() => handleGuidedSkip(entry)}>
+              {t('sidepanel.guided.skip')}
+            </Button>
+            <Button size="sm" disabled={fillDisabled} onClick={() => handleGuidedAccept(entry)}>
+              {t('sidepanel.guided.accept')}
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
+    );
+  }
+
+  function startGuided() {
+    setGuidedStarted(true);
+    setGuidedIndex(0);
+    setGuidedFilled(0);
+    setGuidedSkipped(0);
+    if (fields.length > 0) {
+      setSelectedFieldId(fields[0].field.id);
+      highlightCurrent(fields[0]);
+    }
+    refreshMemory().catch(console.error);
+  }
+
+  function highlightCurrent(entry: FieldEntry | null) {
+    if (!entry) return;
+    sendMessage({ kind: 'HIGHLIGHT_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId, label: entry.field.label });
+  }
+
+  async function handleGuidedAccept(entry: FieldEntry) {
+    const { value } = resolveEntryData(entry);
+    if (!value) {
+      notify(t('sidepanel.feedback.noValues'), 'info');
+      return;
+    }
+    const requestId = crypto.randomUUID();
+    setFieldStatus(entry.field.id, 'pending');
+    sendMessage({
+      kind: 'PROMPT_FILL',
+      requestId,
+      fieldId: entry.field.id,
+      frameId: entry.field.frameId,
+      label: entry.field.label,
+      mode: 'fill',
+      value,
+      preview: value,
+    });
+    const result = await waitForFillCompletion(requestId);
+    if (result?.status === 'filled') {
+      setGuidedFilled((n) => n + 1);
+      const { learnAccept } = await import('../../shared/memory/store');
+      await learnAccept(entry.field, { slot: entry.selectedSlot, value });
+    }
+    goToNext(entry);
+  }
+
+  async function handleGuidedSkip(entry: FieldEntry) {
+    setFieldStatus(entry.field.id, 'skipped');
+    const { learnReject } = await import('../../shared/memory/store');
+    await learnReject(entry.field);
+    setGuidedSkipped((n) => n + 1);
+    goToNext(entry);
+  }
+
+  function goToNext(current: FieldEntry) {
+    const idx = fieldsRef.current.findIndex((e) => e.field.id === current.field.id);
+    const nextIndex = Math.min(Math.max(idx + 1, 0), fieldsRef.current.length - 1);
+    setGuidedIndex(nextIndex);
+    const next = fieldsRef.current[nextIndex];
+    if (next) {
+      setSelectedFieldId(next.field.id);
+      highlightCurrent(next);
+    }
+  }
+
+  async function refreshMemory() {
+    const { listAssociations } = await import('../../shared/memory/store');
+    const items = await listAssociations();
+    setMemoryList(items);
+  }
+
+  async function clearMemory() {
+    const { clearAllMemory } = await import('../../shared/memory/store');
+    await clearAllMemory();
+    await refreshMemory();
+  }
+
+  async function removeMemory(key: string) {
+    const { deleteAssociation } = await import('../../shared/memory/store');
+    await deleteAssociation(key);
+    await refreshMemory();
   }
 
   function renderFieldCard(entry: FieldEntry, options: { isSelected?: boolean } = {}) {

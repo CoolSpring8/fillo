@@ -79,7 +79,7 @@ sidepanel:
     manageProfiles: 管理简历
   tabs:
     dom: 字段审核
-    auto: 自动填充
+    guided: 引导模式
     manual: 手动复制
   states:
     noProfilesOption: 暂无简历
@@ -112,14 +112,19 @@ sidepanel:
   footer:
     noSelection: 请选择一个字段以查看可填数据。
     selectionHint: 选择要填入该字段的数据。
-  auto:
-    description: 使用本地模型自动匹配简历字段并逐项填写。
-    start: 开始自动填充
-    running: 正在填充…
-    noModel: AI 提供商不可用，请在 ApplyPilot 选项中配置。
-    noKeys: 暂无可用于自动填充的简历数据。
-    summary: 已填写 $1 / $2 个字段。
-    paused: 已填写 $1 / $2 个字段，暂停于"$3"。
+  guided:
+    description: 逐项处理每个字段，逐步确认填写，并从你的选择中学习。
+    start: 开始引导填写
+    accept: 填写并进入下一项
+    skip: 跳过并进入下一项
+    paused: 暂停于“$1”（第 $2 / $3 项）
+    progress: 进度 — 已填写 $1 / $2 · 已跳过 $3
+    memory:
+      heading: 记忆
+      refresh: 刷新
+      clearAll: 清除全部
+      delete: 删除
+      empty: 暂无学习到的关联。
   preview:
     file: 将打开文件选择器以上传简历。
     select: 请在侧边栏选择一个值。
