@@ -115,8 +115,14 @@ sidepanel:
   guided:
     description: Step through fields one by one, confirm each fill, and learn from your choices.
     start: Start guided fill
+    back: Back
+    next: Next
+    fill: Fill
     accept: Fill & next
     skip: Skip & next
+    done: Done
+    restart: Restart
+    jumpToUnfilled: First unfilled
     paused: Paused at "$1" ($2 of $3)
     progress: Progress — filled $1 of $2 · skipped $3
     memory:

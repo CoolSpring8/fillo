@@ -739,6 +739,8 @@ export default function App() {
 
   const classifyDisabled = classifying || fields.length === 0;
   const guidedTotal = fields.length;
+  const isFirst = guidedStarted ? guidedIndex <= 0 : true;
+  const isLast = guidedStarted ? guidedIndex >= Math.max(guidedTotal - 1, 0) : false;
 
   const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'blue' = 'gray') => (
     <Alert color={tone} variant="light" radius="lg">
@@ -910,8 +912,23 @@ export default function App() {
               <Badge variant="light" color="gray">
                 {t('sidepanel.guided.paused', [current?.field.label || t('sidepanel.field.noLabel'), String(guidedIndex + 1), String(guidedTotal)])}
               </Badge>
+              <Button size="sm" variant="light" onClick={navPrev} disabled={isFirst}>
+                {t('sidepanel.guided.back')}
+              </Button>
+              <Button size="sm" variant="light" onClick={navNext} disabled={isLast}>
+                {t('sidepanel.guided.next')}
+              </Button>
+              <Button size="sm" variant="light" onClick={navToFirstUnfilled}>
+                {t('sidepanel.guided.jumpToUnfilled')}
+              </Button>
+              <Button size="sm" variant="light" onClick={restartGuided}>
+                {t('sidepanel.guided.restart')}
+              </Button>
               <Button size="sm" variant="light" onClick={() => highlightCurrent(current)}>
                 {t('sidepanel.buttons.highlight')}
+              </Button>
+              <Button size="sm" color="green" variant="filled" onClick={finishGuided}>
+                {t('sidepanel.guided.done')}
               </Button>
             </>
           )}
@@ -1000,8 +1017,12 @@ export default function App() {
             <Button size="sm" variant="default" onClick={() => handleGuidedSkip(entry)}>
               {t('sidepanel.guided.skip')}
             </Button>
-            <Button size="sm" disabled={fillDisabled} onClick={() => handleGuidedAccept(entry)}>
-              {t('sidepanel.guided.accept')}
+            <Button
+              size="sm"
+              disabled={fillDisabled}
+              onClick={() => handleGuidedAccept(entry, !isLast)}
+            >
+              {isLast ? t('sidepanel.guided.fill') : t('sidepanel.guided.accept')}
             </Button>
           </Group>
         </Stack>
@@ -1026,7 +1047,62 @@ export default function App() {
     sendMessage({ kind: 'HIGHLIGHT_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId, label: entry.field.label });
   }
 
-  async function handleGuidedAccept(entry: FieldEntry) {
+  function navPrev() {
+    if (!guidedStarted) return;
+    const prevIndex = Math.max(0, guidedIndexRef.current - 1);
+    if (prevIndex === guidedIndexRef.current) return;
+    setGuidedIndex(prevIndex);
+    const prev = fieldsRef.current[prevIndex];
+    if (prev) {
+      setSelectedFieldId(prev.field.id);
+      highlightCurrent(prev);
+    }
+  }
+
+  function navNext() {
+    if (!guidedStarted) return;
+    const nextIndex = guidedIndexRef.current + 1;
+    if (nextIndex >= fieldsRef.current.length) return;
+    setGuidedIndex(nextIndex);
+    const next = fieldsRef.current[nextIndex];
+    if (next) {
+      setSelectedFieldId(next.field.id);
+      highlightCurrent(next);
+    }
+  }
+
+  function navToFirstUnfilled() {
+    if (!guidedStarted) return;
+    const idx = fieldsRef.current.findIndex((e) => e.status !== 'filled');
+    if (idx === -1) {
+      return;
+    }
+    setGuidedIndex(idx);
+    const entry = fieldsRef.current[idx];
+    if (entry) {
+      setSelectedFieldId(entry.field.id);
+      highlightCurrent(entry);
+    }
+  }
+
+  function restartGuided() {
+    setGuidedStarted(true);
+    setGuidedIndex(0);
+    setGuidedFilled(0);
+    setGuidedSkipped(0);
+    if (fieldsRef.current.length > 0) {
+      const first = fieldsRef.current[0];
+      setSelectedFieldId(first.field.id);
+      highlightCurrent(first);
+    }
+  }
+
+  function finishGuided() {
+    setGuidedStarted(false);
+    sendMessage({ kind: 'CLEAR_OVERLAY' });
+  }
+
+  async function handleGuidedAccept(entry: FieldEntry, advance = true) {
     const { value } = resolveEntryData(entry);
     if (!value) {
       notify(t('sidepanel.feedback.noValues'), 'info');
@@ -1050,7 +1126,9 @@ export default function App() {
       const { learnAccept } = await import('../../shared/memory/store');
       await learnAccept(entry.field, { slot: entry.selectedSlot, value });
     }
-    goToNext(entry);
+    if (advance) {
+      goToNext(entry);
+    }
   }
 
   async function handleGuidedSkip(entry: FieldEntry) {
@@ -1063,7 +1141,11 @@ export default function App() {
 
   function goToNext(current: FieldEntry) {
     const idx = fieldsRef.current.findIndex((e) => e.field.id === current.field.id);
-    const nextIndex = Math.min(Math.max(idx + 1, 0), fieldsRef.current.length - 1);
+    const nextIndex = idx + 1;
+    if (nextIndex >= fieldsRef.current.length) {
+      // At the end — do not advance further.
+      return;
+    }
     setGuidedIndex(nextIndex);
     const next = fieldsRef.current[nextIndex];
     if (next) {
@@ -1071,6 +1153,21 @@ export default function App() {
       highlightCurrent(next);
     }
   }
+
+  // Clamp guided index if fields change size while guided mode is active
+  useEffect(() => {
+    if (!guidedStarted) return;
+    if (fields.length === 0) {
+      setGuidedStarted(false);
+      return;
+    }
+    const clamped = Math.min(guidedIndexRef.current, fields.length - 1);
+    if (clamped !== guidedIndexRef.current) {
+      setGuidedIndex(clamped);
+      const entry = fields[clamped];
+      if (entry) setSelectedFieldId(entry.field.id);
+    }
+  }, [fields.length, guidedStarted]);
 
   async function refreshMemory() {
     const { listAssociations } = await import('../../shared/memory/store');
