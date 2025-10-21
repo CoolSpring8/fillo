@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -23,7 +24,7 @@ import {
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Eraser, PenSquare, RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -766,43 +767,27 @@ export default function App() {
       </Paper>
       <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
         <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <Stack gap="sm">
-            <NativeSelect
-              label={t('popup.title')}
-              value={selectedProfileId ?? ''}
-              onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
-              data={selectOptions}
-              size="sm"
-            />
-            <Group gap="sm" wrap="wrap">
-              <Button variant="light" size="sm" onClick={requestScan} disabled={scanning}>
-                {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
-              </Button>
-              <Button
-                variant="light"
+          <Stack gap="xs">
+            <Group gap="xs" align="flex-end" justify="space-between" wrap="nowrap">
+              <NativeSelect
+                label={t('popup.title')}
+                value={selectedProfileId ?? ''}
+                onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
+                data={selectOptions}
                 size="sm"
-                onClick={handleClassify}
-                disabled={classifyDisabled}
-              >
-                {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAutoFill}
-                disabled={fillDisabled}
-              >
-                {t('sidepanel.toolbar.fillMapped')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
-              >
-                {t('sidepanel.toolbar.clearOverlay')}
-              </Button>
-              <Button variant="light" size="sm" onClick={openProfilesPage}>
-                {t('sidepanel.toolbar.manageProfiles')}
-              </Button>
+                style={{ flex: 1 }}
+              />
+              <Tooltip label={t('sidepanel.toolbar.manageProfiles')}>
+                <ActionIcon
+                  variant="light"
+                  size="lg"
+                  radius="md"
+                  aria-label={t('sidepanel.toolbar.manageProfiles')}
+                  onClick={openProfilesPage}
+                >
+                  <Settings2 size={18} strokeWidth={1.75} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
           </Stack>
         </Paper>
@@ -825,6 +810,15 @@ export default function App() {
             style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
             <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
+              <Paper
+                px="md"
+                py="xs"
+                withBorder
+                shadow="xs"
+                style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+              >
+                {renderDomToolbar()}
+              </Paper>
               <ScrollArea style={{ flex: 1 }} px="md" py="md">
                 <Stack gap="md">
                   {renderDomMode()}
@@ -851,6 +845,75 @@ export default function App() {
       </Stack>
     </Stack>
   );
+
+  function renderDomToolbar() {
+    return (
+      <Group gap="xs" justify="space-between" align="center" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap">
+          <Tooltip label={scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}>
+            <ActionIcon
+              variant="light"
+              size="lg"
+              radius="md"
+              aria-label={t('sidepanel.toolbar.rescan')}
+              onClick={requestScan}
+              disabled={scanning}
+            >
+              <RefreshCw size={18} strokeWidth={1.75} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}>
+            <ActionIcon
+              variant="light"
+              size="lg"
+              radius="md"
+              aria-label={t('sidepanel.toolbar.classify')}
+              onClick={handleClassify}
+              disabled={classifyDisabled}
+            >
+              <Sparkles size={18} strokeWidth={1.75} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={t('sidepanel.toolbar.fillMapped')}>
+            <ActionIcon
+              variant="filled"
+              color="blue"
+              size="lg"
+              radius="md"
+              aria-label={t('sidepanel.toolbar.fillMapped')}
+              onClick={handleAutoFill}
+              disabled={fillDisabled}
+            >
+              <PenSquare size={18} strokeWidth={1.75} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={t('sidepanel.toolbar.clearOverlay')}>
+            <ActionIcon
+              variant="light"
+              size="lg"
+              radius="md"
+              aria-label={t('sidepanel.toolbar.clearOverlay')}
+              onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
+            >
+              <Eraser size={18} strokeWidth={1.75} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+        <Group gap="xs">
+          {scanning && (
+            <Badge color="blue" variant="light">
+              {t('sidepanel.toolbar.scanning')}
+            </Badge>
+          )}
+          {classifying && (
+            <Badge color="violet" variant="light">
+              {t('sidepanel.toolbar.classifying')}
+            </Badge>
+          )}
+        </Group>
+      </Group>
+    );
+  }
 
   function renderDomMode() {
     if (viewState.loadingProfiles) {
