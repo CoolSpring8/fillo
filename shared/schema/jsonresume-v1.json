@@ -1,75 +1,41 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://jsonresume.org/schema/v1.0.0.json",
-  "title": "JSON Resume",
   "type": "object",
-  "additionalProperties": false,
+  "definitions": {
+    "iso8601": {
+      "type": "string",
+      "pattern": "^([1-2][0-9]{3}-[0-1][0-9]-[0-3][0-9]|[1-2][0-9]{3}-[0-1][0-9]|[1-2][0-9]{3})$"
+    }
+  },
   "properties": {
     "basics": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
-        "image": {
-          "type": "string",
-          "format": "uri"
-        },
-        "email": {
-          "type": "string",
-          "format": "email"
-        },
-        "phone": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "summary": {
-          "type": "string"
-        },
+        "name": { "type": "string" },
+        "label": { "type": "string" },
+        "image": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "summary": { "type": "string" },
         "location": {
           "type": "object",
-          "additionalProperties": false,
           "properties": {
-            "address": {
-              "type": "string"
-            },
-            "postalCode": {
-              "type": "string"
-            },
-            "city": {
-              "type": "string"
-            },
-            "countryCode": {
-              "type": "string"
-            },
-            "region": {
-              "type": "string"
-            }
+            "address": { "type": "string" },
+            "postalCode": { "type": "string" },
+            "city": { "type": "string" },
+            "countryCode": { "type": "string" },
+            "region": { "type": "string" }
           }
         },
         "profiles": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "properties": {
-              "network": {
-                "type": "string"
-              },
-              "username": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string",
-                "format": "uri"
-              }
+              "network": { "type": "string" },
+              "username": { "type": "string" },
+              "url": { "type": "string", "format": "uri" }
             }
           }
         }
@@ -79,35 +45,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "position": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "startDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "endDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "highlights": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "name": { "type": "string" },
+          "location": { "type": "string" },
+          "description": { "type": "string" },
+          "position": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "startDate": { "$ref": "#/definitions/iso8601" },
+          "endDate": { "$ref": "#/definitions/iso8601" },
+          "summary": { "type": "string" },
+          "highlights": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -115,35 +62,14 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "organization": {
-            "type": "string"
-          },
-          "position": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "startDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "endDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "highlights": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "organization": { "type": "string" },
+          "position": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "startDate": { "$ref": "#/definitions/iso8601" },
+          "endDate": { "$ref": "#/definitions/iso8601" },
+          "summary": { "type": "string" },
+          "highlights": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -151,38 +77,15 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "institution": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "area": {
-            "type": "string"
-          },
-          "studyType": {
-            "type": "string"
-          },
-          "startDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "endDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "score": {
-            "type": "string"
-          },
-          "courses": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "institution": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "area": { "type": "string" },
+          "studyType": { "type": "string" },
+          "startDate": { "$ref": "#/definitions/iso8601" },
+          "endDate": { "$ref": "#/definitions/iso8601" },
+          "score": { "type": "string" },
+          "courses": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -190,21 +93,11 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "title": {
-            "type": "string"
-          },
-          "date": {
-            "type": "string",
-            "format": "date"
-          },
-          "awarder": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          }
+          "title": { "type": "string" },
+          "date": { "$ref": "#/definitions/iso8601" },
+          "awarder": { "type": "string" },
+          "summary": { "type": "string" }
         }
       }
     },
@@ -212,22 +105,11 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "date": {
-            "type": "string",
-            "format": "date"
-          },
-          "issuer": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          }
+          "name": { "type": "string" },
+          "date": { "$ref": "#/definitions/iso8601" },
+          "url": { "type": "string", "format": "uri" },
+          "issuer": { "type": "string" }
         }
       }
     },
@@ -235,25 +117,12 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "publisher": {
-            "type": "string"
-          },
-          "releaseDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "summary": {
-            "type": "string"
-          }
+          "name": { "type": "string" },
+          "publisher": { "type": "string" },
+          "releaseDate": { "$ref": "#/definitions/iso8601" },
+          "url": { "type": "string", "format": "uri" },
+          "summary": { "type": "string" }
         }
       }
     },
@@ -261,20 +130,10 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "level": {
-            "type": "string"
-          },
-          "keywords": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "name": { "type": "string" },
+          "level": { "type": "string" },
+          "keywords": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -282,14 +141,9 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "language": {
-            "type": "string"
-          },
-          "fluency": {
-            "type": "string"
-          }
+          "language": { "type": "string" },
+          "fluency": { "type": "string" }
         }
       }
     },
@@ -297,17 +151,9 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "keywords": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "name": { "type": "string" },
+          "keywords": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -315,14 +161,9 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string"
-          }
+          "name": { "type": "string" },
+          "reference": { "type": "string" }
         }
       }
     },
@@ -330,68 +171,26 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "highlights": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "keywords": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "startDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "endDate": {
-            "type": "string",
-            "format": "date"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "entity": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "highlights": { "type": "array", "items": { "type": "string" } },
+          "keywords": { "type": "array", "items": { "type": "string" } },
+          "startDate": { "$ref": "#/definitions/iso8601" },
+          "endDate": { "$ref": "#/definitions/iso8601" },
+          "url": { "type": "string", "format": "uri" },
+          "roles": { "type": "array", "items": { "type": "string" } },
+          "entity": { "type": "string" },
+          "type": { "type": "string" }
         }
       }
     },
     "meta": {
       "type": "object",
-      "additionalProperties": true,
       "properties": {
-        "canonical": {
-          "type": "string",
-          "format": "uri"
-        },
-        "version": {
-          "type": "string"
-        },
-        "lastModified": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "canonical": { "type": "string", "format": "uri" },
+        "version": { "type": "string" },
+        "lastModified": { "type": "string" }
       }
     }
   }
