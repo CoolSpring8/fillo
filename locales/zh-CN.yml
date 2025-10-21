@@ -233,7 +233,7 @@ overlay:
     skip: 跳过
 onboarding:
   title: 简历工作台
-  description: 导入简历、使用 AI 解析，并维护结构化数据以便自动填写。
+  description: 在一个页面中完成档案管理、自动填写偏好设置与 AI 解析。
   buttons:
     working: 正在处理…
   manage:
@@ -253,12 +253,12 @@ onboarding:
     parsedOnDevice: 已使用本地模型解析
     parsedOnDeviceAt: 已使用本地模型解析 · $1
   upload:
-    heading: 1. 上传简历 PDF
+    heading: 上传简历 PDF
     button: 提取文本
     helper: 所有处理都在本次浏览器会话内完成。不支持无法选择文本的扫描版 PDF。
     current: 当前档案 "$1" 包含 $2 个字符的原始文本。
   parse:
-    heading: 2. （可选）使用 AI 解析
+    heading: AI 解析与服务提供方
     helper: 可选择本地模型或 OpenAI 优化结构化数据，随时可重新执行。
     button: 解析简历
     needProfile: 请选择或创建一个档案以启用解析。
