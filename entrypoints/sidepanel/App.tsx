@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -23,7 +24,16 @@ import {
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
-import { ChevronRight } from 'lucide-react';
+import {
+  ChevronRight,
+  EyeOff,
+  PanelsTopLeft,
+  Scan,
+  Sparkles,
+  Users,
+  Wand2,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -754,58 +764,105 @@ export default function App() {
     </ScrollArea>
   );
 
+  const renderDomToolbar = () => {
+    const actions: Array<{
+      key: string;
+      label: string;
+      icon: LucideIcon;
+      onClick: () => void;
+      disabled?: boolean;
+      active?: boolean;
+      color?: string;
+    }> = [
+      {
+        key: 'scan',
+        label: scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan'),
+        icon: Scan,
+        onClick: requestScan,
+        disabled: scanning,
+        active: scanning,
+        color: 'blue',
+      },
+      {
+        key: 'classify',
+        label: classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify'),
+        icon: Sparkles,
+        onClick: handleClassify,
+        disabled: classifyDisabled,
+        active: classifying,
+        color: 'violet',
+      },
+      {
+        key: 'fill',
+        label: t('sidepanel.toolbar.fillMapped'),
+        icon: Wand2,
+        onClick: handleAutoFill,
+        disabled: fillDisabled,
+        color: 'green',
+      },
+      {
+        key: 'overlay',
+        label: t('sidepanel.toolbar.clearOverlay'),
+        icon: EyeOff,
+        onClick: () => sendMessage({ kind: 'CLEAR_OVERLAY' }),
+        color: 'gray',
+      },
+    ];
+
+    return (
+      <Group gap="xs">
+        {actions.map(({ key, label, icon: Icon, onClick, disabled, active, color }) => (
+          <Tooltip key={key} label={label} withArrow position="bottom">
+            <ActionIcon
+              size="lg"
+              radius="md"
+              variant={active ? 'filled' : 'light'}
+              color={color}
+              onClick={onClick}
+              disabled={disabled}
+              aria-label={label}
+            >
+              <Icon size={18} />
+            </ActionIcon>
+          </Tooltip>
+        ))}
+      </Group>
+    );
+  };
+
   return (
     <Stack gap={0} style={{ height: '100vh' }}>
       <Paper shadow="sm" withBorder={false} px="md" py="sm">
-        <Stack gap={2}>
-          <Title order={3}>{t('sidepanel.title')}</Title>
-          <Text fz="sm" c="dimmed">
-            {t('sidepanel.subtitle')}
-          </Text>
+        <Stack gap="sm">
+          <Group justify="space-between" align="flex-start" gap="sm">
+            <Stack gap={2} flex={1}>
+              <Title order={3}>{t('sidepanel.title')}</Title>
+              <Text fz="sm" c="dimmed">
+                {t('sidepanel.subtitle')}
+              </Text>
+            </Stack>
+            <Tooltip label={t('sidepanel.toolbar.manageProfiles')} position="bottom" withArrow>
+              <ActionIcon
+                variant="light"
+                radius="md"
+                size="lg"
+                onClick={openProfilesPage}
+                aria-label={t('sidepanel.toolbar.manageProfiles')}
+              >
+                <Users size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+          <NativeSelect
+            label={t('popup.title')}
+            value={selectedProfileId ?? ''}
+            onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
+            data={selectOptions}
+            size="sm"
+          />
         </Stack>
       </Paper>
       <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
-        <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <Stack gap="sm">
-            <NativeSelect
-              label={t('popup.title')}
-              value={selectedProfileId ?? ''}
-              onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
-              data={selectOptions}
-              size="sm"
-            />
-            <Group gap="sm" wrap="wrap">
-              <Button variant="light" size="sm" onClick={requestScan} disabled={scanning}>
-                {scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={handleClassify}
-                disabled={classifyDisabled}
-              >
-                {classifying ? t('sidepanel.toolbar.classifying') : t('sidepanel.toolbar.classify')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAutoFill}
-                disabled={fillDisabled}
-              >
-                {t('sidepanel.toolbar.fillMapped')}
-              </Button>
-              <Button
-                variant="light"
-                size="sm"
-                onClick={() => sendMessage({ kind: 'CLEAR_OVERLAY' })}
-              >
-                {t('sidepanel.toolbar.clearOverlay')}
-              </Button>
-              <Button variant="light" size="sm" onClick={openProfilesPage}>
-                {t('sidepanel.toolbar.manageProfiles')}
-              </Button>
-            </Group>
-          </Stack>
-        </Paper>
         <Tabs
           value={mode}
           onChange={(value) => setMode((value as PanelMode) ?? 'dom')}
@@ -815,9 +872,24 @@ export default function App() {
           style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <Tabs.List>
-            <Tabs.Tab value="dom">{t('sidepanel.tabs.dom')}</Tabs.Tab>
-            <Tabs.Tab value="guided">{t('sidepanel.tabs.guided')}</Tabs.Tab>
-            <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
+            <Tabs.Tab
+              value="dom"
+              leftSection={<PanelsTopLeft size={16} />}
+            >
+              {t('sidepanel.tabs.dom')}
+            </Tabs.Tab>
+            <Tabs.Tab
+              value="guided"
+              leftSection={<Sparkles size={16} />}
+            >
+              {t('sidepanel.tabs.guided')}
+            </Tabs.Tab>
+            <Tabs.Tab
+              value="manual"
+              leftSection={<Wand2 size={16} />}
+            >
+              {t('sidepanel.tabs.manual')}
+            </Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel
@@ -825,6 +897,15 @@ export default function App() {
             style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
             <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
+              <Paper
+                px="md"
+                py="xs"
+                withBorder
+                shadow="xs"
+                style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+              >
+                {renderDomToolbar()}
+              </Paper>
               <ScrollArea style={{ flex: 1 }} px="md" py="md">
                 <Stack gap="md">
                   {renderDomMode()}
