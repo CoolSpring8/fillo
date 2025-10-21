@@ -40,10 +40,9 @@ popup:
   description: 在 ApplyPilot 中导入一次，之后可在任何应用流程中重复使用。
   loading: 正在加载简历…
   error: 加载简历失败（$1）
-  empty: 尚未保存任何简历，请先在引导页导入 PDF。
+  empty: 尚未保存任何简历，请先在工作台导入 PDF。
   buttons:
-    openOnboarding: 打开引导页
-    settings: 打开设置
+    openWorkspace: 打开工作台
     openSidePanel: 打开侧边栏
     viewDetails: 查看详情
     hideDetails: 收起详情
@@ -53,7 +52,7 @@ popup:
     openaiModel: OpenAI（$1）
     openaiModelWithBase: OpenAI（$1 @ $2）
     parsed: 已解析于 $1
-    notParsed: 尚未解析——请在引导页运行 AI 解析以获取结构化数据
+    notParsed: 尚未解析——请在工作台运行 AI 解析以获取结构化数据
   profile:
     unnamed: 未命名的简历
     importedAt: 导入时间：$1
@@ -65,7 +64,7 @@ popup:
     rawText: 原始文本
     validationWarnings: 校验警告
   info:
-    noStructured: 尚未保存结构化简历，请先运行 AI 解析。
+    noStructured: 尚未保存结构化简历，请先在工作台运行 AI 解析。
 sidepanel:
   title: 简历助手
   subtitle: 选择一份简历，在填写前逐项确认。
@@ -85,8 +84,8 @@ sidepanel:
     noProfilesOption: 暂无简历
     loadingProfiles: 正在加载简历…
     error: 加载简历失败（$1）
-    noProfile: 请先在引导页导入简历，便于自动填写。
-    noProfileManual: 请先导入简历以使用手动复制功能。
+    noProfile: 请先在工作台导入简历，便于自动填写。
+    noProfileManual: 请先在工作台导入简历以使用手动复制功能。
     noFields: 未检测到可填写的字段。
     noManualValues: 暂无结构化字段，可复制下方原始文本。
   manual:
@@ -232,8 +231,8 @@ overlay:
     fill: 填写
     skip: 跳过
 onboarding:
-  title: 简历工作台
-  description: 导入简历、使用 AI 解析，并维护结构化数据以便自动填写。
+  title: ApplyPilot 工作台
+  description: 在同一位置导入简历、配置 AI 服务并优化自动填充。
   buttons:
     working: 正在处理…
   manage:
@@ -253,13 +252,13 @@ onboarding:
     parsedOnDevice: 已使用本地模型解析
     parsedOnDeviceAt: 已使用本地模型解析 · $1
   upload:
-    heading: 1. 上传简历 PDF
+    heading: 上传简历 PDF
     button: 提取文本
     helper: 所有处理都在本次浏览器会话内完成。不支持无法选择文本的扫描版 PDF。
     current: 当前档案 "$1" 包含 $2 个字符的原始文本。
   parse:
-    heading: 2. （可选）使用 AI 解析
-    helper: 可选择本地模型或 OpenAI 优化结构化数据，随时可重新执行。
+    heading: 使用 AI 解析（可选）
+    helper: 可随时调整本地模型或 OpenAI 设置并重新解析，以完善结构化数据。
     button: 解析简历
     needProfile: 请选择或创建一个档案以启用解析。
     needsSave: 解析前请先保存修改。
