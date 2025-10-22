@@ -313,7 +313,7 @@ function ensureElements(): OverlayElements {
         justify-content: flex-end;
       }
       .overlay-btn {
-        border: 1px solid rgba(76, 159, 254, 0.6);
+        border: 1px solid rgba(137, 100, 89, 0.6);
         border-radius: 6px;
         padding: 6px 12px;
         background: #ffffff;
@@ -321,8 +321,8 @@ function ensureElements(): OverlayElements {
         cursor: pointer;
       }
       .overlay-btn.primary {
-        background: #4c9ffe;
-        border-color: #4c9ffe;
+        background: #896459;
+        border-color: #896459;
         color: #fff;
       }
       .overlay-btn:hover {

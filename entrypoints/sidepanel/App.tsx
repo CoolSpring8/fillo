@@ -344,8 +344,8 @@ export default function App() {
   }, []);
 
   const notify = useCallback((message: string, tone: 'info' | 'success' | 'error' = 'info') => {
-    const colorMap: Record<'info' | 'success' | 'error', 'blue' | 'green' | 'red'> = {
-      info: 'blue',
+    const colorMap: Record<'info' | 'success' | 'error', 'brand' | 'green' | 'red'> = {
+      info: 'brand',
       success: 'green',
       error: 'red',
     };
@@ -759,7 +759,7 @@ export default function App() {
   const isFirst = guidedStarted ? guidedIndex <= 0 : true;
   const isLast = guidedStarted ? guidedIndex >= Math.max(guidedTotal - 1, 0) : false;
 
-  const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'blue' = 'gray') => (
+  const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'brand' = 'gray') => (
     <Alert color={tone} variant="light" radius="lg">
       {message}
     </Alert>
@@ -775,7 +775,7 @@ export default function App() {
     const iconSize = 18;
     const baseDisabled = viewState.loadingProfiles || !selectedProfile;
     const statusBadge = scanning
-      ? { color: 'blue' as const, label: t('sidepanel.toolbar.scanning') }
+      ? { color: 'brand' as const, label: t('sidepanel.toolbar.scanning') }
       : classifying
         ? { color: 'violet' as const, label: t('sidepanel.toolbar.classifying') }
         : null;
@@ -811,7 +811,7 @@ export default function App() {
           {renderIconButton(scanning ? t('sidepanel.toolbar.scanning') : t('sidepanel.toolbar.rescan'), {
             onClick: requestScan,
             disabled: scanning,
-            color: 'blue',
+            color: 'brand',
             variant: scanning ? 'filled' : 'light',
             icon: <RefreshCcw size={iconSize} />,
           })}
@@ -825,7 +825,7 @@ export default function App() {
           {renderIconButton(t('sidepanel.toolbar.fillMapped'), {
             onClick: handleAutoFill,
             disabled: fillDisabled,
-            color: 'blue',
+            color: 'brand',
             variant: 'filled',
             icon: <Sparkles size={iconSize} />,
           })}
@@ -937,7 +937,7 @@ export default function App() {
 
   function renderDomMode() {
     if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
     }
     if (viewState.error) {
       return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
@@ -946,7 +946,7 @@ export default function App() {
       return renderStateAlert(t('sidepanel.states.noProfile'));
     }
     if (scanning) {
-      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'blue');
+      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'brand');
     }
     if (fields.length === 0) {
       return renderStateAlert(t('sidepanel.states.noFields'));
@@ -960,7 +960,7 @@ export default function App() {
 
   function renderGuidedMode() {
     if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
     }
     if (viewState.error) {
       return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
@@ -969,7 +969,7 @@ export default function App() {
       return renderStateAlert(t('sidepanel.states.noProfile'));
     }
     if (scanning) {
-      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'blue');
+      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'brand');
     }
     if (fields.length === 0) {
       return renderStateAlert(t('sidepanel.states.noFields'));
@@ -984,7 +984,7 @@ export default function App() {
 
     return (
       <Stack gap="sm">
-        <Alert color="blue" variant="light" radius="lg">
+        <Alert color="brand" variant="light" radius="lg">
           {t('sidepanel.guided.description')}
         </Alert>
         <Stack gap={4}>
@@ -1400,7 +1400,7 @@ export default function App() {
         : entry.status === 'failed'
           ? 'red'
           : entry.status === 'pending'
-            ? 'blue'
+            ? 'brand'
             : 'gray';
 
     return (
@@ -1421,8 +1421,8 @@ export default function App() {
         }}
         style={{
           cursor: 'pointer',
-          borderColor: isSelected ? 'var(--mantine-color-blue-5)' : undefined,
-          backgroundColor: isSelected ? 'rgba(76, 159, 254, 0.08)' : undefined,
+          borderColor: isSelected ? 'var(--mantine-color-brand-5)' : undefined,
+          backgroundColor: isSelected ? 'rgba(137, 100, 89, 0.08)' : undefined,
           outline: 'none',
         }}
       >
@@ -1572,7 +1572,7 @@ export default function App() {
 
   function renderManualMode() {
     if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'blue');
+      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
     }
     if (viewState.error) {
       return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');

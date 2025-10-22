@@ -133,7 +133,7 @@ export function ProviderCard({
         )}
 
         {parseHint && (
-          <Alert variant="light" color="blue">
+          <Alert variant="light" color="brand">
             {parseHint}
           </Alert>
         )}

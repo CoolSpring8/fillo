@@ -56,7 +56,7 @@ export function ProfilesCard({
       </Group>
 
       {isLoading && (
-        <Alert mt="md" variant="light" color="blue">
+        <Alert mt="md" variant="light" color="brand">
           {loadingLabel}
         </Alert>
       )}

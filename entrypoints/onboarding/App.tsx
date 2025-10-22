@@ -605,7 +605,7 @@ export default function App() {
         ? 'green'
         : status.phase === 'idle'
           ? 'gray'
-          : 'blue';
+          : 'brand';
 
   return (
     <Container size="lg" py="xl" style={{ minHeight: '100vh' }}>
