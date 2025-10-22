@@ -13,7 +13,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "test": "vitest",
-    "postinstall": "wxt prepare"
+    "postinstall": "node scripts/bootstrap-i18n.mjs && wxt prepare"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
