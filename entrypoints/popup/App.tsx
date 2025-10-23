@@ -62,7 +62,7 @@ export default function App() {
   };
 
   const openWorkspace = () => {
-    void browser.tabs.create({ url: browser.runtime.getURL('/onboarding.html') });
+    void browser.tabs.create({ url: browser.runtime.getURL('/options.html') });
   };
 
   const profileItems = useMemo<ProfileAccordionItem[]>(() => {

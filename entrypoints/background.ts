@@ -46,9 +46,9 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
       browser.tabs
-        .create({ url: browser.runtime.getURL('/onboarding.html') })
+        .create({ url: browser.runtime.getURL('/options.html') })
         .catch((error: unknown) => {
-          console.warn('Unable to open onboarding tab.', error);
+          console.warn('Unable to open options page.', error);
         });
     }
   });

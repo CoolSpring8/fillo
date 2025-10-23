@@ -726,9 +726,9 @@ export default function App() {
 
   const openProfilesPage = () => {
     browser.tabs
-      .create({ url: browser.runtime.getURL('/popup.html') })
+      .create({ url: browser.runtime.getURL('/options.html') })
       .catch((error: unknown) => {
-        console.warn('Unable to open profile manager.', error);
+        console.warn('Unable to open options page.', error);
       });
   };
 
