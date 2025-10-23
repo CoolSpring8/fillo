@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Container, List, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
+import {
+  Affix,
+  Alert,
+  Button,
+  Container,
+  CopyButton,
+  List,
+  Modal,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+  Title,
+} from '@mantine/core';
+import { useForm } from '@mantine/form';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
@@ -29,12 +45,16 @@ import type {
   ResumeExtractionResult,
 } from '../../shared/types';
 import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCard';
-import { UploadCard } from './components/UploadCard';
 import { ProviderCard } from './components/ProviderCard';
-import { ParseCard } from './components/ParseCard';
-import { EditProfileCard } from './components/EditProfileCard';
 import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
 import { AutofillCard } from './components/AutofillCard';
+import {
+  ProfileForm,
+  createEmptyResumeFormValues,
+  formValuesToResume,
+  resumeToFormValues,
+  type ResumeFormValues,
+} from './components/ProfileForm';
 
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -64,6 +84,9 @@ function buildSettings(
 }
 
 export default function App() {
+  const form = useForm<ResumeFormValues>({
+    initialValues: createEmptyResumeFormValues(),
+  });
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai'>('on-device');
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
@@ -74,7 +97,8 @@ export default function App() {
   const defaultAdapterIds = useMemo(() => adapters.map((adapter) => adapter.id), [adapters]);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(defaultAdapterIds);
   const [autoFallback, setAutoFallback] = useState<AppSettings['autoFallback']>('skip');
-  const [file, setFile] = useState<File | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [filePromptOpen, setFilePromptOpen] = useState(false);
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [profilesState, setProfilesState] = useState<{ loading: boolean; error?: string }>({
     loading: true,
@@ -83,11 +107,8 @@ export default function App() {
   const [status, setStatus] = useState<StatusState>({ phase: 'idle', message: '' });
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [busyAction, setBusyAction] = useState<'extract' | 'parse' | 'edit' | null>(null);
-  const [rawDraft, setRawDraft] = useState('');
-  const [resumeDraft, setResumeDraft] = useState('');
-  const [draftDirty, setDraftDirty] = useState(false);
-  const [draftError, setDraftError] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<'upload' | 'parse' | 'save' | null>(null);
+  const [rawText, setRawText] = useState('');
   const [activeTab, setActiveTab] = useState<'profiles' | 'settings'>('profiles');
   const { t } = i18n;
   const providerLabels: Record<'on-device' | 'openai', string> = {
@@ -133,16 +154,17 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedProfile) {
-      setRawDraft('');
-      setResumeDraft('');
-      setDraftDirty(false);
-      setDraftError(null);
+      const empty = createEmptyResumeFormValues();
+      form.setValues(empty);
+      form.resetDirty(empty);
+      setRawText('');
       return;
     }
-    setRawDraft(selectedProfile.rawText);
-    setResumeDraft(formatJson(selectedProfile.resume));
-    setDraftDirty(false);
-    setDraftError(null);
+    const values = resumeToFormValues(selectedProfile.resume);
+    form.setValues(values);
+    form.resetDirty(values);
+    setRawText(selectedProfile.rawText);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProfile]);
 
   useEffect(() => {
@@ -259,62 +281,161 @@ export default function App() {
     void saveSettings(nextSettings);
   };
 
-  const handleFileSelect = (nextFile: File | null) => {
-    setFile(nextFile);
+  const handleFileSelect = (file: File | null) => {
+    if (!file) {
+      return;
+    }
+    setPendingFile(file);
+    setFilePromptOpen(true);
     setStatus({ phase: 'idle', message: '' });
     setErrorDetails(null);
   };
 
-  const handleExtract = async () => {
-    if (!file) {
+  const closeFilePrompt = () => {
+    setFilePromptOpen(false);
+    setPendingFile(null);
+  };
+
+  const handleFileAction = async (mode: 'parse' | 'store') => {
+    if (!pendingFile) {
+      return;
+    }
+    await processFile(pendingFile, mode);
+    closeFilePrompt();
+  };
+
+  const processFile = async (file: File, mode: 'parse' | 'store') => {
+    if (!selectedProfile) {
       return;
     }
     setBusy(true);
-    setBusyAction('extract');
+    setBusyAction(mode === 'parse' ? 'parse' : 'upload');
     setErrorDetails(null);
+    setStatus({ phase: 'extracting', message: t('options.profileForm.status.extracting') });
 
     try {
-      setStatus({ phase: 'extracting', message: t('onboarding.status.extracting') });
       const { text } = await extractTextFromPdf(file);
 
       if (!text.trim()) {
         throw new Error(t('onboarding.errors.noText'));
       }
 
-      setStatus({ phase: 'saving', message: t('onboarding.status.savingExtraction') });
-      const id = crypto.randomUUID();
-      const fileRef = await storeFile(id, file);
-      const profile: ProfileRecord = {
-        id,
-        createdAt: new Date().toISOString(),
+      const fileRef = await storeFile(selectedProfile.id, file);
+
+      let resumeResult = selectedProfile.resume;
+      let providerSnapshot = selectedProfile.provider;
+      let parsedAt = selectedProfile.parsedAt;
+      let validation = selectedProfile.validation;
+      const parseRequested = mode === 'parse';
+      let parseSucceeded = false;
+      let parseErrorMessage: string | null = null;
+      let parseErrorDetails: string | null = null;
+
+      if (parseRequested) {
+        const canParse =
+          selectedProvider === 'openai'
+            ? apiKey.trim().length > 0
+            : availability !== 'unavailable';
+        if (!canParse) {
+          parseErrorMessage = t('options.profileForm.status.parseUnavailable');
+        } else {
+          setStatus({ phase: 'parsing', message: t('options.profileForm.status.parsing') });
+          try {
+            const messages = buildResumePrompt(text);
+            const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+            const providerConfig: ProviderConfig =
+              selectedProvider === 'openai'
+                ? createOpenAIProvider(apiKey, model, baseUrl)
+                : createOnDeviceProvider();
+
+            const raw = await invokeWithProvider(providerConfig, messages, {
+              responseSchema: resumeSchema,
+              temperature: 0,
+            });
+
+            const parsed = JSON.parse(raw) as unknown;
+            const resume: ResumeExtractionResult =
+              parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? (parsed as ResumeExtractionResult)
+                : {};
+
+            const validationResult = validateResume(resume);
+
+            const snapshot: ProviderSnapshot =
+              providerConfig.kind === 'openai'
+                ? {
+                    kind: 'openai',
+                    model: providerConfig.model,
+                    apiBaseUrl: providerConfig.apiBaseUrl,
+                  }
+                : { kind: 'on-device' };
+
+            const formValues = resumeToFormValues(resume);
+            form.setValues(formValues);
+            form.resetDirty(formValues);
+
+            resumeResult = resume;
+            providerSnapshot = snapshot;
+            parsedAt = new Date().toISOString();
+            validation = {
+              valid: validationResult.valid,
+              errors: validationResult.errors,
+            };
+            parseSucceeded = true;
+            setStatus({ phase: 'saving', message: t('options.profileForm.status.savingParsed') });
+          } catch (error) {
+            if (
+              error instanceof NoProviderConfiguredError ||
+              error instanceof ProviderConfigurationError ||
+              error instanceof ProviderAvailabilityError
+            ) {
+              parseErrorMessage = error.message;
+              parseErrorDetails = null;
+            } else {
+              const message = error instanceof Error ? error.message : String(error);
+              parseErrorMessage =
+                error instanceof ProviderInvocationError
+                  ? error.message
+                  : t('options.profileForm.status.parseFailed');
+              parseErrorDetails = error instanceof ProviderInvocationError ? null : message;
+            }
+          }
+        }
+      }
+
+      if (!parseRequested || parseSucceeded) {
+        setStatus({ phase: 'saving', message: t('options.profileForm.status.savingUpload') });
+      }
+
+      const updated: ProfileRecord = {
+        ...selectedProfile,
         sourceFile: fileRef,
         rawText: text,
+        resume: resumeResult,
+        provider: providerSnapshot,
+        parsedAt,
+        validation,
       };
 
-      await saveProfile(profile);
-      await refreshProfiles(id);
+      await saveProfile(updated);
+      await refreshProfiles(updated.id);
+      setRawText(text);
 
-      const adapterIds = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const fallback = autoFallback;
-      const nextSettings = buildSettings(
-        selectedProvider,
-        apiKey,
-        model,
-        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
-        adapterIds,
-        fallback,
-      );
-      setSettings(nextSettings);
-      await saveSettings(nextSettings);
-
-      setStatus({
-        phase: 'complete',
-        message: t('onboarding.status.extractionComplete'),
-      });
-      setFile(null);
+      if (parseRequested) {
+        if (parseSucceeded) {
+          setStatus({ phase: 'complete', message: t('options.profileForm.status.parsed') });
+          setErrorDetails(null);
+        } else if (parseErrorMessage) {
+          setStatus({ phase: 'error', message: parseErrorMessage });
+          setErrorDetails(parseErrorDetails);
+        }
+      } else {
+        setStatus({ phase: 'complete', message: t('options.profileForm.status.stored') });
+        setErrorDetails(null);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus({ phase: 'error', message: t('onboarding.status.extractionFailed') });
+      setStatus({ phase: 'error', message: t('options.profileForm.status.uploadFailed') });
       setErrorDetails(message);
       console.error(error);
     } finally {
@@ -323,102 +444,60 @@ export default function App() {
     }
   };
 
-  const handleParse = async () => {
+  const handleSaveForm = async (values: ResumeFormValues) => {
     if (!selectedProfile) {
       return;
     }
-    if (selectedProvider === 'openai' && !apiKey) {
-      setStatus({ phase: 'error', message: t('onboarding.status.requireApiKey') });
-      setErrorDetails(null);
-      return;
-    }
-    if (draftDirty) {
-      setStatus({ phase: 'error', message: t('onboarding.status.saveBeforeParse') });
-      setErrorDetails(null);
-      return;
-    }
     setBusy(true);
-    setBusyAction('parse');
+    setBusyAction('save');
+    setStatus({ phase: 'saving', message: t('options.profileForm.status.savingForm') });
     setErrorDetails(null);
 
     try {
-      setStatus({ phase: 'parsing', message: t('onboarding.status.parsing') });
-      const messages = buildResumePrompt(selectedProfile.rawText);
+      const resumeData = formValuesToResume(values);
+      const hasResume = Object.keys(resumeData).length > 0;
+      const resumePayload = hasResume ? resumeData : undefined;
+      const validationResult = resumePayload ? validateResume(resumePayload) : undefined;
 
-      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const providerConfig: ProviderConfig =
-        selectedProvider === 'openai'
-          ? createOpenAIProvider(apiKey, model, baseUrl)
-          : createOnDeviceProvider();
-
-      const raw = await invokeWithProvider(providerConfig, messages, {
-        responseSchema: resumeSchema,
-        temperature: 0,
-      });
-
-      const parsed = JSON.parse(raw) as unknown;
-      const resume: ResumeExtractionResult =
-        parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as ResumeExtractionResult) : {};
-
-      const providerSnapshot: ProviderSnapshot =
-        providerConfig.kind === 'openai'
-          ? { kind: 'openai', model: providerConfig.model, apiBaseUrl: providerConfig.apiBaseUrl }
-          : { kind: 'on-device' };
-
-      setStatus({ phase: 'saving', message: t('onboarding.status.savingParsing') });
-      const validation = validateResume(resume);
-
-      const profile: ProfileRecord = {
+      const updated: ProfileRecord = {
         ...selectedProfile,
-        provider: providerSnapshot,
-        parsedAt: new Date().toISOString(),
-        resume,
-        validation: {
-          valid: validation.valid,
-          errors: validation.errors,
-        },
+        resume: resumePayload,
+        parsedAt: resumePayload ? new Date().toISOString() : undefined,
+        validation: resumePayload
+          ? {
+              valid: validationResult?.valid ?? true,
+              errors: validationResult?.errors,
+            }
+          : undefined,
       };
 
-      await saveProfile(profile);
-      await refreshProfiles(profile.id);
+      await saveProfile(updated);
+      await refreshProfiles(updated.id);
+      form.resetDirty(values);
 
-      const adapterIds = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const fallback = autoFallback;
-      const nextSettings = buildSettings(
-        selectedProvider,
-        apiKey,
-        model,
-        apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
-        adapterIds,
-        fallback,
-      );
-      setSettings(nextSettings);
-      await saveSettings(nextSettings);
-
-      setStatus({
-        phase: 'complete',
-        message: t('onboarding.status.parsingComplete'),
-      });
+      setStatus({ phase: 'complete', message: t('options.profileForm.status.savedForm') });
+      setErrorDetails(null);
     } catch (error) {
-      if (
-        error instanceof NoProviderConfiguredError ||
-        error instanceof ProviderConfigurationError ||
-        error instanceof ProviderAvailabilityError
-      ) {
-        setStatus({ phase: 'error', message: error.message });
-        setErrorDetails(null);
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        const statusMessage =
-          error instanceof ProviderInvocationError ? error.message : t('onboarding.status.parsingFailed');
-        setStatus({ phase: 'error', message: statusMessage });
-        setErrorDetails(error instanceof ProviderInvocationError ? null : message);
-      }
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus({ phase: 'error', message: t('options.profileForm.status.saveFailed') });
+      setErrorDetails(message);
       console.error(error);
     } finally {
       setBusy(false);
       setBusyAction(null);
     }
+  };
+
+  const handleResetForm = () => {
+    if (!selectedProfile) {
+      const empty = createEmptyResumeFormValues();
+      form.setValues(empty);
+      form.resetDirty(empty);
+      return;
+    }
+    const values = resumeToFormValues(selectedProfile.resume);
+    form.setValues(values);
+    form.resetDirty(values);
   };
 
   const handleSelectProfile = (id: string) => {
@@ -427,7 +506,7 @@ export default function App() {
 
   const handleDeleteProfile = async (id: string) => {
     await deleteProfile(id);
-    setStatus({ phase: 'complete', message: t('onboarding.status.profileDeleted') });
+    setStatus({ phase: 'complete', message: t('options.profileForm.status.profileDeleted') });
     setErrorDetails(null);
     await refreshProfiles();
   };
@@ -441,74 +520,9 @@ export default function App() {
       resume: {},
     };
     await saveProfile(profile);
-    setStatus({ phase: 'complete', message: t('onboarding.status.profileCreated') });
+    setStatus({ phase: 'complete', message: t('options.profileForm.status.profileCreated') });
     setErrorDetails(null);
     await refreshProfiles(id);
-  };
-
-  const handleRawDraftChange = (value: string) => {
-    setRawDraft(value);
-    setDraftDirty(true);
-  };
-
-  const handleResumeDraftChange = (value: string) => {
-    setResumeDraft(value);
-    setDraftDirty(true);
-  };
-
-  const handleResetDrafts = () => {
-    if (!selectedProfile) {
-      return;
-    }
-    setRawDraft(selectedProfile.rawText);
-    setResumeDraft(formatJson(selectedProfile.resume));
-    setDraftDirty(false);
-    setDraftError(null);
-  };
-
-  const handleSaveDrafts = async () => {
-    if (!selectedProfile) {
-      return;
-    }
-    try {
-      const nextResume = parseResumeDraft(resumeDraft);
-      setBusy(true);
-      setBusyAction('edit');
-      setStatus({ phase: 'saving', message: t('onboarding.status.savingEdits') });
-      setDraftError(null);
-
-      const validation = nextResume ? validateResume(nextResume) : selectedProfile.validation;
-      const updated: ProfileRecord = {
-        ...selectedProfile,
-        rawText: rawDraft,
-        resume: nextResume,
-        parsedAt: nextResume ? new Date().toISOString() : selectedProfile.parsedAt,
-        validation: nextResume
-          ? {
-              valid: validation?.valid ?? true,
-              errors: validation?.errors,
-            }
-          : selectedProfile.validation,
-      };
-
-      await saveProfile(updated);
-      await refreshProfiles(updated.id);
-      setDraftDirty(false);
-      setStatus({ phase: 'complete', message: t('onboarding.status.savedEdits') });
-      setErrorDetails(null);
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        setDraftError(t('onboarding.edit.invalidJson'));
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        setDraftError(message);
-      }
-      setStatus({ phase: 'error', message: t('onboarding.status.editFailed') });
-      setErrorDetails(null);
-    } finally {
-      setBusy(false);
-      setBusyAction(null);
-    }
   };
 
   const canUseOnDevice = availability !== 'unavailable';
@@ -563,8 +577,6 @@ export default function App() {
       : t('onboarding.manage.parsedOnDevice');
   };
 
-  const activeRawLength = selectedProfile ? selectedProfile.rawText.length.toLocaleString() : null;
-
   const profileCountLabel = profiles.length.toLocaleString();
 
   const profilesData: ProfilesCardProfile[] = profiles.map((profile) => ({
@@ -575,32 +587,26 @@ export default function App() {
     isActive: selectedProfile?.id === profile.id,
   }));
 
-  const currentSummary =
-    selectedProfile && activeRawLength
-      ? t('onboarding.upload.current', [resolveProfileName(selectedProfile), activeRawLength])
+  const fileSummary = selectedProfile?.sourceFile
+    ? t('options.profileForm.upload.currentFile', [
+        selectedProfile.sourceFile.name,
+        selectedProfile.sourceFile.size.toLocaleString(),
+      ])
+    : null;
+
+  const rawSummary =
+    selectedProfile && rawText.trim().length > 0
+      ? t('options.profileForm.upload.rawSummary', [rawText.length.toLocaleString()])
       : null;
 
-  const workingLabel = t('onboarding.buttons.working');
-  const uploadWorking = busy && busyAction === 'extract';
-  const parseWorking = busy && busyAction === 'parse';
-  const editWorking = busy && busyAction === 'edit';
+  const formSaving = busy && busyAction === 'save';
 
-  const parseDisabled =
-    busy || !selectedProfile || draftDirty || (selectedProvider === 'openai' && !apiKey);
-
-  const parseWarning =
-    selectedProfile && draftDirty ? t('onboarding.parse.needsSave') : null;
-  const parseHint =
-    selectedProfile && !draftDirty
-      ? t('onboarding.parse.summary', [resolveProfileName(selectedProfile)])
-      : null;
-  const needProfileMessage = !selectedProfile ? t('onboarding.parse.needProfile') : null;
-  const providerSummary =
+  const canParseWithCurrentSettings =
     selectedProvider === 'openai'
-      ? t('onboarding.parse.providerSummaryOpenAI', [model || OPENAI_DEFAULT_MODEL])
-      : t('onboarding.parse.providerSummaryOnDevice');
-  const adjustSettingsLabel = t('onboarding.parse.adjustSettings');
-  const providerNoteForParse = selectedProvider === 'on-device' ? onDeviceNote : null;
+      ? apiKey.trim().length > 0
+      : availability !== 'unavailable';
+
+  const showCopyHelper = Boolean(selectedProfile && rawText.trim().length > 0 && !canParseWithCurrentSettings);
 
   const profilesErrorLabel = profilesState.error
     ? t('onboarding.manage.error', [profilesState.error])
@@ -631,103 +637,76 @@ export default function App() {
 
           <Tabs.Panel value="profiles">
             <Stack gap="xl" pt="md">
-              <ProfilesCard
-                title={t('onboarding.manage.heading')}
-                countLabel={t('onboarding.manage.count', [profileCountLabel])}
-                addLabel={t('onboarding.manage.addProfile')}
-                loadingLabel={t('onboarding.manage.loading')}
-                emptyLabel={t('onboarding.manage.empty')}
-                deleteLabel={t('onboarding.manage.delete')}
-                errorLabel={profilesErrorLabel}
-                profiles={profilesData}
-                isLoading={profilesState.loading}
-                busy={busy}
-                onCreate={handleCreateProfile}
-                onSelect={handleSelectProfile}
-                onDelete={handleDeleteProfile}
-              />
-
-              <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
-                <UploadCard
-                  title={t('onboarding.upload.heading')}
-                  helper={t('onboarding.upload.helper')}
-                  buttonLabel={t('onboarding.upload.button')}
-                  workingLabel={workingLabel}
-                  isWorking={uploadWorking}
-                  currentSummary={currentSummary}
-                  file={file}
+              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="xl">
+                <ProfilesCard
+                  title={t('onboarding.manage.heading')}
+                  countLabel={t('onboarding.manage.count', [profileCountLabel])}
+                  addLabel={t('onboarding.manage.addProfile')}
+                  loadingLabel={t('onboarding.manage.loading')}
+                  emptyLabel={t('onboarding.manage.empty')}
+                  deleteLabel={t('onboarding.manage.delete')}
+                  errorLabel={profilesErrorLabel}
+                  profiles={profilesData}
+                  isLoading={profilesState.loading}
                   busy={busy}
-                  onExtract={handleExtract}
-                  onFileSelect={handleFileSelect}
+                  onCreate={handleCreateProfile}
+                  onSelect={handleSelectProfile}
+                  onDelete={handleDeleteProfile}
                 />
 
-                <ParseCard
-                  title={t('onboarding.parse.heading')}
-                  helper={t('onboarding.parse.helper')}
-                  providerSummary={providerSummary}
-                  providerNote={providerNoteForParse}
-                  settingsButtonLabel={adjustSettingsLabel}
-                  parseButtonLabel={t('onboarding.parse.button')}
-                  workingLabel={workingLabel}
-                  isWorking={parseWorking}
-                  disabled={parseDisabled}
-                  parseWarning={parseWarning}
-                  parseHint={parseHint}
-                  needProfileMessage={needProfileMessage}
-                  onParse={handleParse}
-                  onOpenSettings={() => setActiveTab('settings')}
-                />
+                <Stack gap="md">
+                  {selectedProfile ? (
+                    <ProfileForm
+                      form={form}
+                      onSubmit={handleSaveForm}
+                      onReset={handleResetForm}
+                      disabled={busy}
+                      saving={formSaving}
+                      onFileSelect={handleFileSelect}
+                      fileSummary={fileSummary}
+                      rawSummary={rawSummary}
+                    />
+                  ) : (
+                    <Paper withBorder radius="lg" p="lg" shadow="sm">
+                      <Stack gap="sm">
+                        <Text fw={600}>{t('options.profileForm.empty.heading')}</Text>
+                        <Text fz="sm" c="dimmed">
+                          {t('options.profileForm.empty.description')}
+                        </Text>
+                        <Button variant="light" onClick={handleCreateProfile} disabled={busy}>
+                          {t('options.profileForm.empty.create')}
+                        </Button>
+                      </Stack>
+                    </Paper>
+                  )}
+
+                  {status.message && (
+                    <Alert variant="light" color={statusColor}>
+                      <Stack gap={4}>
+                        <Text fw={600}>{status.message}</Text>
+                        {errorDetails && (
+                          <Text fz="sm" c="dimmed">
+                            {errorDetails}
+                          </Text>
+                        )}
+                      </Stack>
+                    </Alert>
+                  )}
+
+                  {validationErrors.length > 0 && (
+                    <Alert variant="light" color="yellow">
+                      <Stack gap="xs">
+                        <Text fw={600}>{t('onboarding.validation.heading')}</Text>
+                        <List spacing={4} size="sm">
+                          {validationErrors.map((item) => (
+                            <List.Item key={item}>{item}</List.Item>
+                          ))}
+                        </List>
+                      </Stack>
+                    </Alert>
+                  )}
+                </Stack>
               </SimpleGrid>
-
-              {selectedProfile && (
-                <EditProfileCard
-                  title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
-                  helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
-                  rawLabel={t('onboarding.edit.rawLabel')}
-                  rawValue={rawDraft}
-                  rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
-                  resumeLabel={t('onboarding.edit.resumeLabel')}
-                  resumeValue={resumeDraft}
-                  resumeHelper={t('onboarding.edit.resumeHelper')}
-                  saveLabel={t('onboarding.edit.save')}
-                  resetLabel={t('onboarding.edit.reset')}
-                  workingLabel={workingLabel}
-                  disabledSave={!draftDirty || busy}
-                  disabledReset={!draftDirty || busy}
-                  isWorking={editWorking}
-                  errorMessage={draftError}
-                  onSave={handleSaveDrafts}
-                  onReset={handleResetDrafts}
-                  onRawChange={handleRawDraftChange}
-                  onResumeChange={handleResumeDraftChange}
-                />
-              )}
-
-              {status.message && (
-                <Alert variant="light" color={statusColor}>
-                  <Stack gap={4}>
-                    <Text fw={600}>{status.message}</Text>
-                    {errorDetails && (
-                      <Text fz="sm" c="dimmed">
-                        {errorDetails}
-                      </Text>
-                    )}
-                  </Stack>
-                </Alert>
-              )}
-
-              {validationErrors.length > 0 && (
-                <Alert variant="light" color="yellow">
-                  <Stack gap="xs">
-                    <Text fw={600}>{t('onboarding.validation.heading')}</Text>
-                    <List spacing={4} size="sm">
-                      {validationErrors.map((item) => (
-                        <List.Item key={item}>{item}</List.Item>
-                      ))}
-                    </List>
-                  </Stack>
-                </Alert>
-              )}
             </Stack>
           </Tabs.Panel>
 
@@ -775,28 +754,65 @@ export default function App() {
             </Stack>
           </Tabs.Panel>
         </Tabs>
+
+        <Modal
+          opened={filePromptOpen}
+          onClose={closeFilePrompt}
+          title={t('options.profileForm.upload.modalTitle')}
+          centered
+        >
+          <Stack gap="md">
+            <Text>{t('options.profileForm.upload.modalDescription')}</Text>
+            <Stack gap="sm">
+              <Button
+                onClick={() => handleFileAction('parse')}
+                disabled={busy}
+              >
+                {t('options.profileForm.upload.parseAction')}
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => handleFileAction('store')}
+                disabled={busy}
+              >
+                {t('options.profileForm.upload.storeAction')}
+              </Button>
+            </Stack>
+          </Stack>
+        </Modal>
       </Stack>
+
+      {showCopyHelper && (
+        <Affix position={{ bottom: 24, right: 24 }}>
+          <Paper shadow="lg" radius="md" p="md" style={{ width: 280 }}>
+            <Stack gap="sm">
+              <Text fw={600}>{t('options.profileForm.copyHelper.heading')}</Text>
+              <Text fz="sm" c="dimmed">
+                {t('options.profileForm.copyHelper.description')}
+              </Text>
+              <Textarea
+                value={rawText}
+                readOnly
+                autosize
+                minRows={6}
+                maxRows={12}
+                spellCheck={false}
+              />
+              <CopyButton value={rawText}>
+                {({ copied, copy }) => (
+                  <Button onClick={copy} fullWidth variant={copied ? 'light' : 'filled'} color={copied ? 'green' : 'brand'}>
+                    {copied
+                      ? t('options.profileForm.copyHelper.copied')
+                      : t('options.profileForm.copyHelper.copy')}
+                  </Button>
+                )}
+              </CopyButton>
+            </Stack>
+          </Paper>
+        </Affix>
+      )}
     </Container>
   );
-}
-
-function formatJson(value: unknown): string {
-  if (value === undefined || value === null) {
-    return '';
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return '';
-  }
-}
-
-function parseResumeDraft(source: string): unknown {
-  const trimmed = source.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  return JSON.parse(trimmed);
 }
 
 function formatDateTime(value: string | undefined): string {

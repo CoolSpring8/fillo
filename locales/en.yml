@@ -35,6 +35,215 @@ options:
     description: Decide how ApplyPilot handles fields that need attention during auto fill.
     skip: Skip issues and continue automatically
     pause: Pause for manual review
+  profileForm:
+    heading: Profile details
+    description: Provide structured resume data or import it from a PDF.
+    upload:
+      heading: Resume file
+      placeholder: Select a PDF to upload…
+      currentFile: 'File: $1 ($2 bytes)'
+      rawSummary: 'Extracted text: $1 characters'
+      modalTitle: Import PDF
+      modalDescription: Choose how ApplyPilot should handle the selected PDF.
+      parseAction: Parse automatically
+      storeAction: Store file only
+    sections:
+      basics: Basics
+      work: Work
+      volunteer: Volunteer
+      education: Education
+      projects: Projects
+      skills: Skills
+      awards: Awards
+      certificates: Certificates
+      publications: Publications
+      languages: Languages
+      interests: Interests
+      references: References
+      meta: Meta
+    basics:
+      name: Full name
+      namePlaceholder: Jane Doe
+      label: Title or label
+      email: Email
+      phone: Phone
+      url: Website
+      image: Avatar URL
+      summary: Summary
+      location:
+        heading: Location
+        address: Street address
+        city: City
+        region: Region / state
+        countryCode: Country code
+        postalCode: Postal code
+      profiles:
+        heading: Online profiles
+        add: Add profile
+        empty: No profiles added.
+        item: 'Profile $1'
+        remove: Remove profile
+        network: Network
+        username: Username
+        url: URL
+    work:
+      heading: Work experience
+      add: Add role
+      empty: No work experience stored.
+      item: 'Role $1'
+      remove: Remove role
+      name: Company
+      position: Position
+      location: Location
+      url: Company URL
+      startDate: Start date
+      endDate: End date
+      description: Description
+      summary: Summary
+      highlights: Highlights
+    volunteer:
+      heading: Volunteer
+      add: Add volunteer work
+      empty: No volunteer experience stored.
+      item: 'Volunteer $1'
+      remove: Remove volunteer entry
+      organization: Organization
+      position: Position
+      url: Organization URL
+      startDate: Start date
+      endDate: End date
+      summary: Summary
+      highlights: Highlights
+    education:
+      heading: Education
+      add: Add education
+      empty: No education entries stored.
+      item: 'Education $1'
+      remove: Remove education entry
+      institution: Institution
+      url: Institution URL
+      area: Area of study
+      studyType: Degree or program
+      startDate: Start date
+      endDate: End date
+      score: GPA or score
+      courses: Courses
+    projects:
+      heading: Projects
+      add: Add project
+      empty: No projects stored.
+      item: 'Project $1'
+      remove: Remove project
+      name: Project name
+      entity: Organization
+      type: Type
+      url: Project URL
+      startDate: Start date
+      endDate: End date
+      description: Description
+      roles: Roles
+      highlights: Highlights
+      keywords: Keywords
+    skills:
+      heading: Skills
+      add: Add skill
+      empty: No skills stored.
+      item: 'Skill $1'
+      remove: Remove skill
+      name: Skill name
+      level: Level
+      keywords: Keywords
+    awards:
+      heading: Awards
+      add: Add award
+      empty: No awards stored.
+      item: 'Award $1'
+      remove: Remove award
+      title: Title
+      awarder: Awarded by
+      date: Date
+      summary: Summary
+    certificates:
+      heading: Certificates
+      add: Add certificate
+      empty: No certificates stored.
+      item: 'Certificate $1'
+      remove: Remove certificate
+      name: Certificate
+      issuer: Issuer
+      date: Date
+      url: Certificate URL
+    publications:
+      heading: Publications
+      add: Add publication
+      empty: No publications stored.
+      item: 'Publication $1'
+      remove: Remove publication
+      name: Title
+      publisher: Publisher
+      releaseDate: Release date
+      url: Publication URL
+      summary: Summary
+    languages:
+      heading: Languages
+      add: Add language
+      empty: No languages stored.
+      item: 'Language $1'
+      remove: Remove language
+      language: Language
+      fluency: Fluency
+    interests:
+      heading: Interests
+      add: Add interest
+      empty: No interests stored.
+      item: 'Interest $1'
+      remove: Remove interest
+      name: Interest name
+      keywords: Keywords
+    references:
+      heading: References
+      add: Add reference
+      empty: No references stored.
+      item: 'Reference $1'
+      remove: Remove reference
+      name: Name
+      reference: Reference
+    meta:
+      canonical: Canonical URL
+      version: Version
+      lastModified: Last modified
+    actions:
+      reset: Reset changes
+      saving: Saving…
+      save: Save changes
+    common:
+      urlPlaceholder: https://example.com
+      datePlaceholder: YYYY-MM-DD
+      listPlaceholder: One item per line
+    status:
+      extracting: Extracting PDF…
+      parsing: Parsing resume…
+      savingParsed: Saving parsed resume…
+      savingUpload: Saving extracted text…
+      parsed: Resume parsed and form updated.
+      stored: PDF stored and ready to use.
+      parseUnavailable: Parsing unavailable. The file was stored—configure an AI provider to enable automatic parsing.
+      parseFailed: Unable to parse the PDF. The file was stored—try again or copy the text manually.
+      uploadFailed: Failed to import the PDF.
+      savingForm: Saving form…
+      savedForm: Profile saved.
+      saveFailed: Failed to save the profile.
+      profileDeleted: Profile deleted.
+      profileCreated: Profile created.
+    copyHelper:
+      heading: Copy extracted text
+      description: AI parsing is disabled. Copy the text manually when needed.
+      copy: Copy text
+      copied: Copied!
+    empty:
+      heading: No profile selected
+      description: Select a profile from the list or create a new one to start editing.
+      create: Create profile
 popup:
   title: ApplyPilot Profiles
   description: Import once in ApplyPilot and reuse it wherever you apply.

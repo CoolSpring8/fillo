@@ -35,6 +35,215 @@ options:
     description: 选择自动填充遇到问题时的处理方式。
     skip: 跳过问题并继续
     pause: 暂停，等待手动处理
+  profileForm:
+    heading: 简历详情
+    description: 填写结构化简历数据，或通过 PDF 导入。
+    upload:
+      heading: 简历文件
+      placeholder: 选择要上传的 PDF…
+      currentFile: '文件：$1（$2 字节）'
+      rawSummary: '提取文本：$1 个字符'
+      modalTitle: 导入 PDF
+      modalDescription: 请选择 ApplyPilot 应如何处理所选 PDF。
+      parseAction: 自动解析
+      storeAction: 仅保存文件
+    sections:
+      basics: 基础信息
+      work: 工作经历
+      volunteer: 志愿者
+      education: 教育经历
+      projects: 项目
+      skills: 技能
+      awards: 奖项
+      certificates: 证书
+      publications: 出版物
+      languages: 语言
+      interests: 兴趣
+      references: 推荐人
+      meta: 元数据
+    basics:
+      name: 姓名
+      namePlaceholder: 张三
+      label: 头衔或标签
+      email: 邮箱
+      phone: 电话
+      url: 个人网站
+      image: 头像 URL
+      summary: 个人简介
+      location:
+        heading: 所在地
+        address: 街道地址
+        city: 城市
+        region: 州/省
+        countryCode: 国家代码
+        postalCode: 邮政编码
+      profiles:
+        heading: 在线资料
+        add: 添加资料
+        empty: 尚未添加在线资料。
+        item: 在线资料 $1
+        remove: 移除此资料
+        network: 平台
+        username: 用户名
+        url: 链接
+    work:
+      heading: 工作经历
+      add: 添加经历
+      empty: 尚未填写工作经历。
+      item: 工作经历 $1
+      remove: 移除这段经历
+      name: 公司
+      position: 职位
+      location: 地点
+      url: 公司链接
+      startDate: 开始日期
+      endDate: 结束日期
+      description: 描述
+      summary: 摘要
+      highlights: 亮点
+    volunteer:
+      heading: 志愿者经历
+      add: 添加志愿者经历
+      empty: 尚未填写志愿者经历。
+      item: 志愿者经历 $1
+      remove: 移除此经历
+      organization: 组织
+      position: 职务
+      url: 组织链接
+      startDate: 开始日期
+      endDate: 结束日期
+      summary: 摘要
+      highlights: 亮点
+    education:
+      heading: 教育经历
+      add: 添加教育经历
+      empty: 尚未填写教育经历。
+      item: 教育经历 $1
+      remove: 移除此经历
+      institution: 学校
+      url: 学校链接
+      area: 专业方向
+      studyType: 学历或项目
+      startDate: 开始日期
+      endDate: 结束日期
+      score: 成绩/GPA
+      courses: 相关课程
+    projects:
+      heading: 项目
+      add: 添加项目
+      empty: 尚未填写项目经历。
+      item: 项目 $1
+      remove: 移除此项目
+      name: 项目名称
+      entity: 所属组织
+      type: 类型
+      url: 项目链接
+      startDate: 开始日期
+      endDate: 结束日期
+      description: 项目描述
+      roles: 角色
+      highlights: 亮点
+      keywords: 关键词
+    skills:
+      heading: 技能
+      add: 添加技能
+      empty: 尚未填写技能。
+      item: 技能 $1
+      remove: 移除此技能
+      name: 技能名称
+      level: 熟练度
+      keywords: 关键词
+    awards:
+      heading: 奖项
+      add: 添加奖项
+      empty: 尚未填写奖项。
+      item: 奖项 $1
+      remove: 移除此奖项
+      title: 奖项名称
+      awarder: 授予方
+      date: 获奖日期
+      summary: 摘要
+    certificates:
+      heading: 证书
+      add: 添加证书
+      empty: 尚未填写证书。
+      item: 证书 $1
+      remove: 移除此证书
+      name: 证书名称
+      issuer: 颁发机构
+      date: 获取日期
+      url: 证书链接
+    publications:
+      heading: 出版物
+      add: 添加出版物
+      empty: 尚未填写出版物。
+      item: 出版物 $1
+      remove: 移除此出版物
+      name: 标题
+      publisher: 出版方
+      releaseDate: 出版日期
+      url: 链接
+      summary: 摘要
+    languages:
+      heading: 语言
+      add: 添加语言
+      empty: 尚未填写语言能力。
+      item: 语言 $1
+      remove: 移除此语言
+      language: 语言
+      fluency: 熟练度
+    interests:
+      heading: 兴趣
+      add: 添加兴趣
+      empty: 尚未填写兴趣。
+      item: 兴趣 $1
+      remove: 移除此兴趣
+      name: 兴趣名称
+      keywords: 关键词
+    references:
+      heading: 推荐人
+      add: 添加推荐人
+      empty: 尚未填写推荐人。
+      item: 推荐人 $1
+      remove: 移除此推荐人
+      name: 姓名
+      reference: 推荐说明
+    meta:
+      canonical: Canonical URL
+      version: 版本
+      lastModified: 最后修改时间
+    actions:
+      reset: 重置修改
+      saving: 正在保存…
+      save: 保存修改
+    common:
+      urlPlaceholder: https://example.com
+      datePlaceholder: YYYY-MM-DD
+      listPlaceholder: 每行一条
+    status:
+      extracting: 正在提取 PDF…
+      parsing: 正在解析简历…
+      savingParsed: 正在保存解析结果…
+      savingUpload: 正在保存提取文本…
+      parsed: 解析完成并已更新表单。
+      stored: PDF 已保存，可随时使用。
+      parseUnavailable: 暂无法解析，文件已保存，请先配置 AI 服务提供方。
+      parseFailed: 无法解析该 PDF，文件已保存，可重试或手动复制文本。
+      uploadFailed: 导入 PDF 失败。
+      savingForm: 正在保存…
+      savedForm: 已保存。
+      saveFailed: 保存失败。
+      profileDeleted: 简历已删除。
+      profileCreated: 简历已创建。
+    copyHelper:
+      heading: 复制提取的文本
+      description: 未启用 AI 解析，可手动复制文本使用。
+      copy: 复制文本
+      copied: 已复制！
+    empty:
+      heading: 尚未选择简历
+      description: 请选择列表中的简历，或新建一份开始编辑。
+      create: 新建简历
 popup:
   title: ApplyPilot 简历
   description: 在 ApplyPilot 中导入一次，之后可在任何应用流程中重复使用。

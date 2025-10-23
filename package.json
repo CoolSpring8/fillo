@@ -18,6 +18,7 @@
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
     "@mantine/core": "^8.3.5",
+    "@mantine/form": "^8.3.5",
     "@mantine/hooks": "^8.3.5",
     "@mantine/notifications": "^8.3.5",
     "@wxt-dev/i18n": "^0.2.4",
