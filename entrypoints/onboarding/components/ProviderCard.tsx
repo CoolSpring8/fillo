@@ -1,4 +1,4 @@
-import { Alert, Button, Paper, PasswordInput, Radio, Stack, Text, TextInput } from '@mantine/core';
+import { Paper, PasswordInput, Radio, Stack, Text, TextInput } from '@mantine/core';
 
 interface ProviderCardProps {
   title: string;
@@ -16,18 +16,10 @@ interface ProviderCardProps {
   apiKey: string;
   model: string;
   apiBaseUrl: string;
-  workingLabel: string;
-  parseButtonLabel: string;
-  parseWarning?: string | null;
-  parseHint?: string | null;
-  needProfileMessage?: string | null;
-  isWorking: boolean;
-  disabled: boolean;
   onProviderChange: (value: 'on-device' | 'openai') => void | Promise<void>;
   onApiKeyChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onApiBaseUrlChange: (value: string) => void;
-  onParse: () => void;
 }
 
 export function ProviderCard({
@@ -46,18 +38,10 @@ export function ProviderCard({
   apiKey,
   model,
   apiBaseUrl,
-  workingLabel,
-  parseButtonLabel,
-  parseWarning,
-  parseHint,
-  needProfileMessage,
-  isWorking,
-  disabled,
   onProviderChange,
   onApiKeyChange,
   onModelChange,
   onApiBaseUrlChange,
-  onParse,
 }: ProviderCardProps) {
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
@@ -114,28 +98,6 @@ export function ProviderCard({
               {openAiHelper}
             </Text>
           </Stack>
-        )}
-
-        <Button onClick={onParse} disabled={disabled} radius="md" size="md">
-          {isWorking ? workingLabel : parseButtonLabel}
-        </Button>
-
-        {parseWarning && (
-          <Alert variant="light" color="yellow">
-            {parseWarning}
-          </Alert>
-        )}
-
-        {needProfileMessage && (
-          <Alert variant="light" color="gray">
-            {needProfileMessage}
-          </Alert>
-        )}
-
-        {parseHint && (
-          <Alert variant="light" color="brand">
-            {parseHint}
-          </Alert>
         )}
       </Stack>
     </Paper>

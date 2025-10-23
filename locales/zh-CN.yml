@@ -233,6 +233,9 @@ overlay:
 onboarding:
   title: ApplyPilot 工作台
   description: 在同一位置导入简历、配置 AI 服务并优化自动填充。
+  tabs:
+    profiles: 档案管理
+    aiSettings: AI 设置
   buttons:
     working: 正在处理…
   manage:
@@ -263,6 +266,9 @@ onboarding:
     needProfile: 请选择或创建一个档案以启用解析。
     needsSave: 解析前请先保存修改。
     summary: 解析结果会将 JSON 简历数据写入 "$1"，便于自动填写。
+    providerSummaryOnDevice: 当前使用 Chrome 本地模型进行解析。
+    providerSummaryOpenAI: 当前使用 OpenAI 模型“$1”进行解析。
+    adjustSettings: 调整 AI 设置
   openai:
     apiKey: API 密钥
     apiKeyPlaceholder: sk-...

@@ -233,6 +233,9 @@ overlay:
 onboarding:
   title: ApplyPilot workspace
   description: Import resumes, configure AI providers, and fine-tune autofill settings in one place.
+  tabs:
+    profiles: Profile management
+    aiSettings: AI settings
   buttons:
     working: Working…
   manage:
@@ -263,6 +266,9 @@ onboarding:
     needProfile: Select or create a profile to enable parsing.
     needsSave: Save your edits before parsing.
     summary: Parsing updates "$1" with JSON Resume data for autofill workflows.
+    providerSummaryOnDevice: Using Chrome on-device (Prompt API) for parsing.
+    providerSummaryOpenAI: Using OpenAI model "$1" for parsing.
+    adjustSettings: Adjust AI settings
   openai:
     apiKey: API key
     apiKeyPlaceholder: sk-...

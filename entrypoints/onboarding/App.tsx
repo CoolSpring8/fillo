@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Container, List, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Alert, Container, List, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
@@ -31,6 +31,7 @@ import type {
 import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCard';
 import { UploadCard } from './components/UploadCard';
 import { ProviderCard } from './components/ProviderCard';
+import { ParseCard } from './components/ParseCard';
 import { EditProfileCard } from './components/EditProfileCard';
 import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
 import { AutofillCard } from './components/AutofillCard';
@@ -87,6 +88,7 @@ export default function App() {
   const [resumeDraft, setResumeDraft] = useState('');
   const [draftDirty, setDraftDirty] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'profiles' | 'settings'>('profiles');
   const { t } = i18n;
   const providerLabels: Record<'on-device' | 'openai', string> = {
     'on-device': t('options.provider.onDevice'),
@@ -593,6 +595,12 @@ export default function App() {
       ? t('onboarding.parse.summary', [resolveProfileName(selectedProfile)])
       : null;
   const needProfileMessage = !selectedProfile ? t('onboarding.parse.needProfile') : null;
+  const providerSummary =
+    selectedProvider === 'openai'
+      ? t('onboarding.parse.providerSummaryOpenAI', [model || OPENAI_DEFAULT_MODEL])
+      : t('onboarding.parse.providerSummaryOnDevice');
+  const adjustSettingsLabel = t('onboarding.parse.adjustSettings');
+  const providerNoteForParse = selectedProvider === 'on-device' ? onDeviceNote : null;
 
   const profilesErrorLabel = profilesState.error
     ? t('onboarding.manage.error', [profilesState.error])
@@ -615,134 +623,158 @@ export default function App() {
           <Text c="dimmed">{t('onboarding.description')}</Text>
         </Stack>
 
-        <ProfilesCard
-          title={t('onboarding.manage.heading')}
-          countLabel={t('onboarding.manage.count', [profileCountLabel])}
-          addLabel={t('onboarding.manage.addProfile')}
-          loadingLabel={t('onboarding.manage.loading')}
-          emptyLabel={t('onboarding.manage.empty')}
-          deleteLabel={t('onboarding.manage.delete')}
-          errorLabel={profilesErrorLabel}
-          profiles={profilesData}
-          isLoading={profilesState.loading}
-          busy={busy}
-          onCreate={handleCreateProfile}
-          onSelect={handleSelectProfile}
-          onDelete={handleDeleteProfile}
-        />
+        <Tabs value={activeTab} onChange={(value) => setActiveTab((value ?? 'profiles') as 'profiles' | 'settings')}>
+          <Tabs.List>
+            <Tabs.Tab value="profiles">{t('onboarding.tabs.profiles')}</Tabs.Tab>
+            <Tabs.Tab value="settings">{t('onboarding.tabs.aiSettings')}</Tabs.Tab>
+          </Tabs.List>
 
-        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
-          <UploadCard
-            title={t('onboarding.upload.heading')}
-            helper={t('onboarding.upload.helper')}
-            buttonLabel={t('onboarding.upload.button')}
-            workingLabel={workingLabel}
-            isWorking={uploadWorking}
-            currentSummary={currentSummary}
-            file={file}
-            busy={busy}
-            onExtract={handleExtract}
-            onFileSelect={handleFileSelect}
-          />
+          <Tabs.Panel value="profiles">
+            <Stack gap="xl" pt="md">
+              <ProfilesCard
+                title={t('onboarding.manage.heading')}
+                countLabel={t('onboarding.manage.count', [profileCountLabel])}
+                addLabel={t('onboarding.manage.addProfile')}
+                loadingLabel={t('onboarding.manage.loading')}
+                emptyLabel={t('onboarding.manage.empty')}
+                deleteLabel={t('onboarding.manage.delete')}
+                errorLabel={profilesErrorLabel}
+                profiles={profilesData}
+                isLoading={profilesState.loading}
+                busy={busy}
+                onCreate={handleCreateProfile}
+                onSelect={handleSelectProfile}
+                onDelete={handleDeleteProfile}
+              />
 
-          <ProviderCard
-            title={t('onboarding.parse.heading')}
-            helper={t('onboarding.parse.helper')}
-            providerLabels={providerLabels}
-            selectedProvider={selectedProvider}
-            canUseOnDevice={canUseOnDevice}
-            onDeviceNote={onDeviceNote}
-            apiKeyLabel={t('onboarding.openai.apiKey')}
-            apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
-            modelLabel={t('onboarding.openai.model')}
-            baseUrlLabel={t('onboarding.openai.baseUrl')}
-            baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
-            openAiHelper={t('onboarding.openai.helper')}
-            apiKey={apiKey}
-            model={model}
-            apiBaseUrl={apiBaseUrl}
-            workingLabel={workingLabel}
-            parseButtonLabel={t('onboarding.parse.button')}
-            parseWarning={parseWarning}
-            parseHint={parseHint}
-            needProfileMessage={needProfileMessage}
-            isWorking={parseWorking}
-            disabled={parseDisabled}
-            onProviderChange={handleProviderChange}
-            onApiKeyChange={handleApiKeyChange}
-            onModelChange={handleModelChange}
-            onApiBaseUrlChange={handleApiBaseUrlChange}
-            onParse={handleParse}
-          />
-        </SimpleGrid>
+              <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
+                <UploadCard
+                  title={t('onboarding.upload.heading')}
+                  helper={t('onboarding.upload.helper')}
+                  buttonLabel={t('onboarding.upload.button')}
+                  workingLabel={workingLabel}
+                  isWorking={uploadWorking}
+                  currentSummary={currentSummary}
+                  file={file}
+                  busy={busy}
+                  onExtract={handleExtract}
+                  onFileSelect={handleFileSelect}
+                />
 
-        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
-          <AdaptersCard
-            title={t('options.adapters.heading')}
-            description={t('options.adapters.description')}
-            items={adapterItems}
-            onToggle={handleToggleAdapter}
-          />
+                <ParseCard
+                  title={t('onboarding.parse.heading')}
+                  helper={t('onboarding.parse.helper')}
+                  providerSummary={providerSummary}
+                  providerNote={providerNoteForParse}
+                  settingsButtonLabel={adjustSettingsLabel}
+                  parseButtonLabel={t('onboarding.parse.button')}
+                  workingLabel={workingLabel}
+                  isWorking={parseWorking}
+                  disabled={parseDisabled}
+                  parseWarning={parseWarning}
+                  parseHint={parseHint}
+                  needProfileMessage={needProfileMessage}
+                  onParse={handleParse}
+                  onOpenSettings={() => setActiveTab('settings')}
+                />
+              </SimpleGrid>
 
-          <AutofillCard
-            title={t('options.autofill.heading')}
-            description={t('options.autofill.description')}
-            value={autoFallback}
-            skipLabel={t('options.autofill.skip')}
-            pauseLabel={t('options.autofill.pause')}
-            onChange={handleAutoFallbackChange}
-          />
-        </SimpleGrid>
+              {selectedProfile && (
+                <EditProfileCard
+                  title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
+                  helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
+                  rawLabel={t('onboarding.edit.rawLabel')}
+                  rawValue={rawDraft}
+                  rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
+                  resumeLabel={t('onboarding.edit.resumeLabel')}
+                  resumeValue={resumeDraft}
+                  resumeHelper={t('onboarding.edit.resumeHelper')}
+                  saveLabel={t('onboarding.edit.save')}
+                  resetLabel={t('onboarding.edit.reset')}
+                  workingLabel={workingLabel}
+                  disabledSave={!draftDirty || busy}
+                  disabledReset={!draftDirty || busy}
+                  isWorking={editWorking}
+                  errorMessage={draftError}
+                  onSave={handleSaveDrafts}
+                  onReset={handleResetDrafts}
+                  onRawChange={handleRawDraftChange}
+                  onResumeChange={handleResumeDraftChange}
+                />
+              )}
 
-        {selectedProfile && (
-        <EditProfileCard
-          title={t('onboarding.edit.heading', [resolveProfileName(selectedProfile)])}
-          helper={t('onboarding.edit.helper', [activeRawLength ?? '0'])}
-          rawLabel={t('onboarding.edit.rawLabel')}
-          rawValue={rawDraft}
-          rawSummary={t('onboarding.edit.rawSummary', [rawDraft.length.toLocaleString()])}
-          resumeLabel={t('onboarding.edit.resumeLabel')}
-          resumeValue={resumeDraft}
-          resumeHelper={t('onboarding.edit.resumeHelper')}
-          saveLabel={t('onboarding.edit.save')}
-          resetLabel={t('onboarding.edit.reset')}
-          workingLabel={workingLabel}
-          disabledSave={!draftDirty || busy}
-          disabledReset={!draftDirty || busy}
-          isWorking={editWorking}
-          errorMessage={draftError}
-          onSave={handleSaveDrafts}
-          onReset={handleResetDrafts}
-          onRawChange={handleRawDraftChange}
-          onResumeChange={handleResumeDraftChange}
-        />
-        )}
+              {status.message && (
+                <Alert variant="light" color={statusColor}>
+                  <Stack gap={4}>
+                    <Text fw={600}>{status.message}</Text>
+                    {errorDetails && (
+                      <Text fz="sm" c="dimmed">
+                        {errorDetails}
+                      </Text>
+                    )}
+                  </Stack>
+                </Alert>
+              )}
 
-        {status.message && (
-          <Alert variant="light" color={statusColor}>
-            <Stack gap={4}>
-              <Text fw={600}>{status.message}</Text>
-              {errorDetails && (
-                <Text fz="sm" c="dimmed">
-                  {errorDetails}
-                </Text>
+              {validationErrors.length > 0 && (
+                <Alert variant="light" color="yellow">
+                  <Stack gap="xs">
+                    <Text fw={600}>{t('onboarding.validation.heading')}</Text>
+                    <List spacing={4} size="sm">
+                      {validationErrors.map((item) => (
+                        <List.Item key={item}>{item}</List.Item>
+                      ))}
+                    </List>
+                  </Stack>
+                </Alert>
               )}
             </Stack>
-          </Alert>
-        )}
+          </Tabs.Panel>
 
-        {validationErrors.length > 0 && (
-          <Alert variant="light" color="yellow">
-            <Stack gap="xs">
-              <Text fw={600}>{t('onboarding.validation.heading')}</Text>
-              <List spacing={4} size="sm">
-                {validationErrors.map((item) => (
-                  <List.Item key={item}>{item}</List.Item>
-                ))}
-              </List>
+          <Tabs.Panel value="settings">
+            <Stack gap="xl" pt="md">
+              <ProviderCard
+                title={t('onboarding.parse.heading')}
+                helper={t('onboarding.parse.helper')}
+                providerLabels={providerLabels}
+                selectedProvider={selectedProvider}
+                canUseOnDevice={canUseOnDevice}
+                onDeviceNote={onDeviceNote}
+                apiKeyLabel={t('onboarding.openai.apiKey')}
+                apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
+                modelLabel={t('onboarding.openai.model')}
+                baseUrlLabel={t('onboarding.openai.baseUrl')}
+                baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
+                openAiHelper={t('onboarding.openai.helper')}
+                apiKey={apiKey}
+                model={model}
+                apiBaseUrl={apiBaseUrl}
+                onProviderChange={handleProviderChange}
+                onApiKeyChange={handleApiKeyChange}
+                onModelChange={handleModelChange}
+                onApiBaseUrlChange={handleApiBaseUrlChange}
+              />
+
+              <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
+                <AdaptersCard
+                  title={t('options.adapters.heading')}
+                  description={t('options.adapters.description')}
+                  items={adapterItems}
+                  onToggle={handleToggleAdapter}
+                />
+
+                <AutofillCard
+                  title={t('options.autofill.heading')}
+                  description={t('options.autofill.description')}
+                  value={autoFallback}
+                  skipLabel={t('options.autofill.skip')}
+                  pauseLabel={t('options.autofill.pause')}
+                  onChange={handleAutoFallbackChange}
+                />
+              </SimpleGrid>
             </Stack>
-          </Alert>
-        )}
+          </Tabs.Panel>
+        </Tabs>
       </Stack>
     </Container>
   );
