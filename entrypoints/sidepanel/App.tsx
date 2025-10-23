@@ -65,6 +65,10 @@ import {
   ProviderInvocationError,
 } from '../../shared/llm/errors';
 
+function isFieldSlotValue(slot: PromptOptionSlot | null | undefined): slot is FieldSlot {
+  return typeof slot === 'string' && !slot.startsWith('profile.');
+}
+
 type PanelMode = 'dom' | 'guided' | 'manual';
 
 type FieldStatus = 'idle' | 'pending' | 'filled' | 'skipped' | 'failed';
@@ -280,10 +284,12 @@ export default function App() {
             let next = { ...entry };
             if (assoc.preferredSlot) {
               // If the preferred slot has a value in current profile, use it
-              const pref = slotValuesRef.current[assoc.preferredSlot as any];
-              if (pref && pref.trim().length > 0) {
-                next.selectedSlot = assoc.preferredSlot;
-                next.suggestion = pref;
+              if (isFieldSlotValue(assoc.preferredSlot)) {
+                const pref = slotValuesRef.current[assoc.preferredSlot];
+                if (pref && pref.trim().length > 0) {
+                  next.selectedSlot = assoc.preferredSlot;
+                  next.suggestion = pref;
+                }
               }
             }
             if (!next.suggestion && assoc.lastValue && assoc.lastValue.trim().length > 0) {
