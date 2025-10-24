@@ -301,6 +301,7 @@ sidepanel:
     rawLabel: Raw resume text
     resumeRoot: Resume data
     copyHint: Click to copy
+    copyBranch: Copy section
   buttons:
     copy: Copy
     copyAll: Copy all

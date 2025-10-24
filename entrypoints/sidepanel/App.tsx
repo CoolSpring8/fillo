@@ -8,6 +8,7 @@ import {
   Card,
   Group,
   NativeSelect,
+  Menu,
   Select,
   Paper,
   ScrollArea,
@@ -1590,7 +1591,12 @@ export default function App() {
       <Stack gap="md">
         {manualTree.length === 0 && renderStateAlert(t('sidepanel.states.noManualValues'))}
         {manualTree.length > 0 && (
-          <ManualTreeView nodes={manualTree} tooltipLabel={t('sidepanel.manual.copyHint')} onCopy={handleCopy} />
+          <ManualTreeView
+            nodes={manualTree}
+            tooltipLabel={t('sidepanel.manual.copyHint')}
+            branchCopyLabel={t('sidepanel.manual.copyBranch')}
+            onCopy={handleCopy}
+          />
         )}
         <Card withBorder radius="md" shadow="sm">
           <Stack gap="sm">
@@ -1819,12 +1825,13 @@ function truncate(value: string, limit = 120): string {
 interface ManualTreeViewProps {
   nodes: ManualValueNode[];
   tooltipLabel: string;
+  branchCopyLabel: string;
   onCopy: (label: string, value: string) => void;
 }
 
 type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
 
-function ManualTreeView({ nodes, tooltipLabel, onCopy }: ManualTreeViewProps) {
+function ManualTreeView({ nodes, tooltipLabel, branchCopyLabel, onCopy }: ManualTreeViewProps) {
   if (nodes.length === 0) {
     return null;
   }
@@ -1839,11 +1846,27 @@ function ManualTreeView({ nodes, tooltipLabel, onCopy }: ManualTreeViewProps) {
   const initialExpandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
   const tree = useTree({ initialExpandedState });
   const { setExpandedState, clearSelected, setHoveredNode } = tree;
+  const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   useEffect(() => {
     setExpandedState(initialExpandedState);
     clearSelected();
     setHoveredNode(null);
   }, [initialExpandedState, setExpandedState, clearSelected, setHoveredNode]);
+
+  useEffect(() => {
+    setContextNodeId(null);
+  }, [treeData]);
+
+  const copyBranch = useCallback(
+    (node: ManualValueNode) => {
+      const text = buildManualBranchCopy(node);
+      if (!text) {
+        return;
+      }
+      onCopy(node.displayPath, text);
+    },
+    [onCopy],
+  );
 
   const renderNode = useCallback(
     ({ node, elementProps, hasChildren, expanded }: RenderTreeNodePayload) => {
@@ -1895,6 +1918,75 @@ function ManualTreeView({ nodes, tooltipLabel, onCopy }: ManualTreeViewProps) {
         );
       }
 
+      if (hasChildren) {
+        const { onContextMenu, ...restElementProps } = rest as typeof rest & {
+          onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
+        };
+        const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+          event.preventDefault();
+          onContextMenu?.(event);
+          setContextNodeId(manualNode.id);
+        };
+        const nodeHasLeaves = manualNodeHasLeaf(manualNode);
+        const isMenuOpen = contextNodeId === manualNode.id;
+        return (
+          <Menu
+            withinPortal
+            opened={isMenuOpen}
+            onClose={() => setContextNodeId((current) => (current === manualNode.id ? null : current))}
+            closeOnItemClick
+            closeOnEscape
+          >
+            <Menu.Target>
+              <div
+                className={className}
+                style={{
+                  ...style,
+                  paddingBlock: '4px',
+                  paddingInlineEnd: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--mantine-spacing-xs)',
+                  cursor: 'pointer',
+                  borderRadius: 'var(--mantine-radius-sm)',
+                  backgroundColor: isHovered ? hoverBackground : 'transparent',
+                  transition: 'background-color 120ms ease',
+                }}
+                onClick={onClick}
+                onContextMenu={handleContextMenu}
+                {...restElementProps}
+              >
+                <ChevronRight
+                  size={16}
+                  strokeWidth={2}
+                  aria-hidden
+                  style={{
+                    transition: 'transform 150ms ease',
+                    transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    flexShrink: 0,
+                  }}
+                />
+                <Text fw={600} fz="sm" style={{ margin: 0 }}>
+                  {manualNode.label}
+                </Text>
+              </div>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<Copy size={14} aria-hidden />}
+                onClick={() => {
+                  copyBranch(manualNode);
+                  setContextNodeId(null);
+                }}
+                disabled={!nodeHasLeaves}
+              >
+                {branchCopyLabel}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        );
+      }
+
       return (
         <div
           className={className}
@@ -1929,7 +2021,7 @@ function ManualTreeView({ nodes, tooltipLabel, onCopy }: ManualTreeViewProps) {
         </div>
       );
     },
-    [hoverBackground, onCopy, tooltipLabel],
+    [branchCopyLabel, contextNodeId, copyBranch, hoverBackground, onCopy, tooltipLabel],
   );
 
   return <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />;
@@ -1942,6 +2034,31 @@ function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
     manualNode: node,
     children: node.children?.map(mapManualNodeToTreeNode),
   };
+}
+
+function manualNodeHasLeaf(node: ManualValueNode): boolean {
+  if (typeof node.value === 'string' && node.value.trim().length > 0) {
+    return true;
+  }
+  if (!node.children) {
+    return false;
+  }
+  return node.children.some((child) => manualNodeHasLeaf(child));
+}
+
+function buildManualBranchCopy(node: ManualValueNode): string | null {
+  const entries: Array<{ path: string; value: string }> = [];
+  const visit = (current: ManualValueNode) => {
+    if (typeof current.value === 'string' && current.value.trim().length > 0) {
+      entries.push({ path: current.displayPath, value: current.value });
+    }
+    current.children?.forEach(visit);
+  };
+  visit(node);
+  if (entries.length === 0) {
+    return null;
+  }
+  return entries.map((entry) => `${entry.path}: ${entry.value}`).join('\n');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
