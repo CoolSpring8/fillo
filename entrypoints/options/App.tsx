@@ -5,6 +5,7 @@ import {
   Button,
   Container,
   CopyButton,
+  Group,
   List,
   Modal,
   Paper,
@@ -52,6 +53,7 @@ import {
   ProfileForm,
   createEmptyResumeFormValues,
   formValuesToResume,
+  mergeResumeFormValues,
   resumeToFormValues,
   type ResumeFormValues,
 } from './components/ProfileForm';
@@ -99,6 +101,7 @@ export default function App() {
   const [autoFallback, setAutoFallback] = useState<AppSettings['autoFallback']>('skip');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [filePromptOpen, setFilePromptOpen] = useState(false);
+  const [parseAgainConfirmOpen, setParseAgainConfirmOpen] = useState(false);
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [profilesState, setProfilesState] = useState<{ loading: boolean; error?: string }>({
     loading: true,
@@ -111,6 +114,7 @@ export default function App() {
   const [rawText, setRawText] = useState('');
   const [activeTab, setActiveTab] = useState<'profiles' | 'settings'>('profiles');
   const { t } = i18n;
+  const translate = t as unknown as (key: string, substitutions?: unknown) => string;
   const providerLabels: Record<'on-device' | 'openai', string> = {
     'on-device': t('options.provider.onDevice'),
     openai: t('options.provider.openai'),
@@ -296,6 +300,14 @@ export default function App() {
     setPendingFile(null);
   };
 
+  const openParseAgainConfirm = () => {
+    setParseAgainConfirmOpen(true);
+  };
+
+  const closeParseAgainConfirm = () => {
+    setParseAgainConfirmOpen(false);
+  };
+
   const handleFileAction = async (mode: 'parse' | 'store') => {
     if (!pendingFile) {
       return;
@@ -359,8 +371,6 @@ export default function App() {
                 ? (parsed as ResumeExtractionResult)
                 : {};
 
-            const validationResult = validateResume(resume);
-
             const snapshot: ProviderSnapshot =
               providerConfig.kind === 'openai'
                 ? {
@@ -371,10 +381,14 @@ export default function App() {
                 : { kind: 'on-device' };
 
             const formValues = resumeToFormValues(resume);
-            form.setValues(formValues);
-            form.resetDirty(formValues);
+            const mergedValues = mergeResumeFormValues(form.getValues(), formValues);
+            form.setValues(mergedValues);
+            form.resetDirty(mergedValues);
 
-            resumeResult = resume;
+            const mergedResume = formValuesToResume(mergedValues);
+            const validationResult = validateResume(mergedResume);
+
+            resumeResult = mergedResume;
             providerSnapshot = snapshot;
             parsedAt = new Date().toISOString();
             validation = {
@@ -437,6 +451,110 @@ export default function App() {
       const message = error instanceof Error ? error.message : String(error);
       setStatus({ phase: 'error', message: t('options.profileForm.status.uploadFailed') });
       setErrorDetails(message);
+      console.error(error);
+    } finally {
+      setBusy(false);
+      setBusyAction(null);
+    }
+  };
+
+  const handleParseAgain = async () => {
+    if (!selectedProfile || busy) {
+      return;
+    }
+    closeParseAgainConfirm();
+    const text = rawText.trim();
+    if (!text) {
+      return;
+    }
+
+    const canParse =
+      selectedProvider === 'openai'
+        ? apiKey.trim().length > 0
+        : availability !== 'unavailable';
+
+    if (!canParse) {
+      setStatus({ phase: 'error', message: t('options.profileForm.status.parseUnavailable') });
+      setErrorDetails(null);
+      return;
+    }
+
+    setBusy(true);
+    setBusyAction('parse');
+    setErrorDetails(null);
+    setStatus({ phase: 'parsing', message: t('options.profileForm.status.parsing') });
+
+    try {
+      const messages = buildResumePrompt(text);
+      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const providerConfig: ProviderConfig =
+        selectedProvider === 'openai'
+          ? createOpenAIProvider(apiKey, model, baseUrl)
+          : createOnDeviceProvider();
+
+      const raw = await invokeWithProvider(providerConfig, messages, {
+        responseSchema: resumeSchema,
+        temperature: 0,
+      });
+
+      const parsed = JSON.parse(raw) as unknown;
+      const resume: ResumeExtractionResult =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as ResumeExtractionResult)
+          : {};
+
+      const snapshot: ProviderSnapshot =
+        providerConfig.kind === 'openai'
+          ? {
+              kind: 'openai',
+              model: providerConfig.model,
+              apiBaseUrl: providerConfig.apiBaseUrl,
+            }
+          : { kind: 'on-device' };
+
+      const parsedValues = resumeToFormValues(resume);
+      const mergedValues = mergeResumeFormValues(form.getValues(), parsedValues);
+      form.setValues(mergedValues);
+      form.resetDirty(mergedValues);
+
+      const mergedResume = formValuesToResume(mergedValues);
+      const validationResult = validateResume(mergedResume);
+
+      setStatus({ phase: 'saving', message: t('options.profileForm.status.savingParsed') });
+
+      const updated: ProfileRecord = {
+        ...selectedProfile,
+        resume: mergedResume,
+        provider: snapshot,
+        parsedAt: new Date().toISOString(),
+        validation: {
+          valid: validationResult.valid,
+          errors: validationResult.errors,
+        },
+      };
+
+      await saveProfile(updated);
+      await refreshProfiles(updated.id);
+      setStatus({ phase: 'complete', message: t('options.profileForm.status.parsed') });
+      setErrorDetails(null);
+    } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError
+      ) {
+        setStatus({ phase: 'error', message: error.message });
+        setErrorDetails(null);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        const displayMessage =
+          error instanceof ProviderInvocationError
+            ? error.message
+            : t('options.profileForm.status.parseFailed');
+        const details = error instanceof ProviderInvocationError ? null : message;
+        setStatus({ phase: 'error', message: displayMessage });
+        setErrorDetails(details);
+      }
       console.error(error);
     } finally {
       setBusy(false);
@@ -601,6 +719,8 @@ export default function App() {
 
   const formSaving = busy && busyAction === 'save';
 
+  const canParseAgain = Boolean(selectedProfile && rawText.trim().length > 0);
+
   const canParseWithCurrentSettings =
     selectedProvider === 'openai'
       ? apiKey.trim().length > 0
@@ -663,6 +783,8 @@ export default function App() {
                       disabled={busy}
                       saving={formSaving}
                       onFileSelect={handleFileSelect}
+                      onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
+                      parseAgainDisabled={!canParseAgain}
                       fileSummary={fileSummary}
                       rawSummary={rawSummary}
                     />
@@ -778,6 +900,25 @@ export default function App() {
                 {t('options.profileForm.upload.storeAction')}
               </Button>
             </Stack>
+          </Stack>
+        </Modal>
+
+        <Modal
+          opened={parseAgainConfirmOpen}
+          onClose={closeParseAgainConfirm}
+          title={translate('options.profileForm.upload.parseAgainConfirmTitle')}
+          centered
+        >
+          <Stack gap="md">
+            <Text>{translate('options.profileForm.upload.parseAgainConfirmDescription')}</Text>
+            <Group justify="flex-end" gap="sm">
+              <Button variant="default" onClick={closeParseAgainConfirm} disabled={busy}>
+                {translate('options.profileForm.upload.parseAgainConfirmCancel')}
+              </Button>
+              <Button onClick={handleParseAgain} disabled={busy}>
+                {translate('options.profileForm.upload.parseAgainConfirmConfirm')}
+              </Button>
+            </Group>
           </Stack>
         </Modal>
       </Stack>
