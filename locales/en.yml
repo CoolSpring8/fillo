@@ -303,6 +303,10 @@ sidepanel:
     copyHint: Click to copy
     copyBranch: Copy section
     copyValue: Copy value
+    searchPlaceholder: Search resume data…
+    searchPrev: Previous match
+    searchNext: Next match
+    searchNoMatches: No matches found.
   buttons:
     copy: Copy
     copyAll: Copy all

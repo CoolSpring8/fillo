@@ -303,6 +303,10 @@ sidepanel:
     copyHint: 点击复制
     copyBranch: 复制该部分
     copyValue: 复制该值
+    searchPlaceholder: 搜索简历数据…
+    searchPrev: 上一个匹配
+    searchNext: 下一个匹配
+    searchNoMatches: 未找到匹配项。
   buttons:
     copy: 复制
     copyAll: 全部复制
