@@ -47,6 +47,11 @@ options:
       modalDescription: Choose how ApplyPilot should handle the selected PDF.
       parseAction: Parse automatically
       storeAction: Store file only
+      parseAgain: Re-run AI parsing
+      parseAgainConfirmTitle: Overwrite with new AI parsing?
+      parseAgainConfirmDescription: Running the parser again will overwrite any fields that receive new values. Existing inputs without new data will be kept.
+      parseAgainConfirmConfirm: Parse again
+      parseAgainConfirmCancel: Cancel
     sections:
       basics: Basics
       work: Work

@@ -285,6 +285,8 @@ interface ProfileFormProps {
   disabled?: boolean;
   saving?: boolean;
   onFileSelect: (file: File | null) => void;
+  onParseAgain?: () => void;
+  parseAgainDisabled?: boolean;
   fileSummary?: string | null;
   rawSummary?: string | null;
 }
@@ -296,10 +298,13 @@ export function ProfileForm({
   disabled = false,
   saving = false,
   onFileSelect,
+  onParseAgain,
+  parseAgainDisabled = false,
   fileSummary,
   rawSummary,
 }: ProfileFormProps) {
   const { t } = i18n;
+  const translate = t as unknown as (key: string, substitutions?: unknown) => string;
   const isDirty = form.isDirty();
 
   return (
@@ -317,14 +322,25 @@ export function ProfileForm({
 
           <Stack gap="sm">
             <Text fw={600}>{t('options.profileForm.upload.heading')}</Text>
-            <FileInput
-              radius="md"
-              size="md"
-              accept="application/pdf"
-              onChange={onFileSelect}
-              disabled={disabled}
-              placeholder={t('options.profileForm.upload.placeholder')}
-            />
+            <Group gap="sm" align="flex-end">
+              <FileInput
+                radius="md"
+                size="md"
+                accept="application/pdf"
+                onChange={onFileSelect}
+                disabled={disabled}
+                placeholder={t('options.profileForm.upload.placeholder')}
+                style={{ flex: 1 }}
+              />
+              <Button
+                type="button"
+                variant="light"
+                onClick={() => onParseAgain?.()}
+                disabled={disabled || parseAgainDisabled || !onParseAgain}
+              >
+                {translate('options.profileForm.upload.parseAgain')}
+              </Button>
+            </Group>
             {fileSummary && (
               <Text fz="sm" c="dimmed">
                 {fileSummary}
@@ -1788,6 +1804,54 @@ export function formValuesToResume(values: ResumeFormValues): ResumeExtractionRe
   return resume;
 }
 
+export function mergeResumeFormValues(
+  current: ResumeFormValues,
+  incoming: ResumeFormValues,
+): ResumeFormValues {
+  return {
+    basics: {
+      name: preferString(current.basics.name, incoming.basics.name),
+      label: preferString(current.basics.label, incoming.basics.label),
+      image: preferString(current.basics.image, incoming.basics.image),
+      email: preferString(current.basics.email, incoming.basics.email),
+      phone: preferString(current.basics.phone, incoming.basics.phone),
+      url: preferString(current.basics.url, incoming.basics.url),
+      summary: preferString(current.basics.summary, incoming.basics.summary),
+      location: {
+        address: preferString(current.basics.location.address, incoming.basics.location.address),
+        postalCode: preferString(
+          current.basics.location.postalCode,
+          incoming.basics.location.postalCode,
+        ),
+        city: preferString(current.basics.location.city, incoming.basics.location.city),
+        countryCode: preferString(
+          current.basics.location.countryCode,
+          incoming.basics.location.countryCode,
+        ),
+        region: preferString(current.basics.location.region, incoming.basics.location.region),
+      },
+      profiles:
+        incoming.basics.profiles.length > 0 ? incoming.basics.profiles : current.basics.profiles,
+    },
+    work: preferArray(current.work, incoming.work),
+    volunteer: preferArray(current.volunteer, incoming.volunteer),
+    education: preferArray(current.education, incoming.education),
+    awards: preferArray(current.awards, incoming.awards),
+    certificates: preferArray(current.certificates, incoming.certificates),
+    publications: preferArray(current.publications, incoming.publications),
+    skills: preferArray(current.skills, incoming.skills),
+    languages: preferArray(current.languages, incoming.languages),
+    interests: preferArray(current.interests, incoming.interests),
+    references: preferArray(current.references, incoming.references),
+    projects: preferArray(current.projects, incoming.projects),
+    meta: {
+      canonical: preferString(current.meta.canonical, incoming.meta.canonical),
+      version: preferString(current.meta.version, incoming.meta.version),
+      lastModified: preferString(current.meta.lastModified, incoming.meta.lastModified),
+    },
+  };
+}
+
 function readString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -1863,6 +1927,18 @@ function parseSectionArray<T>(
   return source
     .map((item) => (isPlainObject(item) ? parser(item as Record<string, unknown>) : null))
     .filter((item): item is T => Boolean(item));
+}
+
+function preferString(current: string, incoming: string): string {
+  return hasStringValue(incoming) ? incoming : current;
+}
+
+function preferArray<T>(current: T[], incoming: T[]): T[] {
+  return incoming.length > 0 ? incoming : current;
+}
+
+function hasStringValue(value: string): boolean {
+  return value.trim().length > 0;
 }
 
 function parseWorkEntry(source: Record<string, unknown>): ResumeFormValues['work'][number] | null {
