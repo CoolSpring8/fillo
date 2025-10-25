@@ -2058,7 +2058,7 @@ function buildManualBranchCopy(node: ManualValueNode): string | null {
   if (entries.length === 0) {
     return null;
   }
-  return entries.map((entry) => `${entry.path}: ${entry.value}`).join('\n');
+  return entries.map((entry) => entry.value).join('\n');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
