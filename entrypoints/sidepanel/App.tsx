@@ -1959,7 +1959,7 @@ function ManualTreeView({
         ? `[data-manual-node-id="${CSS.escape(activeMatchId)}"]`
         : `[data-manual-node-id="${activeMatchId.replace(/"/g, '\\"')}"]`;
     const element = document.querySelector(selector);
-    element?.scrollIntoView({ block: 'nearest' });
+    element?.scrollIntoView({ block: 'center' });
   }, [activeMatchId]);
 
   const copyBranch = useCallback(
