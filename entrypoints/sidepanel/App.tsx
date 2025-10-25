@@ -4,10 +4,10 @@ import {
   ActionIcon,
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Group,
-  Highlight,
   Menu,
   NativeSelect,
   Paper,
@@ -1908,15 +1908,15 @@ function ManualTreeView({
       ? theme.colors.blue?.[8] ?? '#1c7ed6'
       : theme.colors.blue?.[1] ?? '#d0ebff';
   const activeMatchBorderColor = highlightColor;
-  const highlightStyles = useMemo(
-    () => ({
-      backgroundColor: 'transparent',
-      color: highlightColor,
-      fontWeight: 600,
-    }),
-    [highlightColor],
-  );
   const trimmedQuery = searchQuery.trim();
+  const searchBarBackground =
+    colorScheme === 'dark'
+      ? theme.colors.dark?.[7] ?? theme.colors.dark?.[6] ?? '#1a1b1e'
+      : theme.white ?? '#ffffff';
+  const highlightText = useCallback(
+    (text: string) => renderTextWithHighlight(text, trimmedQuery, highlightColor),
+    [highlightColor, trimmedQuery],
+  );
 
   useEffect(() => {
     setExpandedState(expandedState);
@@ -2063,26 +2063,14 @@ function ManualTreeView({
                     fw={500}
                     style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   >
-                    {trimmedQuery.length > 0 ? (
-                      <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
-                        {manualNode.label}
-                      </Highlight>
-                    ) : (
-                      manualNode.label
-                    )}
+                    {highlightText(manualNode.label)}
                   </Text>
                   <Text
                     fz="xs"
                     c="dimmed"
                     style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   >
-                    {trimmedQuery.length > 0 ? (
-                      <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
-                        {value}
-                      </Highlight>
-                    ) : (
-                      value
-                    )}
+                    {highlightText(value)}
                   </Text>
                 </div>
               </Tooltip>
@@ -2154,13 +2142,7 @@ function ManualTreeView({
                   }}
                 />
                 <Text fw={600} fz="sm" style={{ margin: 0 }}>
-                  {trimmedQuery.length > 0 ? (
-                    <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
-                      {manualNode.label}
-                    </Highlight>
-                  ) : (
-                    manualNode.label
-                  )}
+                  {highlightText(manualNode.label)}
                 </Text>
               </div>
             </Menu.Target>
@@ -2212,13 +2194,7 @@ function ManualTreeView({
             }}
           />
           <Text fw={600} fz="sm" style={{ margin: 0 }}>
-            {trimmedQuery.length > 0 ? (
-              <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
-                {manualNode.label}
-              </Highlight>
-            ) : (
-              manualNode.label
-            )}
+            {highlightText(manualNode.label)}
           </Text>
         </div>
       );
@@ -2230,58 +2206,67 @@ function ManualTreeView({
       branchCopyLabel,
       contextNodeId,
       copyBranch,
-      highlightStyles,
       hoverBackground,
       matchBackground,
       matchesSet,
+      highlightText,
       onCopy,
       tooltipLabel,
-      trimmedQuery,
       valueCopyLabel,
     ],
   );
 
   return (
-    <Stack gap="xs">
-      <TextInput
-        value={searchQuery}
-        onChange={handleSearchChange}
-        placeholder={searchPlaceholder}
-        aria-label={searchAriaLabel}
-        size="sm"
-        leftSection={<Search size={16} strokeWidth={2} aria-hidden />}
-        rightSection={
-          <Group gap={4} wrap="nowrap">
-            {hasMatches && (
-              <Text size="xs" c="dimmed" fw={500}>
-                {`${Math.min(activeMatchIndex + 1, matchesCount)} / ${matchesCount}`}
-              </Text>
-            )}
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="gray"
-              aria-label={previousMatchLabel}
-              disabled={!hasMatches}
-              onClick={handlePreviousMatch}
-            >
-              <ChevronUp size={16} strokeWidth={2} />
-            </ActionIcon>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="gray"
-              aria-label={nextMatchLabel}
-              disabled={!hasMatches}
-              onClick={handleNextMatch}
-            >
-              <ChevronDown size={16} strokeWidth={2} />
-            </ActionIcon>
-          </Group>
-        }
-        rightSectionPointerEvents="auto"
-        rightSectionWidth={hasMatches ? 144 : 112}
-      />
+    <Stack gap={0} style={{ position: 'relative' }}>
+      <Box
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
+          backgroundColor: searchBarBackground,
+          paddingBottom: 'var(--mantine-spacing-xs)',
+        }}
+      >
+        <TextInput
+          value={searchQuery}
+          onChange={handleSearchChange}
+          placeholder={searchPlaceholder}
+          aria-label={searchAriaLabel}
+          size="sm"
+          leftSection={<Search size={16} strokeWidth={2} aria-hidden />}
+          rightSection={
+            <Group gap={4} wrap="nowrap">
+              {hasMatches && (
+                <Text size="xs" c="dimmed" fw={500}>
+                  {`${Math.min(activeMatchIndex + 1, matchesCount)} / ${matchesCount}`}
+                </Text>
+              )}
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                aria-label={previousMatchLabel}
+                disabled={!hasMatches}
+                onClick={handlePreviousMatch}
+              >
+                <ChevronUp size={16} strokeWidth={2} />
+              </ActionIcon>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                aria-label={nextMatchLabel}
+                disabled={!hasMatches}
+                onClick={handleNextMatch}
+              >
+                <ChevronDown size={16} strokeWidth={2} />
+              </ActionIcon>
+            </Group>
+          }
+          rightSectionPointerEvents="auto"
+          rightSectionWidth={hasMatches ? 144 : 112}
+        />
+      </Box>
       <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />
     </Stack>
   );
@@ -2305,6 +2290,59 @@ function flattenManualNodes(nodes: ManualValueNode[]): ManualValueNode[] {
     }
   });
   return result;
+}
+
+function renderTextWithHighlight(text: string, query: string, highlightColor: string): ReactNode {
+  if (!query) {
+    return text;
+  }
+  const normalizedQuery = query.toLowerCase();
+  if (!normalizedQuery) {
+    return text;
+  }
+  const normalizedText = text.toLowerCase();
+  let searchIndex = 0;
+  const segments: Array<{ value: string; match: boolean }> = [];
+  let matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
+
+  while (matchIndex !== -1) {
+    if (matchIndex > searchIndex) {
+      segments.push({ value: text.slice(searchIndex, matchIndex), match: false });
+    }
+    segments.push({
+      value: text.slice(matchIndex, matchIndex + query.length),
+      match: true,
+    });
+    searchIndex = matchIndex + query.length;
+    matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
+  }
+
+  if (searchIndex < text.length) {
+    segments.push({ value: text.slice(searchIndex), match: false });
+  }
+
+  return segments.map((segment, index) => {
+    if (!segment.match) {
+      return (
+        <span key={`segment-${index}`} style={{ fontWeight: 'inherit', fontSize: 'inherit' }}>
+          {segment.value}
+        </span>
+      );
+    }
+    return (
+      <mark
+        key={`segment-${index}`}
+        style={{
+          backgroundColor: 'transparent',
+          color: highlightColor,
+          fontWeight: 'inherit',
+          fontSize: 'inherit',
+        }}
+      >
+        {segment.value}
+      </mark>
+    );
+  });
 }
 
 function manualNodeHasLeaf(node: ManualValueNode): boolean {
