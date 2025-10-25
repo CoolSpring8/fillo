@@ -371,8 +371,6 @@ export default function App() {
                 ? (parsed as ResumeExtractionResult)
                 : {};
 
-            const validationResult = validateResume(resume);
-
             const snapshot: ProviderSnapshot =
               providerConfig.kind === 'openai'
                 ? {
@@ -387,7 +385,10 @@ export default function App() {
             form.setValues(mergedValues);
             form.resetDirty(mergedValues);
 
-            resumeResult = resume;
+            const mergedResume = formValuesToResume(mergedValues);
+            const validationResult = validateResume(mergedResume);
+
+            resumeResult = mergedResume;
             providerSnapshot = snapshot;
             parsedAt = new Date().toISOString();
             validation = {
@@ -502,8 +503,6 @@ export default function App() {
           ? (parsed as ResumeExtractionResult)
           : {};
 
-      const validationResult = validateResume(resume);
-
       const snapshot: ProviderSnapshot =
         providerConfig.kind === 'openai'
           ? {
@@ -518,11 +517,14 @@ export default function App() {
       form.setValues(mergedValues);
       form.resetDirty(mergedValues);
 
+      const mergedResume = formValuesToResume(mergedValues);
+      const validationResult = validateResume(mergedResume);
+
       setStatus({ phase: 'saving', message: t('options.profileForm.status.savingParsed') });
 
       const updated: ProfileRecord = {
         ...selectedProfile,
-        resume,
+        resume: mergedResume,
         provider: snapshot,
         parsedAt: new Date().toISOString(),
         validation: {
