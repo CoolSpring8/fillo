@@ -339,6 +339,10 @@ sidepanel:
     jumpToUnfilled: 跳至首个未填写
     paused: 暂停于“$1”（第 $2 / $3 项）
     progress: 进度 — 已填写 $1 / $2 · 已跳过 $3
+    manualInputLabel: 填写内容
+    manualInputPlaceholder: 在此输入要填入该字段的内容…
+    manualInputPlaceholderWithValue: 可修改或替换建议的内容。
+    manualInputHint: 接受后的内容会被记住，便于下次使用。
     memory:
       heading: 记忆
       refresh: 刷新

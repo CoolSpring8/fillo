@@ -339,6 +339,10 @@ sidepanel:
     jumpToUnfilled: First unfilled
     paused: Paused at "$1" ($2 of $3)
     progress: Progress — filled $1 of $2 · skipped $3
+    manualInputLabel: Value to fill
+    manualInputPlaceholder: Type a value to fill this field…
+    manualInputPlaceholderWithValue: Edit or replace the suggested value.
+    manualInputHint: Accepted values will be remembered for next time.
     memory:
       heading: Memory
       refresh: Refresh
