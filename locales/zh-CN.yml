@@ -302,6 +302,7 @@ sidepanel:
     resumeRoot: 简历数据
     copyHint: 点击复制
     copyBranch: 复制该部分
+    copyValue: 复制该值
   buttons:
     copy: 复制
     copyAll: 全部复制

@@ -1595,6 +1595,7 @@ export default function App() {
             nodes={manualTree}
             tooltipLabel={t('sidepanel.manual.copyHint')}
             branchCopyLabel={t('sidepanel.manual.copyBranch')}
+            valueCopyLabel={t('sidepanel.manual.copyValue')}
             onCopy={handleCopy}
           />
         )}
@@ -1826,12 +1827,19 @@ interface ManualTreeViewProps {
   nodes: ManualValueNode[];
   tooltipLabel: string;
   branchCopyLabel: string;
+  valueCopyLabel: string;
   onCopy: (label: string, value: string) => void;
 }
 
 type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
 
-function ManualTreeView({ nodes, tooltipLabel, branchCopyLabel, onCopy }: ManualTreeViewProps) {
+function ManualTreeView({
+  nodes,
+  tooltipLabel,
+  branchCopyLabel,
+  valueCopyLabel,
+  onCopy,
+}: ManualTreeViewProps) {
   if (nodes.length === 0) {
     return null;
   }
@@ -1876,45 +1884,76 @@ function ManualTreeView({ nodes, tooltipLabel, branchCopyLabel, onCopy }: Manual
 
       if (!hasChildren && typeof manualNode.value === 'string') {
         const value = manualNode.value;
+        const { onContextMenu, ...restElementProps } = rest as typeof rest & {
+          onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
+        };
+        const isMenuOpen = contextNodeId === manualNode.id;
+        const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+          event.preventDefault();
+          onContextMenu?.(event);
+          setContextNodeId(manualNode.id);
+        };
         return (
-          <Tooltip label={tooltipLabel} position="right" withArrow openDelay={250}>
-            <div
-              className={className}
-              style={{
-                ...style,
-                paddingBlock: '4px',
-                paddingInlineEnd: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: '2px',
-                borderRadius: 'var(--mantine-radius-sm)',
-                backgroundColor: isHovered ? hoverBackground : 'transparent',
-                transition: 'background-color 120ms ease',
-              }}
-              {...rest}
-              onClick={(event) => {
-                onCopy(manualNode.displayPath, value);
-                onClick?.(event);
-              }}
-            >
-              <Text
-                fz="sm"
-                fw={500}
-                style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          <Menu
+            withinPortal
+            opened={isMenuOpen}
+            onClose={() => setContextNodeId((current) => (current === manualNode.id ? null : current))}
+            closeOnItemClick
+            closeOnEscape
+          >
+            <Menu.Target>
+              <Tooltip label={tooltipLabel} position="right" withArrow openDelay={250}>
+                <div
+                  className={className}
+                  style={{
+                    ...style,
+                    paddingBlock: '4px',
+                    paddingInlineEnd: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: '2px',
+                    borderRadius: 'var(--mantine-radius-sm)',
+                    backgroundColor: isHovered ? hoverBackground : 'transparent',
+                    transition: 'background-color 120ms ease',
+                  }}
+                  {...restElementProps}
+                  onClick={(event) => {
+                    onCopy(manualNode.displayPath, value);
+                    onClick?.(event);
+                  }}
+                  onContextMenu={handleContextMenu}
+                >
+                  <Text
+                    fz="sm"
+                    fw={500}
+                    style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {manualNode.label}
+                  </Text>
+                  <Text
+                    fz="xs"
+                    c="dimmed"
+                    style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {value}
+                  </Text>
+                </div>
+              </Tooltip>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<Copy size={14} aria-hidden />}
+                onClick={() => {
+                  onCopy(manualNode.displayPath, value);
+                  setContextNodeId(null);
+                }}
               >
-                {manualNode.label}
-              </Text>
-              <Text
-                fz="xs"
-                c="dimmed"
-                style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-              >
-                {value}
-              </Text>
-            </div>
-          </Tooltip>
+                {valueCopyLabel}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         );
       }
 
@@ -2021,7 +2060,15 @@ function ManualTreeView({ nodes, tooltipLabel, branchCopyLabel, onCopy }: Manual
         </div>
       );
     },
-    [branchCopyLabel, contextNodeId, copyBranch, hoverBackground, onCopy, tooltipLabel],
+    [
+      branchCopyLabel,
+      contextNodeId,
+      copyBranch,
+      hoverBackground,
+      onCopy,
+      tooltipLabel,
+      valueCopyLabel,
+    ],
   );
 
   return <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />;

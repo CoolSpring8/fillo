@@ -302,6 +302,7 @@ sidepanel:
     resumeRoot: Resume data
     copyHint: Click to copy
     copyBranch: Copy section
+    copyValue: Copy value
   buttons:
     copy: Copy
     copyAll: Copy all
