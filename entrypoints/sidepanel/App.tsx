@@ -10,6 +10,7 @@ import {
   NativeSelect,
   Menu,
   Select,
+  Textarea,
   Paper,
   ScrollArea,
   Stack,
@@ -81,6 +82,7 @@ interface FieldEntry {
   slot: FieldSlot | null;
   selectedSlot: PromptOptionSlot | null;
   suggestion?: string;
+  manualValue: string;
   status: FieldStatus;
   reason?: string;
   slotSource: 'heuristic' | 'model' | 'unset';
@@ -296,7 +298,10 @@ export default function App() {
             if (!next.suggestion && assoc.lastValue && assoc.lastValue.trim().length > 0) {
               next.suggestion = assoc.lastValue;
             }
-            return next;
+            return {
+              ...next,
+              manualValue: deriveManualValue(entry, next.suggestion),
+            };
           });
           setFields(withMemory);
         })().catch(console.error);
@@ -496,12 +501,28 @@ export default function App() {
   };
 
   const handleSlotSelectionChange = (fieldId: string, slot: PromptOptionSlot | null) => {
+    const option = slot ? manualOptions.find((entry) => entry.slot === slot) ?? null : null;
     setFields((current) =>
       current.map((entry) =>
         entry.field.id === fieldId
           ? {
               ...entry,
               selectedSlot: slot,
+              suggestion: option ? option.value : entry.suggestion,
+              manualValue: option ? option.value : entry.manualValue,
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const handleManualValueChange = (fieldId: string, value: string) => {
+    setFields((current) =>
+      current.map((entry) =>
+        entry.field.id === fieldId
+          ? {
+              ...entry,
+              manualValue: value,
             }
           : entry,
       ),
@@ -634,6 +655,7 @@ export default function App() {
         return {
           selectedOption: null as PromptOption | null,
           fallbackOption: null as PromptOption | null,
+          manualValue: '',
           value: '',
         };
       }
@@ -645,8 +667,11 @@ export default function App() {
         entry.slot !== null
           ? manualOptions.find((option) => option.slot === entry.slot) ?? null
           : null;
-      const value = (selectedOption?.value ?? fallbackOption?.value ?? entry.suggestion ?? '').trim();
-      return { selectedOption, fallbackOption, value };
+      const manualValue = entry.manualValue ?? '';
+      const manualValueTrimmed = manualValue.trim();
+      const fallbackValue = (selectedOption?.value ?? fallbackOption?.value ?? entry.suggestion ?? '').trim();
+      const value = manualValueTrimmed.length > 0 ? manualValueTrimmed : fallbackValue;
+      return { selectedOption, fallbackOption, manualValue, value };
     },
     [manualOptions],
   );
@@ -684,6 +709,7 @@ export default function App() {
             ...entry,
             slot: match.slot,
             suggestion,
+            manualValue: deriveManualValue(entry, suggestion),
             slotSource: 'model',
             slotNote: match.reason,
             selectedSlot: suggestion && shouldUpdateSelection ? match.slot : entry.selectedSlot,
@@ -1152,9 +1178,12 @@ export default function App() {
   }
 
   function renderGuidedControls(entry: FieldEntry) {
-    const { fallbackOption, value } = resolveEntryData(entry);
+    const { fallbackOption, manualValue, value } = resolveEntryData(entry);
     const currentSlot = entry.selectedSlot ?? (fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : null);
     const fillDisabled = entry.status === 'pending' || !value;
+    const placeholderKey = fallbackOption
+      ? 'sidepanel.guided.manualInputPlaceholderWithValue'
+      : 'sidepanel.guided.manualInputPlaceholder';
 
     return (
       <Card withBorder radius="md" shadow="sm">
@@ -1187,11 +1216,29 @@ export default function App() {
             searchable={manualOptions.length > 7}
             comboboxProps={{ withinPortal: true }}
           />
-          <Text fz="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>
-            {value ? truncate(value, 200) : t('sidepanel.field.chooseValue')}
-          </Text>
+          {entry.field.kind !== 'file' ? (
+            <Textarea
+              label={t('sidepanel.guided.manualInputLabel' as any)}
+              placeholder={t(placeholderKey as any)}
+              autosize
+              minRows={2}
+              maxRows={6}
+              value={manualValue}
+              onChange={(event) => handleManualValueChange(entry.field.id, event.currentTarget.value)}
+              description={t('sidepanel.guided.manualInputHint' as any)}
+            />
+          ) : (
+            <Text fz="xs" c="dimmed">
+              {t('sidepanel.preview.file')}
+            </Text>
+          )}
           <Group gap="sm" justify="flex-end">
-            <Button size="sm" variant="default" onClick={() => handleGuidedSkip(entry)}>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => handleGuidedSkip(entry)}
+              disabled={entry.status === 'pending'}
+            >
               {t('sidepanel.guided.skip')}
             </Button>
             <Button
@@ -1643,6 +1690,7 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
       slot,
       selectedSlot: suggestion ? slot : null,
       suggestion,
+      manualValue: suggestion ?? '',
       status: 'idle',
       reason: undefined,
       slotSource: slot ? 'heuristic' : 'unset',
@@ -1722,6 +1770,17 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
 
     return null;
   }
+}
+
+function deriveManualValue(entry: FieldEntry, nextSuggestion?: string | null): string {
+  const currentManual = entry.manualValue ?? '';
+  const previousSuggestion = entry.suggestion ?? '';
+  const trimmedManual = currentManual.trim();
+  const trimmedPreviousSuggestion = previousSuggestion.trim();
+  if (!trimmedManual || trimmedManual === trimmedPreviousSuggestion) {
+    return nextSuggestion ?? '';
+  }
+  return currentManual;
 }
 
 function formatProfileLabel(profile: ProfileRecord): string {
