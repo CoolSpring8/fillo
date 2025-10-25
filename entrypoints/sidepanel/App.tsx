@@ -16,7 +16,7 @@ import {
   Stack,
   Tabs,
   Text,
-  TextArea,
+  Textarea,
   TextInput,
   Title,
   Tree,
