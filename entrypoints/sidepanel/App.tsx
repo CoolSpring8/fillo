@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react';
+import type { ChangeEvent, JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
@@ -7,21 +7,23 @@ import {
   Button,
   Card,
   Group,
-  NativeSelect,
+  Highlight,
   Menu,
-  Select,
+  NativeSelect,
   Paper,
   ScrollArea,
+  Select,
   Stack,
   Tabs,
   Text,
+  TextInput,
   Title,
   Tree,
   Tooltip,
   getTreeExpandedState,
-  useTree,
-  useMantineTheme,
   useComputedColorScheme,
+  useMantineTheme,
+  useTree,
   type RenderTreeNodePayload,
   type TreeNodeData,
 } from '@mantine/core';
@@ -29,13 +31,16 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Copy,
   Eraser,
   ListChecks,
   Play,
   RefreshCcw,
   RotateCcw,
+  Search,
   Sparkles,
   Target,
   Trash2,
@@ -1596,6 +1601,10 @@ export default function App() {
             tooltipLabel={t('sidepanel.manual.copyHint')}
             branchCopyLabel={t('sidepanel.manual.copyBranch')}
             valueCopyLabel={t('sidepanel.manual.copyValue')}
+            searchPlaceholder={t('sidepanel.manual.searchPlaceholder' as any)}
+            searchAriaLabel={t('sidepanel.manual.searchAria' as any)}
+            previousMatchLabel={t('sidepanel.manual.searchPrevious' as any)}
+            nextMatchLabel={t('sidepanel.manual.searchNext' as any)}
             onCopy={handleCopy}
           />
         )}
@@ -1828,6 +1837,10 @@ interface ManualTreeViewProps {
   tooltipLabel: string;
   branchCopyLabel: string;
   valueCopyLabel: string;
+  searchPlaceholder: string;
+  searchAriaLabel: string;
+  previousMatchLabel: string;
+  nextMatchLabel: string;
   onCopy: (label: string, value: string) => void;
 }
 
@@ -1838,6 +1851,10 @@ function ManualTreeView({
   tooltipLabel,
   branchCopyLabel,
   valueCopyLabel,
+  searchPlaceholder,
+  searchAriaLabel,
+  previousMatchLabel,
+  nextMatchLabel,
   onCopy,
 }: ManualTreeViewProps) {
   if (nodes.length === 0) {
@@ -1851,19 +1868,99 @@ function ManualTreeView({
       ? theme.colors.dark?.[6] ?? theme.colors.dark?.[5] ?? '#2c2e33'
       : theme.colors.gray?.[1] ?? theme.colors.gray?.[2] ?? '#f1f3f5';
   const treeData = useMemo<ManualTreeNodeData[]>(() => nodes.map(mapManualNodeToTreeNode), [nodes]);
-  const initialExpandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
-  const tree = useTree({ initialExpandedState });
+  const expandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
+  const tree = useTree({ initialExpandedState: expandedState });
   const { setExpandedState, clearSelected, setHoveredNode } = tree;
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+
+  const flattenedNodes = useMemo(() => flattenManualNodes(nodes), [nodes]);
+  const matches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return [] as string[];
+    }
+    return flattenedNodes
+      .filter((node) => {
+        const labelMatch = node.label.toLowerCase().includes(query);
+        const valueMatch =
+          typeof node.value === 'string' && node.value.toLowerCase().includes(query);
+        return labelMatch || valueMatch;
+      })
+      .map((node) => node.id);
+  }, [flattenedNodes, searchQuery]);
+  const matchesSet = useMemo(() => new Set(matches), [matches]);
+  const matchesCount = matches.length;
+  const hasMatches = matchesCount > 0;
+  const activeMatchId = hasMatches
+    ? matches[Math.min(activeMatchIndex, Math.max(matchesCount - 1, 0))]
+    : null;
+  const highlightColor =
+    theme.colors.blue?.[colorScheme === 'dark' ? 3 : 6] ??
+    (colorScheme === 'dark' ? '#4dabf7' : '#1c7ed6');
+  const matchBackground =
+    colorScheme === 'dark'
+      ? theme.colors.blue?.[9] ?? '#1864ab'
+      : theme.colors.blue?.[0] ?? '#e7f5ff';
+  const activeMatchBackground =
+    colorScheme === 'dark'
+      ? theme.colors.blue?.[8] ?? '#1c7ed6'
+      : theme.colors.blue?.[1] ?? '#d0ebff';
+  const activeMatchBorderColor = highlightColor;
+  const highlightStyles = useMemo(
+    () => ({
+      backgroundColor: 'transparent',
+      color: highlightColor,
+      fontWeight: 600,
+    }),
+    [highlightColor],
+  );
+  const trimmedQuery = searchQuery.trim();
+
   useEffect(() => {
-    setExpandedState(initialExpandedState);
+    setExpandedState(expandedState);
     clearSelected();
     setHoveredNode(null);
-  }, [initialExpandedState, setExpandedState, clearSelected, setHoveredNode]);
+  }, [
+    trimmedQuery,
+    expandedState,
+    setExpandedState,
+    clearSelected,
+    setHoveredNode,
+  ]);
 
   useEffect(() => {
     setContextNodeId(null);
   }, [treeData]);
+
+  useEffect(() => {
+    setActiveMatchIndex(0);
+  }, [trimmedQuery]);
+
+  useEffect(() => {
+    setActiveMatchIndex((current) => {
+      if (!hasMatches) {
+        return 0;
+      }
+      return Math.min(current, matchesCount - 1);
+    });
+  }, [hasMatches, matchesCount]);
+
+  useEffect(() => {
+    if (!activeMatchId) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const selector =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? `[data-manual-node-id="${CSS.escape(activeMatchId)}"]`
+        : `[data-manual-node-id="${activeMatchId.replace(/"/g, '\\"')}"]`;
+    const element = document.querySelector(selector);
+    element?.scrollIntoView({ block: 'nearest' });
+  }, [activeMatchId]);
 
   const copyBranch = useCallback(
     (node: ManualValueNode) => {
@@ -1876,11 +1973,44 @@ function ManualTreeView({
     [onCopy],
   );
 
+  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.currentTarget.value);
+  }, []);
+
+  const handleNextMatch = useCallback(() => {
+    if (!hasMatches) {
+      return;
+    }
+    setActiveMatchIndex((current) => (current + 1) % matchesCount);
+  }, [hasMatches, matchesCount]);
+
+  const handlePreviousMatch = useCallback(() => {
+    if (!hasMatches) {
+      return;
+    }
+    setActiveMatchIndex((current) => (current - 1 + matchesCount) % matchesCount);
+  }, [hasMatches, matchesCount]);
+
   const renderNode = useCallback(
     ({ node, elementProps, hasChildren, expanded }: RenderTreeNodePayload) => {
       const manualNode = (node as ManualTreeNodeData).manualNode;
       const isHovered = elementProps['data-hovered'] === true;
       const { className, style, onClick, ...rest } = elementProps;
+      const isMatch = matchesSet.has(manualNode.id);
+      const isActiveMatch = activeMatchId === manualNode.id;
+      const backgroundColor = (() => {
+        if (isActiveMatch) {
+          return activeMatchBackground;
+        }
+        if (isMatch) {
+          return matchBackground;
+        }
+        if (isHovered) {
+          return hoverBackground;
+        }
+        return 'transparent';
+      })();
+      const borderColor = isActiveMatch ? activeMatchBorderColor : 'transparent';
 
       if (!hasChildren && typeof manualNode.value === 'string') {
         const value = manualNode.value;
@@ -1915,10 +2045,13 @@ function ManualTreeView({
                     alignItems: 'flex-start',
                     gap: '2px',
                     borderRadius: 'var(--mantine-radius-sm)',
-                    backgroundColor: isHovered ? hoverBackground : 'transparent',
-                    transition: 'background-color 120ms ease',
+                    border: '1px solid transparent',
+                    backgroundColor,
+                    borderColor,
+                    transition: 'background-color 120ms ease, border-color 120ms ease',
                   }}
                   {...restElementProps}
+                  data-manual-node-id={manualNode.id}
                   onClick={(event) => {
                     onCopy(manualNode.displayPath, value);
                     onClick?.(event);
@@ -1930,14 +2063,26 @@ function ManualTreeView({
                     fw={500}
                     style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   >
-                    {manualNode.label}
+                    {trimmedQuery.length > 0 ? (
+                      <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
+                        {manualNode.label}
+                      </Highlight>
+                    ) : (
+                      manualNode.label
+                    )}
                   </Text>
                   <Text
                     fz="xs"
                     c="dimmed"
                     style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   >
-                    {value}
+                    {trimmedQuery.length > 0 ? (
+                      <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
+                        {value}
+                      </Highlight>
+                    ) : (
+                      value
+                    )}
                   </Text>
                 </div>
               </Tooltip>
@@ -1988,12 +2133,15 @@ function ManualTreeView({
                   gap: 'var(--mantine-spacing-xs)',
                   cursor: 'pointer',
                   borderRadius: 'var(--mantine-radius-sm)',
-                  backgroundColor: isHovered ? hoverBackground : 'transparent',
-                  transition: 'background-color 120ms ease',
+                  border: '1px solid transparent',
+                  backgroundColor,
+                  borderColor,
+                  transition: 'background-color 120ms ease, border-color 120ms ease',
                 }}
                 onClick={onClick}
                 onContextMenu={handleContextMenu}
                 {...restElementProps}
+                data-manual-node-id={manualNode.id}
               >
                 <ChevronRight
                   size={16}
@@ -2006,7 +2154,13 @@ function ManualTreeView({
                   }}
                 />
                 <Text fw={600} fz="sm" style={{ margin: 0 }}>
-                  {manualNode.label}
+                  {trimmedQuery.length > 0 ? (
+                    <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
+                      {manualNode.label}
+                    </Highlight>
+                  ) : (
+                    manualNode.label
+                  )}
                 </Text>
               </div>
             </Menu.Target>
@@ -2038,11 +2192,14 @@ function ManualTreeView({
             gap: 'var(--mantine-spacing-xs)',
             cursor: 'pointer',
             borderRadius: 'var(--mantine-radius-sm)',
-            backgroundColor: isHovered ? hoverBackground : 'transparent',
-            transition: 'background-color 120ms ease',
+            border: '1px solid transparent',
+            backgroundColor,
+            borderColor,
+            transition: 'background-color 120ms ease, border-color 120ms ease',
           }}
           onClick={onClick}
           {...rest}
+          data-manual-node-id={manualNode.id}
         >
           <ChevronRight
             size={16}
@@ -2055,23 +2212,79 @@ function ManualTreeView({
             }}
           />
           <Text fw={600} fz="sm" style={{ margin: 0 }}>
-            {manualNode.label}
+            {trimmedQuery.length > 0 ? (
+              <Highlight highlight={trimmedQuery} highlightStyles={highlightStyles}>
+                {manualNode.label}
+              </Highlight>
+            ) : (
+              manualNode.label
+            )}
           </Text>
         </div>
       );
     },
     [
+      activeMatchBackground,
+      activeMatchBorderColor,
+      activeMatchId,
       branchCopyLabel,
       contextNodeId,
       copyBranch,
+      highlightStyles,
       hoverBackground,
+      matchBackground,
+      matchesSet,
       onCopy,
       tooltipLabel,
+      trimmedQuery,
       valueCopyLabel,
     ],
   );
 
-  return <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />;
+  return (
+    <Stack gap="xs">
+      <TextInput
+        value={searchQuery}
+        onChange={handleSearchChange}
+        placeholder={searchPlaceholder}
+        aria-label={searchAriaLabel}
+        size="sm"
+        leftSection={<Search size={16} strokeWidth={2} aria-hidden />}
+        rightSection={
+          <Group gap={4} wrap="nowrap">
+            {hasMatches && (
+              <Text size="xs" c="dimmed" fw={500}>
+                {`${Math.min(activeMatchIndex + 1, matchesCount)} / ${matchesCount}`}
+              </Text>
+            )}
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="gray"
+              aria-label={previousMatchLabel}
+              disabled={!hasMatches}
+              onClick={handlePreviousMatch}
+            >
+              <ChevronUp size={16} strokeWidth={2} />
+            </ActionIcon>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="gray"
+              aria-label={nextMatchLabel}
+              disabled={!hasMatches}
+              onClick={handleNextMatch}
+            >
+              <ChevronDown size={16} strokeWidth={2} />
+            </ActionIcon>
+          </Group>
+        }
+        rightSectionPointerEvents="auto"
+        rightSectionWidth={hasMatches ? 144 : 112}
+      />
+      <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />
+    </Stack>
+  );
 }
 
 function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
@@ -2081,6 +2294,17 @@ function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
     manualNode: node,
     children: node.children?.map(mapManualNodeToTreeNode),
   };
+}
+
+function flattenManualNodes(nodes: ManualValueNode[]): ManualValueNode[] {
+  const result: ManualValueNode[] = [];
+  nodes.forEach((node) => {
+    result.push(node);
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenManualNodes(node.children));
+    }
+  });
+  return result;
 }
 
 function manualNodeHasLeaf(node: ManualValueNode): boolean {
