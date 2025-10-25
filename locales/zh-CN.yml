@@ -47,6 +47,11 @@ options:
       modalDescription: 请选择 ApplyPilot 应如何处理所选 PDF。
       parseAction: 自动解析
       storeAction: 仅保存文件
+      parseAgain: 重新运行 AI 解析
+      parseAgainConfirmTitle: 使用新的 AI 解析覆盖？
+      parseAgainConfirmDescription: 再次运行解析会覆盖获得新值的字段。对于没有新数据的输入，将保留现有内容。
+      parseAgainConfirmConfirm: 重新解析
+      parseAgainConfirmCancel: 取消
     sections:
       basics: 基础信息
       work: 工作经历
