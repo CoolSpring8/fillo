@@ -20,7 +20,7 @@ interface ModePanelProps {
 
 export function ModePanel({ children }: ModePanelProps): JSX.Element {
   return (
-    <ScrollArea style={{ flex: 1 }} px="md" py="md">
+    <ScrollArea style={{ flex: 1, height: '100%' }} px="md" py="md">
       <Stack gap="md">{children}</Stack>
     </ScrollArea>
   );
