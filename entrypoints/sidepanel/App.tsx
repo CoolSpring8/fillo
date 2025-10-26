@@ -666,11 +666,6 @@ export default function App() {
       return;
     }
 
-    if (manualOptions.length === 0) {
-      notify(t('sidepanel.feedback.noValues'), 'info');
-      return;
-    }
-
     const { value } = resolveEntryData(entry);
     if (!value) {
       notify(t('sidepanel.feedback.noValues'), 'info');
@@ -1390,14 +1385,14 @@ export default function App() {
           />
           {entry.field.kind !== 'file' ? (
             <Textarea
-              label={t('sidepanel.guided.manualInputLabel' as any)}
-              placeholder={t(placeholderKey as any)}
+              label={t('sidepanel.guided.manualInputLabel')}
+              placeholder={t(placeholderKey )}
               autosize
               minRows={2}
               maxRows={6}
               value={manualValue}
               onChange={(event) => handleManualValueChange(entry.field.id, event.currentTarget.value)}
-              description={t('sidepanel.guided.manualInputHint' as any)}
+              description={t('sidepanel.guided.manualInputHint')}
             />
           ) : (
             <Text fz="xs" c="dimmed">
@@ -1748,11 +1743,14 @@ export default function App() {
       );
     }
 
-    const { fallbackOption, value } = resolveEntryData(selectedEntry);
+    const { fallbackOption, manualValue, value } = resolveEntryData(selectedEntry);
     const currentSlot =
       selectedEntry.selectedSlot ??
       (fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : null);
     const fillDisabled = selectedEntry.status === 'pending' || !value;
+    const placeholderKey = fallbackOption
+      ? 'sidepanel.guided.manualInputPlaceholderWithValue'
+      : 'sidepanel.guided.manualInputPlaceholder';
 
     return (
       <Stack gap="sm">
@@ -1784,9 +1782,16 @@ export default function App() {
           searchable={manualOptions.length > 7}
           comboboxProps={{ withinPortal: true }}
         />
-        <Text fz="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>
-          {value ? truncate(value, 200) : t('sidepanel.field.chooseValue')}
-        </Text>
+        <Textarea
+          label={t('sidepanel.guided.manualInputLabel')}
+          placeholder={t(placeholderKey )}
+          autosize
+          minRows={2}
+          maxRows={6}
+          value={manualValue}
+          onChange={(event) => handleManualValueChange(selectedEntry.field.id, event.currentTarget.value)}
+          description={t('sidepanel.guided.manualInputHint')}
+        />
         <Group justify="flex-end">
           <Button size="sm" disabled={fillDisabled} onClick={() => handleReview(selectedEntry)}>
             {t('sidepanel.buttons.fillField')}
@@ -1815,10 +1820,10 @@ export default function App() {
             tooltipLabel={t('sidepanel.manual.copyHint')}
             branchCopyLabel={t('sidepanel.manual.copyBranch')}
             valueCopyLabel={t('sidepanel.manual.copyValue')}
-            searchPlaceholder={t('sidepanel.manual.searchPlaceholder' as any)}
-            searchAriaLabel={t('sidepanel.manual.searchAria' as any)}
-            previousMatchLabel={t('sidepanel.manual.searchPrevious' as any)}
-            nextMatchLabel={t('sidepanel.manual.searchNext' as any)}
+            searchPlaceholder={t('sidepanel.manual.searchPlaceholder')}
+            searchAriaLabel={t('sidepanel.manual.searchAria')}
+            previousMatchLabel={t('sidepanel.manual.searchPrevious')}
+            nextMatchLabel={t('sidepanel.manual.searchNext')}
             onCopy={handleCopy}
           />
         )}
