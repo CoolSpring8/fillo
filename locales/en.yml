@@ -282,6 +282,11 @@ popup:
 sidepanel:
   title: Resume Helper
   subtitle: Select a profile and review each field before filling.
+  permission:
+    title: Allow Apply Pilot to scan this page?
+    body: Apply Pilot scans the current page to detect application fields and map them to your profile before suggesting anything.
+    note: We only inspect the page after you approve. Close the side panel if you prefer not to proceed.
+    allow: Allow scanning
   toolbar:
     scanning: Scanning…
     rescan: Rescan page

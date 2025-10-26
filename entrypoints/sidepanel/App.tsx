@@ -76,6 +76,29 @@ function isFieldSlotValue(slot: PromptOptionSlot | null | undefined): slot is Fi
   return typeof slot === 'string' && !slot.startsWith('profile.');
 }
 
+function hexToRgba(color: string | undefined, alpha: number): string {
+  if (!color) {
+    return `rgba(0, 0, 0, ${alpha})`;
+  }
+  let hex = color.trim();
+  if (hex.startsWith('#')) {
+    hex = hex.slice(1);
+  }
+  if (hex.length === 3) {
+    hex = hex
+      .split('')
+      .map((char) => char + char)
+      .join('');
+  }
+  if (hex.length !== 6 || Number.isNaN(Number.parseInt(hex, 16))) {
+    return `rgba(0, 0, 0, ${alpha})`;
+  }
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 type PanelMode = 'dom' | 'guided' | 'manual';
 
 type FieldStatus = 'idle' | 'pending' | 'filled' | 'skipped' | 'failed';
@@ -113,6 +136,7 @@ export default function App() {
   const [viewState, setViewState] = useState<ViewState>({ loadingProfiles: true });
   const [scanning, setScanning] = useState(false);
   const [classifying, setClassifying] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
   const defaultAdapterIds = useMemo(() => getAllAdapterIds(), []);
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
   // Guided mode state
@@ -122,6 +146,20 @@ export default function App() {
   const [guidedSkipped, setGuidedSkipped] = useState<number>(0);
   const [memoryList, setMemoryList] = useState<Array<{ key: string; association: any }>>([]);
   const { t } = i18n;
+  const theme = useMantineTheme();
+  const colorScheme = useComputedColorScheme('light');
+  const primaryPalette = theme.colors[theme.primaryColor] ?? theme.colors.blue ?? [];
+  const accentPalette = theme.colors.teal ?? theme.colors.cyan ?? primaryPalette;
+  const softPalette = theme.colors.pink ?? theme.colors.violet ?? primaryPalette;
+  const neutralPalette = theme.colors.gray ?? [];
+  const surfaceBaseHex = colorScheme === 'dark' ? theme.colors.dark?.[8] ?? '#0b1020' : theme.white ?? '#ffffff';
+  const surfaceElevatedHex =
+    colorScheme === 'dark' ? theme.colors.dark?.[6] ?? '#161b2a' : neutralPalette?.[0] ?? '#f8f9fa';
+  const brandPrimaryHex = primaryPalette?.[colorScheme === 'dark' ? 4 : 6] ?? '#3345a2';
+  const brandBrightHex = primaryPalette?.[colorScheme === 'dark' ? 5 : 4] ?? '#4c6ef5';
+  const accentHex = accentPalette?.[colorScheme === 'dark' ? 5 : 2] ?? '#15aabf';
+  const softHex = softPalette?.[colorScheme === 'dark' ? 4 : 1] ?? '#ffd6e8';
+  const neutralTextHex = neutralPalette?.[colorScheme === 'dark' ? 2 : 7] ?? '#495057';
 
   const portRef = useRef<RuntimePort | null>(null);
   const slotValuesRef = useRef<SlotValueMap>({});
@@ -266,6 +304,29 @@ export default function App() {
   }, [defaultAdapterIds]);
 
   useEffect(() => {
+    const styleId = 'apply-pilot-permission-gradient';
+    if (document.getElementById(styleId)) {
+      return;
+    }
+    const styleElement = document.createElement('style');
+    styleElement.id = styleId;
+    styleElement.textContent = `
+      @keyframes apply-pilot-permission-gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+    `;
+    document.head.appendChild(styleElement);
+    return () => {
+      const existing = document.getElementById(styleId);
+      if (existing) {
+        existing.remove();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const port = browser.runtime.connect({ name: 'sidepanel' });
     portRef.current = port;
 
@@ -335,6 +396,7 @@ export default function App() {
 
     port.onDisconnect.addListener(() => {
       portRef.current = null;
+      setPermissionGranted(false);
     });
 
     return () => {
@@ -344,21 +406,19 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!portRef.current) {
-      return;
-    }
-    requestScan();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProfileId]);
-
-  const sendMessage = useCallback((payload: Record<string, unknown>) => {
-    const port = portRef.current;
-    if (!port) {
-      return;
-    }
-    port.postMessage(payload);
-  }, []);
+  const sendMessage = useCallback(
+    (payload: Record<string, unknown>) => {
+      if (!permissionGranted) {
+        return;
+      }
+      const port = portRef.current;
+      if (!port) {
+        return;
+      }
+      port.postMessage(payload);
+    },
+    [permissionGranted],
+  );
 
   const notify = useCallback((message: string, tone: 'info' | 'success' | 'error' = 'info') => {
     const colorMap: Record<'info' | 'success' | 'error', 'brand' | 'green' | 'red'> = {
@@ -465,7 +525,42 @@ export default function App() {
 
   // Auto mode flow removed
 
-  const requestScan = () => {
+  const overlayGradient = useMemo(
+    () =>
+      `linear-gradient(140deg,
+        ${hexToRgba(surfaceBaseHex, colorScheme === 'dark' ? 0.94 : 0.96)} 0%,
+        ${hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.42 : 0.24)} 30%,
+        ${hexToRgba(accentHex, colorScheme === 'dark' ? 0.32 : 0.22)} 60%,
+        ${hexToRgba(softHex, colorScheme === 'dark' ? 0.36 : 0.22)} 100%)`,
+    [accentHex, brandBrightHex, colorScheme, softHex, surfaceBaseHex],
+  );
+
+  const permissionCardStyles = useMemo(
+    () => ({
+      position: 'relative' as const,
+      borderRadius: 24,
+      padding: '2.25rem',
+      background: hexToRgba(surfaceElevatedHex, colorScheme === 'dark' ? 0.88 : 0.94),
+      border: `1px solid ${hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.34 : 0.18)}`,
+      boxShadow:
+        colorScheme === 'dark'
+          ? '0 32px 70px rgba(5, 10, 25, 0.55)'
+          : '0 32px 70px rgba(15, 23, 42, 0.14)',
+      backdropFilter: `blur(${colorScheme === 'dark' ? 12 : 18}px)`,
+    }),
+    [brandBrightHex, colorScheme, surfaceElevatedHex],
+  );
+
+  const permissionTitleColor = colorScheme === 'dark' ? theme.white : brandPrimaryHex;
+  const permissionBodyColor = hexToRgba(neutralTextHex, colorScheme === 'dark' ? 0.86 : 0.92);
+  const permissionNoteBackground = hexToRgba(softHex, colorScheme === 'dark' ? 0.2 : 0.3);
+  const permissionNoteBorder = hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.38 : 0.24);
+  const permissionNoteText = hexToRgba(neutralTextHex, colorScheme === 'dark' ? 0.78 : 0.82);
+
+  const requestScan = useCallback(() => {
+    if (!permissionGranted) {
+      return;
+    }
     if (!portRef.current) {
       return;
     }
@@ -476,7 +571,14 @@ export default function App() {
     setFields([]);
     setSelectedFieldId(null);
     sendMessage({ kind: 'SCAN_FIELDS', requestId });
-  };
+  }, [permissionGranted, sendMessage]);
+
+  useEffect(() => {
+    if (!permissionGranted || !portRef.current) {
+      return;
+    }
+    requestScan();
+  }, [permissionGranted, requestScan, selectedProfileId]);
 
   const handleFillResult = (message: FillResultMessage) => {
     setFields((current) =>
@@ -761,8 +863,12 @@ export default function App() {
       .create({ url: browser.runtime.getURL('/options.html') })
       .catch((error: unknown) => {
         console.warn('Unable to open options page.', error);
-      });
+    });
   };
+
+  const handlePermissionAccept = useCallback(() => {
+    setPermissionGranted(true);
+  }, []);
 
   const profileOptions = useMemo(
     () =>
@@ -883,94 +989,163 @@ export default function App() {
     );
   };
 
-  return (
-    <Stack gap={0} style={{ height: '100vh' }}>
-      <Paper shadow="sm" withBorder={false} px="md" py="sm">
-        <Stack gap={2}>
-          <Title order={3}>{t('sidepanel.title')}</Title>
-          <Text fz="sm" c="dimmed">
-            {t('sidepanel.subtitle')}
-          </Text>
-        </Stack>
-      </Paper>
-      <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
-        <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-          <Group gap="xs" wrap="nowrap" align="flex-end">
-            <NativeSelect
-              label={t('popup.title')}
-              value={selectedProfileId ?? ''}
-              onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
-              data={selectOptions}
-              size="sm"
-              style={{ flex: 1 }}
-            />
-            <Tooltip label={t('sidepanel.toolbar.manageProfiles')} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="lg"
-                radius="md"
-                onClick={openProfilesPage}
-                aria-label={t('sidepanel.toolbar.manageProfiles')}
+  const permissionOverlay = !permissionGranted ? (
+    <Box
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2.5rem 1.5rem',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: 'none',
+          background: overlayGradient,
+          backgroundSize: '280% 280%',
+          animation: 'apply-pilot-permission-gradient 24s ease infinite',
+          backdropFilter: `blur(${colorScheme === 'dark' ? 16 : 20}px)`,
+        }}
+      />
+      <Box style={{ position: 'relative', width: '100%', maxWidth: 460, zIndex: 1 }}>
+        <Box style={permissionCardStyles}>
+          <Stack gap="lg" align="center">
+            <Title order={2} ta="center" style={{ color: permissionTitleColor }}>
+              {t('sidepanel.permission.title')}
+            </Title>
+            <Text fz="sm" ta="center" style={{ color: permissionBodyColor }}>
+              {t('sidepanel.permission.body')}
+            </Text>
+            <Paper
+              radius="lg"
+              withBorder={false}
+              px="md"
+              py="sm"
+              style={{
+                width: '100%',
+                background: permissionNoteBackground,
+                border: `1px solid ${permissionNoteBorder}`,
+              }}
+            >
+              <Text fz="xs" ta="center" style={{ color: permissionNoteText }}>
+                {t('sidepanel.permission.note')}
+              </Text>
+            </Paper>
+            <Group gap="sm" justify="center" wrap="wrap">
+              <Button
+                size="md"
+                radius="lg"
+                color={theme.primaryColor}
+                onClick={handlePermissionAccept}
+                leftSection={<CheckCircle2 size={16} />}
               >
-                <Users size={18} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Paper>
-        <Tabs
-          value={mode}
-          onChange={(value) => setMode((value as PanelMode) ?? 'dom')}
-          keepMounted={false}
-          variant="outline"
-          radius="md"
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-        >
-          <Tabs.List>
-            <Tabs.Tab value="dom">{t('sidepanel.tabs.dom')}</Tabs.Tab>
-            <Tabs.Tab value="guided">{t('sidepanel.tabs.guided')}</Tabs.Tab>
-            <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
-          </Tabs.List>
+                {t('sidepanel.permission.allow')}
+              </Button>
+            </Group>
+          </Stack>
+        </Box>
+      </Box>
+    </Box>
+  ) : null;
 
-          <Tabs.Panel
-            value="dom"
+  return (
+    <Box style={{ position: 'relative', height: '100vh' }}>
+      <Stack gap={0} style={{ height: '100%' }}>
+        <Paper shadow="sm" withBorder={false} px="md" py="sm">
+          <Stack gap={2}>
+            <Title order={3}>{t('sidepanel.title')}</Title>
+            <Text fz="sm" c="dimmed">
+              {t('sidepanel.subtitle')}
+            </Text>
+          </Stack>
+        </Paper>
+        <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
+          <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
+            <Group gap="xs" wrap="nowrap" align="flex-end">
+              <NativeSelect
+                label={t('popup.title')}
+                value={selectedProfileId ?? ''}
+                onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
+                data={selectOptions}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <Tooltip label={t('sidepanel.toolbar.manageProfiles')} withArrow>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="lg"
+                  radius="md"
+                  onClick={openProfilesPage}
+                  aria-label={t('sidepanel.toolbar.manageProfiles')}
+                >
+                  <Users size={18} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          </Paper>
+          <Tabs
+            value={mode}
+            onChange={(value) => setMode((value as PanelMode) ?? 'dom')}
+            keepMounted={false}
+            variant="outline"
+            radius="md"
             style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
-            <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
-              <Paper
-                px="md"
-                py="sm"
-                withBorder
-                shadow="xs"
-                style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-              >
-                {renderDomToolbar()}
-              </Paper>
-              <ScrollArea style={{ flex: 1 }} px="md" py="md">
-                <Stack gap="md">
-                  {renderDomMode()}
-                </Stack>
-              </ScrollArea>
-              <Paper
-                px="md"
-                py="sm"
-                withBorder
-                shadow="sm"
-                style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
-              >
-                {renderSelectionFooter()}
-              </Paper>
-            </Stack>
-          </Tabs.Panel>
-          <Tabs.Panel value="guided" style={{ flex: 1, overflow: 'hidden' }}>
-            {renderPanel(renderGuidedMode())}
-          </Tabs.Panel>
-          <Tabs.Panel value="manual" style={{ flex: 1, overflow: 'hidden' }}>
-            {renderPanel(renderManualMode())}
-          </Tabs.Panel>
-        </Tabs>
+            <Tabs.List>
+              <Tabs.Tab value="dom">{t('sidepanel.tabs.dom')}</Tabs.Tab>
+              <Tabs.Tab value="guided">{t('sidepanel.tabs.guided')}</Tabs.Tab>
+              <Tabs.Tab value="manual">{t('sidepanel.tabs.manual')}</Tabs.Tab>
+            </Tabs.List>
+
+            <Tabs.Panel
+              value="dom"
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+              <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
+                <Paper
+                  px="md"
+                  py="sm"
+                  withBorder
+                  shadow="xs"
+                  style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+                >
+                  {renderDomToolbar()}
+                </Paper>
+                <ScrollArea style={{ flex: 1 }} px="md" py="md">
+                  <Stack gap="md">
+                    {renderDomMode()}
+                  </Stack>
+                </ScrollArea>
+                <Paper
+                  px="md"
+                  py="sm"
+                  withBorder
+                  shadow="sm"
+                  style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
+                >
+                  {renderSelectionFooter()}
+                </Paper>
+              </Stack>
+            </Tabs.Panel>
+            <Tabs.Panel value="guided" style={{ flex: 1, overflow: 'hidden' }}>
+              {renderPanel(renderGuidedMode())}
+            </Tabs.Panel>
+            <Tabs.Panel value="manual" style={{ flex: 1, overflow: 'hidden' }}>
+              {renderPanel(renderManualMode())}
+            </Tabs.Panel>
+          </Tabs>
+        </Stack>
       </Stack>
-    </Stack>
+      {permissionOverlay}
+    </Box>
   );
 
   function renderDomMode() {
