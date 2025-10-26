@@ -3,6 +3,11 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   srcDir: '.',
   modules: ['@wxt-dev/i18n/module', '@wxt-dev/module-react'],
+  hooks: {
+    'build:manifestGenerated': (_, manifest) => {
+      delete manifest.side_panel;
+    },
+  },
   vite: () => ({
     optimizeDeps: {
       include: ['@/shared/schema/jsonresume-v1.validate.cjs'],
@@ -28,9 +33,6 @@ export default defineConfig({
       'https://*.smartrecruiters.com/*',
       'https://*.workable.com/*',
     ],
-    side_panel: {
-      default_path: 'sidepanel.html',
-    },
     web_accessible_resources: [
       {
         resources: ['pdf.worker.mjs'],

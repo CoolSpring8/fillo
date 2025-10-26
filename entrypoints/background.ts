@@ -42,6 +42,15 @@ const sidePanelPorts = new Set<RuntimePort>();
 const pendingScans = new Map<string, PendingScan>();
 const pendingFills = new Map<string, PendingFill>();
 
+async function openSidePanelForTab(tabId: number): Promise<void> {
+  try {
+    await browser.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: true });
+    await browser.sidePanel.open({ tabId });
+  } catch (error) {
+    console.warn('Unable to open side panel for tab.', error);
+  }
+}
+
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
@@ -57,8 +66,7 @@ export default defineBackground(() => {
     if (!tab.id) {
       return;
     }
-    await browser.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel.html', enabled: true });
-    await browser.sidePanel.open({ tabId: tab.id });
+    await openSidePanelForTab(tab.id);
   });
 
   browser.runtime.onConnect.addListener((port) => {
@@ -84,7 +92,7 @@ export default defineBackground(() => {
       return;
     }
 
-    await browser.sidePanel.open({ tabId: tab.id });
+    await openSidePanelForTab(tab.id);
   });
 });
 
