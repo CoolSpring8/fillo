@@ -29,7 +29,7 @@ interface GuidedModeProps {
   viewState: ViewState;
   selectedProfile: ProfileRecord | null;
   scanning: boolean;
-  fields: FieldEntry[];
+  guidedFields: FieldEntry[];
   guidedStarted: boolean;
   guidedIndex: number;
   guidedFilled: number;
@@ -56,7 +56,7 @@ export function GuidedMode({
   viewState,
   selectedProfile,
   scanning,
-  fields,
+  guidedFields,
   guidedStarted,
   guidedIndex,
   guidedFilled,
@@ -90,12 +90,13 @@ export function GuidedMode({
   if (scanning) {
     return <ModePanel><StateAlert message={t('sidepanel.toolbar.scanning')} tone="brand" /></ModePanel>;
   }
-  if (fields.length === 0) {
+  if (guidedFields.length === 0) {
     return <ModePanel><StateAlert message={t('sidepanel.states.noFields')} /></ModePanel>;
   }
 
-  const guidedTotal = fields.length;
-  const current = guidedStarted ? fields[guidedIndex] ?? null : null;
+  const guidedTotal = guidedFields.length;
+  const current = guidedFields[guidedIndex] ?? guidedFields[0] ?? null;
+  const hasCandidate = Boolean(current);
   const progressText = t('sidepanel.guided.progress', [
     String(guidedFilled),
     String(guidedTotal),
@@ -109,9 +110,18 @@ export function GuidedMode({
         <Stack gap={4}>
           <Group gap="xs" wrap="wrap" align="center">
             {!guidedStarted ? (
-              <Button size="sm" leftSection={<Play size={16} />} onClick={onStart}>
-                {t('sidepanel.guided.start')}
-              </Button>
+              <>
+                <Button size="sm" leftSection={<Play size={16} />} onClick={onStart}>
+                  {t('sidepanel.guided.start')}
+                </Button>
+                {hasCandidate && (
+                  <Badge variant="light" color="gray">
+                    {t('sidepanel.guided.preview' as any, [
+                      current?.field.label || t('sidepanel.field.noLabel'),
+                    ])}
+                  </Badge>
+                )}
+              </>
             ) : (
               <>
                 <Badge variant="light" color="gray">
@@ -130,7 +140,7 @@ export function GuidedMode({
                       variant="light"
                       color="gray"
                       onClick={onBack}
-                      disabled={isFirst}
+                      disabled={isFirst || !hasCandidate}
                     >
                       <ArrowLeft size={18} />
                     </ActionIcon>
@@ -143,7 +153,7 @@ export function GuidedMode({
                       variant="light"
                       color="gray"
                       onClick={onNext}
-                      disabled={isLast}
+                      disabled={!hasCandidate}
                     >
                       <ArrowRight size={18} />
                     </ActionIcon>
@@ -202,7 +212,19 @@ export function GuidedMode({
           </Text>
         </Stack>
 
-        <Stack gap="sm">{guidedStarted && current && renderGuidedControls(current)}</Stack>
+        <Stack gap="sm">
+          {current && guidedStarted && renderGuidedControls(current)}
+          {current && !guidedStarted && (
+            <Card withBorder radius="md" shadow="sm">
+              <Stack gap="xs">
+                <Text fw={600}>{current.field.label || t('sidepanel.field.noLabel')}</Text>
+                <Text fz="xs" c="dimmed">
+                  {t('sidepanel.guided.prestartHint' as any)}
+                </Text>
+              </Stack>
+            </Card>
+          )}
+        </Stack>
 
         <Card withBorder radius="md" shadow="sm">
           <Stack gap="sm">

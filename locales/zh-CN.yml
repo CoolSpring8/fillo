@@ -351,6 +351,17 @@ sidepanel:
     manualInputPlaceholder: 在此输入要填入该字段的内容…
     manualInputPlaceholderWithValue: 可修改或替换建议的内容。
     manualInputHint: 接受后的内容会被记住，便于下次使用。
+    aiPromptLabel: 让 AI 提供值
+    aiPromptPlaceholder: 描述或说出要使用的内容…
+    aiPromptHint: 可以引用简历字段、请求修改或生成全新的内容。
+    aiPromptAction: 请求 AI
+    aiPromptMissing: 请先告诉 AI 你想要怎样的帮助。
+    aiPromptEmpty: AI 没能给出可用的内容。
+    aiPromptApplied: 已应用 AI 建议。
+    aiPromptFailed: 获取 AI 建议失败。
+    preview: 准备处理“$1”
+    prestartHint: 聚焦任意表单字段并点击开始即可进入引导填写。
+    noRemaining: 引导列表中的字段都已处理。
     memory:
       heading: 记忆
       refresh: 刷新

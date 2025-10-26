@@ -351,6 +351,17 @@ sidepanel:
     manualInputPlaceholder: Type a value to fill this field…
     manualInputPlaceholderWithValue: Edit or replace the suggested value.
     manualInputHint: Accepted values will be remembered for next time.
+    aiPromptLabel: Ask AI for a value
+    aiPromptPlaceholder: Type or say what to use…
+    aiPromptHint: Reference resume fields, request changes, or ask for a brand-new value.
+    aiPromptAction: Ask AI
+    aiPromptMissing: Describe how the AI should help first.
+    aiPromptEmpty: The AI could not suggest a usable value.
+    aiPromptApplied: Added the AI suggestion.
+    aiPromptFailed: Unable to fetch an AI suggestion.
+    preview: Ready on "$1"
+    prestartHint: Focus any form field and press start to begin guided filling.
+    noRemaining: Everything in this guided list is filled.
     memory:
       heading: Memory
       refresh: Refresh

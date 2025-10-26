@@ -4,6 +4,8 @@ import { clearRegistry, registerElement } from './registry';
 
 type SupportedElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+const ELEMENT_ID_ATTR = 'data-apply-pilot-id';
+
 export interface InternalField {
   id: string;
   element: SupportedElement;
@@ -29,39 +31,11 @@ export function scanFields(): InternalField[] {
   const candidates: InternalField[] = [];
 
   for (const element of nodes) {
-    if (!isSupported(element)) {
+    const described = describeElement(element);
+    if (!described) {
       continue;
     }
-    if (!isEditable(element)) {
-      continue;
-    }
-
-    const kind = classify(element);
-    if (!kind) {
-      continue;
-    }
-
-    const label = buildLabel(element);
-    const rect = extractRect(element);
-    const id = crypto.randomUUID();
-    const autocomplete = (element as HTMLInputElement).autocomplete;
-    const context = buildContext(element, label);
-    const attributes = extractAttributes(element);
-    const hasValue = elementHasValue(element);
-
-    registerElement(id, element);
-    candidates.push({
-      id,
-      element,
-      kind,
-      label,
-      context,
-      rect,
-      required: isRequired(element),
-      autocomplete: autocomplete && autocomplete !== 'on' ? autocomplete : undefined,
-      attributes,
-      hasValue,
-    });
+    candidates.push(described);
   }
 
   candidates.sort((a, b) => {
@@ -73,6 +47,58 @@ export function scanFields(): InternalField[] {
   });
 
   return candidates;
+}
+
+export function describeElement(element: Element | null): InternalField | null {
+  if (!element) {
+    return null;
+  }
+  if (!isSupported(element)) {
+    return null;
+  }
+
+  const target = element as SupportedElement;
+  if (!isEditable(target)) {
+    return null;
+  }
+
+  const kind = classify(target);
+  if (!kind) {
+    return null;
+  }
+
+  const label = buildLabel(target);
+  const rect = extractRect(target);
+  const id = getOrAssignId(target);
+  const autocomplete = (target as HTMLInputElement).autocomplete;
+  const context = buildContext(target, label);
+  const attributes = extractAttributes(target);
+  const hasValue = elementHasValue(target);
+
+  registerElement(id, target);
+
+  return {
+    id,
+    element: target,
+    kind,
+    label,
+    context,
+    rect,
+    required: isRequired(target),
+    autocomplete: autocomplete && autocomplete !== 'on' ? autocomplete : undefined,
+    attributes,
+    hasValue,
+  };
+}
+
+function getOrAssignId(element: SupportedElement): string {
+  const existing = element.getAttribute(ELEMENT_ID_ATTR);
+  if (existing) {
+    return existing;
+  }
+  const id = crypto.randomUUID();
+  element.setAttribute(ELEMENT_ID_ATTR, id);
+  return id;
 }
 
 function isSupported(element: Element): element is SupportedElement {

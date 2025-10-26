@@ -63,6 +63,7 @@ import {
   ProviderConfigurationError,
   ProviderInvocationError,
 } from '../../shared/llm/errors';
+import { invokeWithProvider } from '../../shared/llm/runtime';
 import { FieldReviewMode } from './components/FieldReviewMode';
 import { GuidedMode } from './components/GuidedMode';
 import { ManualCopyMode } from './components/ManualCopyMode';
@@ -117,6 +118,9 @@ export default function App() {
   const [guidedIndex, setGuidedIndex] = useState<number>(0);
   const [guidedFilled, setGuidedFilled] = useState<number>(0);
   const [guidedSkipped, setGuidedSkipped] = useState<number>(0);
+  const [guidedSequence, setGuidedSequence] = useState<string[]>([]);
+  const [guidedPrompts, setGuidedPrompts] = useState<Record<string, string>>({});
+  const [guidedAiPending, setGuidedAiPending] = useState<string | null>(null);
   const [memoryList, setMemoryList] = useState<Array<{ key: string; association: any }>>([]);
   const { t } = i18n;
   const theme = useMantineTheme();
@@ -140,11 +144,15 @@ export default function App() {
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
   const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
   const guidedIndexRef = useRef<number>(0);
+  const guidedSequenceRef = useRef<string[]>([]);
+  const guidedPromptsRef = useRef<Record<string, string>>({});
+  const guidedClassificationPending = useRef<Set<string>>(new Set());
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
   const providerRef = useRef<ProviderConfig | null>(null);
   const selectedFieldRef = useRef<string | null>(null);
   const lastFocusedFieldRef = useRef<string | null>(null);
+  const modeRef = useRef<PanelMode>('dom');
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -182,6 +190,18 @@ export default function App() {
   useEffect(() => {
     guidedIndexRef.current = guidedIndex;
   }, [guidedIndex]);
+
+  useEffect(() => {
+    guidedSequenceRef.current = guidedSequence;
+  }, [guidedSequence]);
+
+  useEffect(() => {
+    guidedPromptsRef.current = guidedPrompts;
+  }, [guidedPrompts]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const formatFillReason = (reason: string): string => {
     const map: Record<string, string> = {
@@ -362,6 +382,22 @@ export default function App() {
         if (result) {
           handleFillResult(result);
         }
+        return;
+      }
+
+      if (message.kind === 'GUIDED_CANDIDATE') {
+        const parsed = parseGuidedCandidateMessage(message);
+        if (parsed) {
+          handleGuidedCandidate(parsed.field);
+        }
+        return;
+      }
+
+      if (message.kind === 'GUIDED_VALUE_CAPTURED') {
+        const parsed = parseGuidedValueMessage(message);
+        if (parsed) {
+          handleGuidedValueCaptured(parsed);
+        }
       }
     };
 
@@ -406,6 +442,54 @@ export default function App() {
       withCloseButton: true,
     });
   }, []);
+
+  const handleGuidedPromptChange = useCallback((fieldId: string, value: string) => {
+    setGuidedPrompts((current) => ({ ...current, [fieldId]: value }));
+  }, []);
+
+  const requestGuidedAiValue = useCallback(
+    async (entry: FieldEntry) => {
+      const instruction = (guidedPromptsRef.current[entry.field.id] ?? '').trim();
+      if (!instruction) {
+        notify(t('sidepanel.guided.aiPromptMissing' as any), 'info');
+        return;
+      }
+      setGuidedAiPending(entry.field.id);
+      try {
+        const value = await composeGuidedValue(entry, instruction);
+        if (!value || value.trim().length === 0) {
+          notify(t('sidepanel.guided.aiPromptEmpty' as any), 'info');
+          return;
+        }
+        setFields((current) =>
+          current.map((item) =>
+            item.field.id === entry.field.id
+              ? {
+                  ...item,
+                  manualValue: value,
+                }
+              : item,
+          ),
+        );
+        notify(t('sidepanel.guided.aiPromptApplied' as any), 'success');
+      } catch (error) {
+        if (
+          error instanceof NoProviderConfiguredError ||
+          error instanceof ProviderConfigurationError ||
+          error instanceof ProviderAvailabilityError ||
+          error instanceof ProviderInvocationError
+        ) {
+          notify(error.message, 'error');
+        } else {
+          console.warn('Guided AI prompt failed', error);
+          notify(t('sidepanel.guided.aiPromptFailed' as any), 'error');
+        }
+      } finally {
+        setGuidedAiPending((current) => (current === entry.field.id ? null : current));
+      }
+    },
+    [notify, t],
+  );
 
   const focusField = useCallback(
     (entry: FieldEntry | null) => {
@@ -580,6 +664,240 @@ export default function App() {
     }
   };
 
+  function handleGuidedCandidate(field: ScannedField) {
+    descriptorsRef.current = [
+      ...descriptorsRef.current.filter((descriptor) => descriptor.id !== field.id),
+      {
+        id: field.id,
+        label: field.label,
+        type: field.kind,
+        autocomplete: field.autocomplete ?? null,
+        required: field.required,
+      },
+    ];
+
+    setFields((current) => {
+      const index = current.findIndex((entry) => entry.field.id === field.id);
+      if (index >= 0) {
+        const next = [...current];
+        const updated = { ...current[index], field };
+        next[index] = updated;
+        return next;
+      }
+      const built = buildFieldEntry(field, slotValuesRef.current, adapterIdsRef.current);
+      return [...current, built];
+    });
+
+    lastFocusedFieldRef.current = field.id;
+    setSelectedFieldId(field.id);
+    setGuidedSequence((current) => {
+      const existingIndex = current.indexOf(field.id);
+      if (existingIndex !== -1) {
+        guidedSequenceRef.current = current;
+        guidedIndexRef.current = existingIndex;
+        return current;
+      }
+      const next = [...current, field.id];
+      guidedSequenceRef.current = next;
+      guidedIndexRef.current = next.indexOf(field.id);
+      return next;
+    });
+    setGuidedIndex(guidedIndexRef.current);
+
+    void enhanceGuidedField(field).catch((error) => {
+      console.warn('Unable to enhance guided field', error);
+    });
+  }
+
+  function handleGuidedValueCaptured(payload: {
+    fieldId: string;
+    newValue: string;
+    label: string;
+    frameId: number;
+    frameUrl: string;
+  }) {
+    setFields((current) =>
+      current.map((entry) =>
+        entry.field.id === payload.fieldId
+          ? {
+              ...entry,
+              manualValue: payload.newValue,
+              field: { ...entry.field, hasValue: true },
+            }
+          : entry,
+      ),
+    );
+
+    void (async () => {
+      const entry = fieldsRef.current.find((item) => item.field.id === payload.fieldId);
+      if (!entry) {
+        return;
+      }
+      try {
+        const { learnAccept } = await import('../../shared/memory/store');
+        await learnAccept(entry.field, { slot: entry.selectedSlot, value: payload.newValue });
+      } catch (error) {
+        console.warn('Unable to learn captured value', error);
+      }
+    })();
+  }
+
+  async function enhanceGuidedField(field: ScannedField): Promise<void> {
+    let entry = fieldsRef.current.find((item) => item.field.id === field.id);
+    if (!entry) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      entry = fieldsRef.current.find((item) => item.field.id === field.id);
+    }
+    if (!entry) {
+      return;
+    }
+
+    try {
+      const { getAssociationFor } = await import('../../shared/memory/store');
+      const association = await getAssociationFor(field);
+      if (association) {
+        setFields((current) =>
+          current.map((item) => {
+            if (item.field.id !== field.id) {
+              return item;
+            }
+            let suggestion = item.suggestion;
+            let selectedSlot = item.selectedSlot;
+            if (association.preferredSlot && isFieldSlotValue(association.preferredSlot)) {
+              const preferredValue = slotValuesRef.current[association.preferredSlot];
+              if (preferredValue && preferredValue.trim().length > 0) {
+                suggestion = preferredValue;
+                selectedSlot = association.preferredSlot;
+              }
+            }
+            if (!suggestion && association.lastValue && association.lastValue.trim().length > 0) {
+              suggestion = association.lastValue;
+            }
+            const manualValue = deriveManualValue(item, suggestion ?? item.suggestion);
+            return {
+              ...item,
+              suggestion: suggestion ?? item.suggestion,
+              manualValue,
+              selectedSlot: selectedSlot ?? item.selectedSlot,
+            };
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn('Unable to apply memory to field', error);
+    }
+
+    entry = fieldsRef.current.find((item) => item.field.id === field.id);
+    if (!entry || entry.slotSource === 'model') {
+      return;
+    }
+    if (!providerRef.current) {
+      return;
+    }
+    if (guidedClassificationPending.current.has(field.id)) {
+      return;
+    }
+    guidedClassificationPending.current.add(field.id);
+    try {
+      const descriptors: FieldDescriptor[] = [
+        {
+          id: field.id,
+          label: field.label,
+          type: field.kind,
+          autocomplete: field.autocomplete ?? null,
+          required: field.required,
+        },
+      ];
+      const map = await classifyFieldDescriptors(providerRef.current, descriptors);
+      const match = map.get(field.id);
+      const slot = match?.slot;
+      if (slot) {
+        setFields((current) =>
+          current.map((item) => {
+            if (item.field.id !== field.id) {
+              return item;
+            }
+            const suggestion = slotValuesRef.current[slot] ?? item.suggestion;
+            const manualValue = deriveManualValue(item, suggestion);
+            const shouldSelect = item.selectedSlot === item.slot || item.selectedSlot === null;
+            return {
+              ...item,
+              slot,
+              suggestion,
+              manualValue,
+              slotSource: 'model',
+              slotNote: match.reason,
+              selectedSlot: suggestion && shouldSelect ? slot : item.selectedSlot,
+            };
+          }),
+        );
+      }
+    } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        notify(error.message, 'error');
+      } else {
+        console.warn('Guided classification failed', error);
+      }
+    } finally {
+      guidedClassificationPending.current.delete(field.id);
+    }
+  }
+
+  async function composeGuidedValue(entry: FieldEntry, instruction: string): Promise<string | null> {
+    const provider = providerRef.current;
+    if (!provider) {
+      throw new NoProviderConfiguredError();
+    }
+    const profileValues = Object.entries(slotValuesRef.current).reduce<Record<string, string>>((acc, [slot, value]) => {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        acc[slot] = value;
+      }
+      return acc;
+    }, {});
+    const messages = [
+      {
+        role: 'system' as const,
+        content: [
+          'You assist with filling job application form fields.',
+          'Use the provided profile values when helpful.',
+          'Follow the instruction to adjust or craft a value.',
+          'Respond with the final value only and no commentary.',
+          'If you cannot comply, respond with UNABLE.',
+        ].join('\n'),
+      },
+      {
+        role: 'user' as const,
+        content: JSON.stringify({
+          field: {
+            label: entry.field.label,
+            kind: entry.field.kind,
+            required: entry.field.required,
+            autocomplete: entry.field.autocomplete ?? null,
+          },
+          slot: entry.selectedSlot ?? entry.slot ?? null,
+          profileValues,
+          currentValue: entry.manualValue ?? entry.suggestion ?? '',
+          instruction,
+        }),
+      },
+    ];
+
+    const raw = await invokeWithProvider(provider, messages, { temperature: 0.2 });
+    const normalized = raw.trim();
+    if (!normalized) {
+      return null;
+    }
+    if (normalized.toUpperCase() === 'UNABLE') {
+      return null;
+    }
+    return normalized;
+  }
+
   const handleSlotSelectionChange = (fieldId: string, slot: PromptOptionSlot | null) => {
     const option = slot ? manualOptions.find((entry) => entry.slot === slot) ?? null : null;
     setFields((current) =>
@@ -722,6 +1040,22 @@ export default function App() {
   const selectedEntry = useMemo(
     () => fields.find((entry) => entry.field.id === selectedFieldId) ?? null,
     [fields, selectedFieldId],
+  );
+
+  const fieldMap = useMemo(() => {
+    const map = new Map<string, FieldEntry>();
+    fields.forEach((entry) => {
+      map.set(entry.field.id, entry);
+    });
+    return map;
+  }, [fields]);
+
+  const guidedEntries = useMemo(
+    () =>
+      guidedSequence
+        .map((id) => fieldMap.get(id) ?? null)
+        .filter((entry): entry is FieldEntry => entry !== null),
+    [fieldMap, guidedSequence],
   );
 
   const resolveEntryData = useCallback(
@@ -867,9 +1201,9 @@ export default function App() {
     );
 
   const classifyDisabled = classifying || fields.length === 0;
-  const guidedTotal = fields.length;
-  const isFirst = guidedStarted ? guidedIndex <= 0 : true;
-  const isLast = guidedStarted ? guidedIndex >= Math.max(guidedTotal - 1, 0) : false;
+  const guidedTotal = guidedSequence.length;
+  const isFirst = guidedIndex <= 0;
+  const isLast = guidedTotal === 0 ? false : guidedIndex >= Math.max(guidedTotal - 1, 0);
 
   const renderDomToolbar = () => {
     const iconSize = 18;
@@ -1074,7 +1408,7 @@ export default function App() {
                 viewState={viewState}
                 selectedProfile={selectedProfile}
                 scanning={scanning}
-                fields={fields}
+                guidedFields={guidedEntries}
                 guidedStarted={guidedStarted}
                 guidedIndex={guidedIndex}
                 guidedFilled={guidedFilled}
@@ -1120,6 +1454,8 @@ export default function App() {
     const placeholderKey = fallbackOption
       ? 'sidepanel.guided.manualInputPlaceholderWithValue'
       : 'sidepanel.guided.manualInputPlaceholder';
+    const aiPrompt = guidedPrompts[entry.field.id] ?? '';
+    const aiLoading = guidedAiPending === entry.field.id;
 
     return (
       <Card withBorder radius="md" shadow="sm">
@@ -1172,6 +1508,32 @@ export default function App() {
               {t('sidepanel.preview.file')}
             </Text>
           )}
+          {entry.field.kind !== 'file' && (
+            <>
+              <Textarea
+                label={t('sidepanel.guided.aiPromptLabel' as any)}
+                placeholder={t('sidepanel.guided.aiPromptPlaceholder' as any)}
+                autosize
+                minRows={2}
+                maxRows={4}
+                value={aiPrompt}
+                onChange={(event) => handleGuidedPromptChange(entry.field.id, event.currentTarget.value)}
+                description={t('sidepanel.guided.aiPromptHint' as any)}
+              />
+              <Group justify="flex-end">
+                <Button
+                  size="sm"
+                  variant="light"
+                  leftSection={<Sparkles size={16} />}
+                  onClick={() => requestGuidedAiValue(entry)}
+                  loading={aiLoading}
+                  disabled={aiLoading}
+                >
+                  {t('sidepanel.guided.aiPromptAction' as any)}
+                </Button>
+              </Group>
+            </>
+          )}
           <Group gap="sm" justify="flex-end">
             <Button
               size="sm"
@@ -1199,10 +1561,12 @@ export default function App() {
     setGuidedIndex(0);
     setGuidedFilled(0);
     setGuidedSkipped(0);
-    if (fields.length > 0) {
-      setSelectedFieldId(fields[0].field.id);
-      highlightCurrent(fields[0]);
-    }
+    setGuidedSequence([]);
+    guidedSequenceRef.current = [];
+    setGuidedPrompts({});
+    guidedPromptsRef.current = {};
+    setGuidedAiPending(null);
+    sendMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
     refreshMemory().catch(console.error);
   }
 
@@ -1212,53 +1576,61 @@ export default function App() {
   }
 
   function navPrev() {
-    if (!guidedStarted) return;
-    const prevIndex = Math.max(0, guidedIndexRef.current - 1);
-    if (prevIndex === guidedIndexRef.current) return;
-    setGuidedIndex(prevIndex);
-    const prev = fieldsRef.current[prevIndex];
-    if (prev) {
-      setSelectedFieldId(prev.field.id);
-      highlightCurrent(prev);
+    if (!guidedStarted && guidedSequenceRef.current.length === 0) {
+      sendMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
+      return;
     }
+    sendMessage({ kind: 'GUIDED_STEP', direction: 'prev' });
   }
 
   function navNext() {
-    if (!guidedStarted) return;
-    const nextIndex = guidedIndexRef.current + 1;
-    if (nextIndex >= fieldsRef.current.length) return;
-    setGuidedIndex(nextIndex);
-    const next = fieldsRef.current[nextIndex];
-    if (next) {
-      setSelectedFieldId(next.field.id);
-      highlightCurrent(next);
+    if (!guidedStarted && guidedSequenceRef.current.length === 0) {
+      sendMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
+      return;
     }
+    sendMessage({ kind: 'GUIDED_STEP', direction: 'next' });
   }
 
   function navToFirstUnfilled() {
-    if (!guidedStarted) return;
-    const idx = fieldsRef.current.findIndex((e) => e.status !== 'filled');
-    if (idx === -1) {
+    const sequence = guidedSequenceRef.current;
+    if (sequence.length === 0) {
+      sendMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
       return;
     }
-    setGuidedIndex(idx);
-    const entry = fieldsRef.current[idx];
-    if (entry) {
-      setSelectedFieldId(entry.field.id);
-      highlightCurrent(entry);
+    const targetId = sequence.find((id) => {
+      const entry = fieldsRef.current.find((item) => item.field.id === id);
+      return entry && entry.status !== 'filled';
+    });
+    if (!targetId) {
+      notify(t('sidepanel.guided.noRemaining' as any), 'info');
+      return;
     }
+    const entry = fieldsRef.current.find((item) => item.field.id === targetId);
+    if (!entry) {
+      return;
+    }
+    const index = sequence.indexOf(targetId);
+    if (index >= 0) {
+      guidedIndexRef.current = index;
+      setGuidedIndex(index);
+    }
+    setSelectedFieldId(targetId);
+    lastFocusedFieldRef.current = targetId;
+    highlightCurrent(entry);
+    focusField(entry);
   }
 
   function restartGuided() {
     setGuidedStarted(true);
-    setGuidedIndex(0);
     setGuidedFilled(0);
     setGuidedSkipped(0);
-    if (fieldsRef.current.length > 0) {
-      const first = fieldsRef.current[0];
-      setSelectedFieldId(first.field.id);
-      highlightCurrent(first);
-    }
+    setGuidedSequence([]);
+    guidedSequenceRef.current = [];
+    setGuidedPrompts({});
+    guidedPromptsRef.current = {};
+    setGuidedAiPending(null);
+    setGuidedIndex(0);
+    sendMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
   }
 
   function finishGuided() {
@@ -1291,7 +1663,7 @@ export default function App() {
       await learnAccept(entry.field, { slot: entry.selectedSlot, value });
     }
     if (advance) {
-      goToNext(entry);
+      sendMessage({ kind: 'GUIDED_STEP', direction: 'next' });
     }
   }
 
@@ -1300,36 +1672,28 @@ export default function App() {
     const { learnReject } = await import('../../shared/memory/store');
     await learnReject(entry.field);
     setGuidedSkipped((n) => n + 1);
-    goToNext(entry);
-  }
-
-  function goToNext(current: FieldEntry) {
-    const idx = fieldsRef.current.findIndex((e) => e.field.id === current.field.id);
-    const nextIndex = idx + 1;
-    if (nextIndex >= fieldsRef.current.length) {
-      return;
-    }
-    setGuidedIndex(nextIndex);
-    const next = fieldsRef.current[nextIndex];
-    if (next) {
-      setSelectedFieldId(next.field.id);
-      highlightCurrent(next);
-    }
+    sendMessage({ kind: 'GUIDED_STEP', direction: 'next' });
   }
 
   useEffect(() => {
-    if (!guidedStarted) return;
-    if (fields.length === 0) {
-      setGuidedStarted(false);
+    const total = guidedSequence.length;
+    if (total === 0) {
+      setGuidedIndex(0);
       return;
     }
-    const clamped = Math.min(guidedIndexRef.current, fields.length - 1);
+    const clamped = Math.min(guidedIndexRef.current, total - 1);
     if (clamped !== guidedIndexRef.current) {
+      guidedIndexRef.current = clamped;
       setGuidedIndex(clamped);
-      const entry = fields[clamped];
-      if (entry) setSelectedFieldId(entry.field.id);
+      const fieldId = guidedSequence[clamped];
+      if (fieldId) {
+        const entry = fieldsRef.current.find((item) => item.field.id === fieldId);
+        if (entry) {
+          setSelectedFieldId(fieldId);
+        }
+      }
     }
-  }, [fields.length, guidedStarted]);
+  }, [guidedSequence]);
 
   async function refreshMemory() {
     const { listAssociations } = await import('../../shared/memory/store');
@@ -1574,25 +1938,27 @@ export default function App() {
 }
 
 function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters: string[]): FieldEntry[] {
-  return fields.map((field) => {
-    const slot = resolveSlot(field);
-    const suggestion = slot ? slots[slot] : undefined;
-    return {
-      field,
-      slot,
-      selectedSlot: suggestion ? slot : null,
-      suggestion,
-      manualValue: suggestion ?? '',
-      status: 'idle',
-      reason: undefined,
-      slotSource: slot ? 'heuristic' : 'unset',
-      slotNote: undefined,
-      autoKey: undefined,
-      autoKeyLabel: undefined,
-      autoNote: undefined,
-      autoConfidence: undefined,
-    };
-  });
+  return fields.map((field) => buildFieldEntry(field, slots, adapters));
+}
+
+function buildFieldEntry(field: ScannedField, slots: SlotValueMap, adapters: string[]): FieldEntry {
+  const slot = resolveSlot(field);
+  const suggestion = slot ? slots[slot] : undefined;
+  return {
+    field,
+    slot,
+    selectedSlot: suggestion ? slot : null,
+    suggestion,
+    manualValue: suggestion ?? '',
+    status: 'idle',
+    reason: undefined,
+    slotSource: slot ? 'heuristic' : 'unset',
+    slotNote: undefined,
+    autoKey: undefined,
+    autoKeyLabel: undefined,
+    autoNote: undefined,
+    autoConfidence: undefined,
+  };
 
   function resolveSlot(field: ScannedField): FieldSlot | null {
     const context = (field.context ?? '').toLowerCase();
@@ -1808,4 +2174,30 @@ function parseFillResultMessage(value: Record<string, unknown>): FillResultMessa
 
 function isFillResultStatus(value: unknown): value is FillResultMessage['status'] {
   return value === 'filled' || value === 'skipped' || value === 'failed';
+}
+
+function parseGuidedCandidateMessage(value: Record<string, unknown>): { field: ScannedField } | null {
+  const field = value.field;
+  if (!field || typeof field !== 'object') {
+    return null;
+  }
+  const record = field as Record<string, unknown>;
+  if (typeof record.id !== 'string' || typeof record.frameId !== 'number') {
+    return null;
+  }
+  return { field: field as ScannedField };
+}
+
+function parseGuidedValueMessage(value: Record<string, unknown>):
+  | { fieldId: string; newValue: string; label: string; frameId: number; frameUrl: string }
+  | null {
+  const fieldId = typeof value.fieldId === 'string' ? value.fieldId : null;
+  const newValue = typeof value.newValue === 'string' ? value.newValue : null;
+  const label = typeof value.label === 'string' ? value.label : '';
+  const frameId = typeof value.frameId === 'number' ? value.frameId : null;
+  const frameUrl = typeof value.frameUrl === 'string' ? value.frameUrl : '';
+  if (!fieldId || newValue === null || frameId === null) {
+    return null;
+  }
+  return { fieldId, newValue, label, frameId, frameUrl };
 }

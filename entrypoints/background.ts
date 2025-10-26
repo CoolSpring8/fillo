@@ -182,6 +182,12 @@ async function handleSidePanelMessage(port: RuntimePort, raw: unknown): Promise<
     case 'CLEAR_OVERLAY':
       await handleClearOverlay(port);
       break;
+    case 'GUIDED_STEP':
+      await handleGuidedStep(message);
+      break;
+    case 'GUIDED_REQUEST_CURRENT':
+      await handleGuidedRequestCurrent();
+      break;
   }
 }
 
@@ -409,6 +415,18 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
         sendFillResult(panel, result);
       }
     }
+  } else if (message.kind === 'GUIDED_CANDIDATE') {
+    const field = parseGuidedCandidate(message.field, frameId, message.frameUrl);
+    if (!field) {
+      return;
+    }
+    broadcastGuidedCandidate(field);
+  } else if (message.kind === 'GUIDED_VALUE_CAPTURED') {
+    const payload = parseGuidedValue(message, frameId);
+    if (!payload) {
+      return;
+    }
+    broadcastGuidedValue(payload);
   }
 }
 
@@ -451,6 +469,35 @@ function sendFields(port: RuntimePort, requestId: string, fields: ScannedField[]
 function sendFillResult(port: RuntimePort, result: FillResultMessage): void {
   const payload: FillResultResponse = { kind: 'FILL_RESULT', ...result };
   safePostMessage(port, payload);
+}
+
+async function handleGuidedStep(payload: Record<string, unknown>): Promise<void> {
+  const direction = payload.direction === 'prev' ? 'prev' : 'next';
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const frames = contentPorts.get(tab.id);
+  if (!frames) {
+    return;
+  }
+  for (const framePort of frames.values()) {
+    safePostMessage(framePort, { kind: 'GUIDED_STEP', direction });
+  }
+}
+
+async function handleGuidedRequestCurrent(): Promise<void> {
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const frames = contentPorts.get(tab.id);
+  if (!frames) {
+    return;
+  }
+  for (const framePort of frames.values()) {
+    safePostMessage(framePort, { kind: 'GUIDED_REQUEST_CURRENT' });
+  }
 }
 
 function parseFieldKind(value: unknown): FieldKind {
@@ -557,5 +604,61 @@ function safePostMessage(port: RuntimePort, message: unknown): void {
     port.postMessage(message);
   } catch (error) {
     console.warn('Failed to post message to port.', error);
+  }
+}
+
+function parseGuidedCandidate(value: unknown, frameId: number, frameUrlRaw: unknown): ScannedField | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const id = typeof raw.id === 'string' ? raw.id : null;
+  if (!id) {
+    return null;
+  }
+  const field: ScannedField = {
+    id,
+    kind: parseFieldKind(raw.kind),
+    label: typeof raw.label === 'string' ? raw.label : '',
+    context: typeof raw.context === 'string' ? raw.context : '',
+    autocomplete: typeof raw.autocomplete === 'string' ? raw.autocomplete : undefined,
+    required: Boolean(raw.required),
+    rect: normalizeRect(raw.rect),
+    frameId,
+    frameUrl: typeof frameUrlRaw === 'string' ? frameUrlRaw : '',
+    attributes: normalizeAttributes(raw.attributes),
+    hasValue: Boolean(raw.hasValue),
+  };
+  return field;
+}
+
+function parseGuidedValue(value: Record<string, unknown>, frameId: number):
+  | { fieldId: string; newValue: string; label: string; frameId: number; frameUrl: string }
+  | null {
+  const fieldId = typeof value.fieldId === 'string' ? value.fieldId : null;
+  const newValue = typeof value.value === 'string' ? value.value : null;
+  if (!fieldId || newValue === null) {
+    return null;
+  }
+  const label = typeof value.label === 'string' ? value.label : '';
+  const frameUrl = typeof value.frameUrl === 'string' ? value.frameUrl : '';
+  return { fieldId, newValue, label, frameId, frameUrl };
+}
+
+function broadcastGuidedCandidate(field: ScannedField): void {
+  for (const panel of sidePanelPorts) {
+    safePostMessage(panel, { kind: 'GUIDED_CANDIDATE', field });
+  }
+}
+
+function broadcastGuidedValue(payload: {
+  fieldId: string;
+  newValue: string;
+  label: string;
+  frameId: number;
+  frameUrl: string;
+}): void {
+  for (const panel of sidePanelPorts) {
+    safePostMessage(panel, { kind: 'GUIDED_VALUE_CAPTURED', ...payload });
   }
 }

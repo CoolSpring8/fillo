@@ -2,9 +2,10 @@ import { browser } from 'wxt/browser';
 import type { FieldAttributes, FillResultStatus, PromptFillRequest } from '../../shared/apply/types';
 import { fillField, triggerClick } from './fill';
 import type { InternalField } from './fields';
-import { scanFields } from './fields';
+import { describeElement, scanFields } from './fields';
 import { clearOverlay, showHighlight, showPrompt } from './overlay';
 import { clearRegistry, getElement } from './registry';
+import { currentTabbable, documentHasFocus, focusNextTabbable } from './tabbable';
 
 type ContentInboundMessage =
   | {
@@ -23,6 +24,13 @@ type ContentInboundMessage =
   | {
       kind: 'FOCUS_FIELD';
       fieldId: string;
+    }
+  | {
+      kind: 'GUIDED_STEP';
+      direction?: 'next' | 'prev';
+    }
+  | {
+      kind: 'GUIDED_REQUEST_CURRENT';
     };
 
 type ContentOutboundMessage =
@@ -38,6 +46,18 @@ type ContentOutboundMessage =
       fieldId: string;
       status: FillResultStatus;
       reason?: string;
+    }
+  | {
+      kind: 'GUIDED_CANDIDATE';
+      field: SerializedField;
+      frameUrl: string;
+    }
+  | {
+      kind: 'GUIDED_VALUE_CAPTURED';
+      fieldId: string;
+      value: string;
+      label: string;
+      frameUrl: string;
     };
 
 interface SerializedField {
@@ -70,6 +90,8 @@ export default defineContentScript({
       }
     >();
 
+    const dirtyElements = new WeakSet<Element>();
+
     const port = browser.runtime.connect({ name: 'content' });
 
     port.onMessage.addListener((message: ContentInboundMessage) => {
@@ -89,6 +111,12 @@ export default defineContentScript({
         case 'FOCUS_FIELD':
           handleFocus(message.fieldId);
           break;
+        case 'GUIDED_STEP':
+          handleGuidedStep(message.direction);
+          break;
+        case 'GUIDED_REQUEST_CURRENT':
+          handleGuidedRequestCurrent();
+          break;
       }
     });
 
@@ -97,6 +125,74 @@ export default defineContentScript({
       clearRegistry();
       fieldMetadata.clear();
     });
+
+    document.addEventListener(
+      'focusin',
+      (event) => {
+        if (!(event.target instanceof Element)) {
+          return;
+        }
+        const field = describeElement(event.target);
+        if (!field) {
+          return;
+        }
+        emitCandidate(field);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      'input',
+      (event) => {
+        const target = event.target;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement
+        ) {
+          if (target instanceof HTMLInputElement && target.type === 'password') {
+            return;
+          }
+          dirtyElements.add(target);
+        }
+      },
+      true,
+    );
+
+    document.addEventListener(
+      'focusout',
+      (event) => {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)
+        ) {
+          return;
+        }
+        if (!dirtyElements.has(target)) {
+          return;
+        }
+        dirtyElements.delete(target);
+        if (target instanceof HTMLInputElement && target.type === 'password') {
+          return;
+        }
+        const value = readElementValue(target);
+        if (!value || value.trim().length === 0) {
+          return;
+        }
+        const field = describeElement(target);
+        if (!field) {
+          return;
+        }
+        send({
+          kind: 'GUIDED_VALUE_CAPTURED',
+          fieldId: field.id,
+          value,
+          label: field.label,
+          frameUrl: window.location.href,
+        });
+      },
+      true,
+    );
 
     function send(message: ContentOutboundMessage): void {
       port.postMessage(message);
@@ -283,6 +379,49 @@ export default defineContentScript({
         }
         showHighlight(target, { label: '', duration: 1000 });
       });
+    }
+
+    function handleGuidedStep(direction: 'next' | 'prev' | undefined): void {
+      if (!documentHasFocus()) {
+        return;
+      }
+      focusNextTabbable({ direction: direction === 'prev' ? -1 : 1, wrap: true });
+    }
+
+    function handleGuidedRequestCurrent(): void {
+      const active = currentTabbable();
+      if (active) {
+        const described = describeElement(active);
+        if (described) {
+          emitCandidate(described);
+        }
+        return;
+      }
+      focusNextTabbable({ direction: 1, wrap: true });
+    }
+
+    function emitCandidate(field: InternalField): void {
+      send({
+        kind: 'GUIDED_CANDIDATE',
+        field: serialize([field])[0],
+        frameUrl: window.location.href,
+      });
+    }
+
+    function readElementValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string | null {
+      if (element instanceof HTMLInputElement) {
+        if (element.type === 'checkbox' || element.type === 'radio') {
+          return element.checked ? element.value || 'on' : '';
+        }
+        return element.value ?? '';
+      }
+      if (element instanceof HTMLTextAreaElement) {
+        return element.value ?? '';
+      }
+      if (element instanceof HTMLSelectElement) {
+        return element.value ?? '';
+      }
+      return null;
     }
   },
 });
