@@ -339,18 +339,27 @@ sidepanel:
     start: 开始引导填写
     back: 上一项
     next: 下一项
-    fill: 填写
-    accept: 填写并进入下一项
+    acceptNext: 填写并进入下一项
     skip: 跳过并进入下一项
     done: 完成
     restart: 重新开始
     jumpToUnfilled: 跳至首个未填写
-    paused: 暂停于“$1”（第 $2 / $3 项）
-    progress: 进度 — 已填写 $1 / $2 · 已跳过 $3
+    focusPrompt: 在页面中先聚焦任意输入框即可在此预览，然后启动引导模式。
+    activeBadge: 正在处理“$1” · 已查看 $2
+    noActive: 正在查找下一个字段…
+    progressDynamic: 进度 — 已填写 $1 · 已访问 $2 · 已跳过 $3
     manualInputLabel: 填写内容
     manualInputPlaceholder: 在此输入要填入该字段的内容…
     manualInputPlaceholderWithValue: 可修改或替换建议的内容。
     manualInputHint: 接受后的内容会被记住，便于下次使用。
+    aiPromptLabel: 告诉助手要使用什么
+    aiPromptPlaceholder: 请助手查找或调整此字段的值…
+    aiPromptHint: 说明上下文、变体或要复用的数据；我们会参考你的简历。
+    aiPromptAction: 请求 AI 填值
+    aiPromptNoProvider: 请在设置中配置 AI 提供方以启用辅助填充。
+    aiPromptEmpty: 助手没有返回值，请换一种说法再试。
+    aiPromptApplied: 已应用助手的建议。
+    aiPromptError: 暂时无法获取建议。
     memory:
       heading: 记忆
       refresh: 刷新

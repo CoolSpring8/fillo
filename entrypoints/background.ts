@@ -182,6 +182,15 @@ async function handleSidePanelMessage(port: RuntimePort, raw: unknown): Promise<
     case 'CLEAR_OVERLAY':
       await handleClearOverlay(port);
       break;
+    case 'GUIDED_STEP':
+      await handleGuidedStep(port, message);
+      break;
+    case 'GUIDED_RESET':
+      await handleGuidedReset();
+      break;
+    case 'GUIDED_REQUEST_CURRENT':
+      await handleGuidedRequestCurrent(port, message);
+      break;
   }
 }
 
@@ -346,6 +355,42 @@ async function handleClearOverlay(_: RuntimePort): Promise<void> {
   }
 }
 
+async function handleGuidedStep(_: RuntimePort, payload: Record<string, unknown>): Promise<void> {
+  const direction = payload.direction === -1 ? -1 : 1;
+  const wrap = payload.wrap === false ? false : true;
+  const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const framePort = contentPorts.get(tab.id)?.get(frameId);
+  framePort?.postMessage({ kind: 'GUIDED_STEP', direction, wrap });
+}
+
+async function handleGuidedReset(): Promise<void> {
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const frames = contentPorts.get(tab.id);
+  if (!frames) {
+    return;
+  }
+  for (const framePort of frames.values()) {
+    framePort.postMessage({ kind: 'GUIDED_RESET' });
+  }
+}
+
+async function handleGuidedRequestCurrent(_: RuntimePort, payload: Record<string, unknown>): Promise<void> {
+  const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const framePort = contentPorts.get(tab.id)?.get(frameId);
+  framePort?.postMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
+}
+
 function handleContentMessage(tabId: number, frameId: number, raw: unknown): void {
   if (!raw || typeof raw !== 'object') {
     return;
@@ -369,19 +414,9 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
 
     const frameUrl = typeof message.frameUrl === 'string' ? message.frameUrl : '';
     const fields = Array.isArray(message.fields) ? message.fields : [];
-    const enriched: ScannedField[] = fields.map((entry: any) => ({
-      id: String(entry.id ?? ''),
-      kind: parseFieldKind(entry.kind),
-      label: String(entry.label ?? ''),
-      context: typeof entry.context === 'string' ? entry.context : '',
-      autocomplete: typeof entry.autocomplete === 'string' ? entry.autocomplete : undefined,
-      required: Boolean(entry.required),
-      rect: normalizeRect(entry.rect),
-      frameId,
-      frameUrl,
-      attributes: normalizeAttributes(entry.attributes),
-      hasValue: Boolean(entry.hasValue),
-    }));
+    const enriched = fields
+      .map((entry) => normalizeFieldEntry(entry, frameId, frameUrl))
+      .filter((entry): entry is ScannedField => entry !== null);
     pending.fields.push(...enriched);
     if (pending.received >= pending.expected) {
       finalizeScan(requestId, pending);
@@ -409,7 +444,50 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
         sendFillResult(panel, result);
       }
     }
+  } else if (message.kind === 'GUIDED_CANDIDATE') {
+    const frameUrl = typeof message.frameUrl === 'string' ? message.frameUrl : '';
+    const origin = message.origin === 'step' ? 'step' : message.origin === 'request' ? 'request' : 'focus';
+    const normalized = normalizeFieldEntry(message.field, frameId, frameUrl);
+    if (!normalized) {
+      return;
+    }
+    for (const panel of sidePanelPorts) {
+      panel.postMessage({ kind: 'GUIDED_CANDIDATE', field: normalized, origin, frameId });
+    }
+  } else if (message.kind === 'GUIDED_INPUT_CAPTURE') {
+    const frameUrl = typeof message.frameUrl === 'string' ? message.frameUrl : '';
+    const value = typeof message.value === 'string' ? message.value : '';
+    if (value.length === 0) {
+      return;
+    }
+    const normalized = normalizeFieldEntry(message.field, frameId, frameUrl);
+    if (!normalized) {
+      return;
+    }
+    for (const panel of sidePanelPorts) {
+      panel.postMessage({ kind: 'GUIDED_INPUT_CAPTURE', field: normalized, value, frameId });
+    }
   }
+}
+
+function normalizeFieldEntry(entry: unknown, frameId: number, frameUrl: string): ScannedField | null {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const value = entry as Record<string, unknown>;
+  return {
+    id: String(value.id ?? ''),
+    kind: parseFieldKind(value.kind),
+    label: String(value.label ?? ''),
+    context: typeof value.context === 'string' ? value.context : '',
+    autocomplete: typeof value.autocomplete === 'string' ? value.autocomplete : undefined,
+    required: Boolean(value.required),
+    rect: normalizeRect(value.rect),
+    frameId,
+    frameUrl,
+    attributes: normalizeAttributes(value.attributes),
+    hasValue: Boolean(value.hasValue),
+  };
 }
 
 function markFrameComplete(tabId: number, frameId: number, specificRequestId?: string): void {

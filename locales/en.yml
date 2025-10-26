@@ -339,18 +339,27 @@ sidepanel:
     start: Start guided fill
     back: Back
     next: Next
-    fill: Fill
-    accept: Fill & next
+    acceptNext: Fill & next
     skip: Skip & next
     done: Done
     restart: Restart
     jumpToUnfilled: First unfilled
-    paused: Paused at "$1" ($2 of $3)
-    progress: Progress — filled $1 of $2 · skipped $3
+    focusPrompt: Focus a field in the page to preview it here, then start guided mode.
+    activeBadge: Reviewing "$1" · $2 seen
+    noActive: Looking for the next field…
+    progressDynamic: Progress — filled $1 · visited $2 · skipped $3
     manualInputLabel: Value to fill
     manualInputPlaceholder: Type a value to fill this field…
     manualInputPlaceholderWithValue: Edit or replace the suggested value.
     manualInputHint: Accepted values will be remembered for next time.
+    aiPromptLabel: Type or say what to use
+    aiPromptPlaceholder: Ask the assistant to look up or adjust this value…
+    aiPromptHint: Mention context, variations, or data to reuse. We will reference your profile when possible.
+    aiPromptAction: Ask AI for a value
+    aiPromptNoProvider: Configure an AI provider in settings to use assisted fills.
+    aiPromptEmpty: The assistant did not provide a value. Try rephrasing your request.
+    aiPromptApplied: Applied the assistant's suggestion.
+    aiPromptError: Unable to fetch a suggestion right now.
     memory:
       heading: Memory
       refresh: Refresh

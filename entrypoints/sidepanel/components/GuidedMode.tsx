@@ -29,13 +29,13 @@ interface GuidedModeProps {
   viewState: ViewState;
   selectedProfile: ProfileRecord | null;
   scanning: boolean;
-  fields: FieldEntry[];
   guidedStarted: boolean;
-  guidedIndex: number;
+  guidedActive: FieldEntry | null;
   guidedFilled: number;
   guidedSkipped: number;
-  isFirst: boolean;
-  isLast: boolean;
+  seenCount: number;
+  canGoBack: boolean;
+  hasCandidate: boolean;
   memoryList: MemoryEntry[];
   onStart: () => void;
   onBack: () => void;
@@ -56,13 +56,13 @@ export function GuidedMode({
   viewState,
   selectedProfile,
   scanning,
-  fields,
   guidedStarted,
-  guidedIndex,
+  guidedActive,
   guidedFilled,
   guidedSkipped,
-  isFirst,
-  isLast,
+  seenCount,
+  canGoBack,
+  hasCandidate,
   memoryList,
   onStart,
   onBack,
@@ -90,15 +90,14 @@ export function GuidedMode({
   if (scanning) {
     return <ModePanel><StateAlert message={t('sidepanel.toolbar.scanning')} tone="brand" /></ModePanel>;
   }
-  if (fields.length === 0) {
-    return <ModePanel><StateAlert message={t('sidepanel.states.noFields')} /></ModePanel>;
+  if (!hasCandidate && !guidedStarted) {
+    return <ModePanel><StateAlert message={t('sidepanel.guided.focusPrompt')} tone="brand" /></ModePanel>;
   }
 
-  const guidedTotal = fields.length;
-  const current = guidedStarted ? fields[guidedIndex] ?? null : null;
-  const progressText = t('sidepanel.guided.progress', [
+  const current = guidedActive;
+  const progressText = t('sidepanel.guided.progressDynamic', [
     String(guidedFilled),
-    String(guidedTotal),
+    String(seenCount),
     String(guidedSkipped),
   ]);
 
@@ -115,11 +114,12 @@ export function GuidedMode({
             ) : (
               <>
                 <Badge variant="light" color="gray">
-                  {t('sidepanel.guided.paused', [
-                    current?.field.label || t('sidepanel.field.noLabel'),
-                    String(guidedIndex + 1),
-                    String(guidedTotal),
-                  ])}
+                  {current
+                    ? t('sidepanel.guided.activeBadge', [
+                        current.field.label || t('sidepanel.field.noLabel'),
+                        String(seenCount),
+                      ])
+                    : t('sidepanel.guided.noActive')}
                 </Badge>
                 <Group gap="xs" wrap="wrap" align="center">
                   <Tooltip label={t('sidepanel.guided.back')} withArrow>
@@ -130,7 +130,7 @@ export function GuidedMode({
                       variant="light"
                       color="gray"
                       onClick={onBack}
-                      disabled={isFirst}
+                      disabled={!canGoBack}
                     >
                       <ArrowLeft size={18} />
                     </ActionIcon>
@@ -143,7 +143,6 @@ export function GuidedMode({
                       variant="light"
                       color="gray"
                       onClick={onNext}
-                      disabled={isLast}
                     >
                       <ArrowRight size={18} />
                     </ActionIcon>
@@ -202,7 +201,11 @@ export function GuidedMode({
           </Text>
         </Stack>
 
-        <Stack gap="sm">{guidedStarted && current && renderGuidedControls(current)}</Stack>
+        {guidedStarted && !current ? (
+          <StateAlert message={t('sidepanel.guided.noActive')} tone="brand" />
+        ) : null}
+
+        <Stack gap="sm">{guidedStarted && current ? renderGuidedControls(current) : null}</Stack>
 
         <Card withBorder radius="md" shadow="sm">
           <Stack gap="sm">
