@@ -1,33 +1,30 @@
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
-import type { PromptOption, PromptOptionSlot } from '../../shared/apply/types';
-
-type OverlayMode = 'highlight' | 'prompt';
-
-interface PromptOptions {
-  label: string;
-  preview?: string;
-  options?: PromptOption[];
-  defaultSlot?: PromptOptionSlot | null;
-  defaultValue?: string;
-  onFill: (value: string, slot: PromptOptionSlot | null) => void;
-  onSkip: () => void;
-}
+import { createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { OverlayApp } from './ui/OverlayApp';
+import type {
+  HighlightRect,
+  OverlayComponentState,
+  PopoverPosition,
+  PromptOptions,
+} from './ui/types';
 
 interface HighlightOptions {
   label: string;
   duration?: number;
 }
 
-interface OverlayElements {
-  highlight: HTMLDivElement;
-  popover: HTMLDivElement;
-}
-
 let cleanupFns: Array<() => void> = [];
 let currentTarget: HTMLElement | null = null;
-let currentMode: OverlayMode | null = null;
 let overlayRoot: ShadowRoot | null = null;
 let dismissTimer: number | null = null;
+let hostContainer: HTMLDivElement | null = null;
+let reactRoot: Root | null = null;
+let popoverElement: HTMLDivElement | null = null;
+let highlightRect: HighlightRect | null = null;
+let popoverPosition: PopoverPosition | null = null;
+let overlayState: OverlayComponentState = { mode: 'hidden', version: 0 };
+let versionCounter = 0;
 
 export function clearOverlay(): void {
   if (dismissTimer !== null) {
@@ -37,13 +34,11 @@ export function clearOverlay(): void {
   cleanupFns.forEach((fn) => fn());
   cleanupFns = [];
   currentTarget = null;
-  currentMode = null;
 
-  const { highlight, popover } = ensureElements();
-  highlight.style.display = 'none';
-  highlight.style.opacity = '0';
-  popover.hidden = true;
-  popover.innerHTML = '';
+  highlightRect = null;
+  popoverPosition = null;
+  overlayState = { mode: 'hidden', version: nextVersion() };
+  renderOverlay();
 }
 
 export function showHighlight(target: Element, options: HighlightOptions): void {
@@ -53,24 +48,14 @@ export function showHighlight(target: Element, options: HighlightOptions): void 
   }
   clearOverlay();
   currentTarget = target;
-  currentMode = 'highlight';
   target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
 
-  const { highlight, popover } = ensureElements();
-  updateHighlightRect(target, highlight);
-
-  popover.innerHTML = '';
-  if (options.label.trim().length > 0) {
-    const label = document.createElement('div');
-    label.className = 'overlay-label';
-    label.textContent = options.label;
-    popover.append(label);
-    popover.hidden = false;
-    void positionPopover(target, popover);
-  } else {
-    popover.hidden = true;
-  }
-  attachRepositionListeners(target, highlight, popover, false);
+  highlightRect = computeHighlightLayout(target);
+  popoverPosition = options.label.trim().length > 0 ? { x: 0, y: 0, visible: false } : null;
+  overlayState = { mode: 'highlight', version: nextVersion(), label: options.label };
+  renderOverlay();
+  void updatePopoverPosition();
+  attachRepositionListeners(target, Boolean(popoverPosition));
 
   const duration = Math.max(0, options.duration ?? 1000);
   if (duration > 0) {
@@ -94,151 +79,25 @@ export function showPrompt(target: Element, options: PromptOptions): void {
   }
   clearOverlay();
   currentTarget = target;
-  currentMode = 'prompt';
   target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
 
-  const { highlight, popover } = ensureElements();
-  updateHighlightRect(target, highlight);
-  renderPrompt(popover, options);
-  popover.hidden = false;
-  void positionPopover(target, popover);
-  attachRepositionListeners(target, highlight, popover, true);
+  highlightRect = computeHighlightLayout(target);
+  popoverPosition = { x: 0, y: 0, visible: false };
+  overlayState = { mode: 'prompt', version: nextVersion(), prompt: options };
+  renderOverlay();
+  void updatePopoverPosition();
+  attachRepositionListeners(target, true);
 }
 
-function renderPrompt(popover: HTMLDivElement, options: PromptOptions): void {
-  const { t } = i18n;
-  popover.innerHTML = '';
-
-  const heading = document.createElement('div');
-  heading.className = 'overlay-title';
-  heading.textContent = options.label.length > 0 ? options.label : t('overlay.prompt.heading');
-
-  const body = document.createElement('div');
-  body.className = 'overlay-body';
-  popover.append(heading);
-
-  const controls = document.createElement('div');
-  controls.className = 'overlay-controls';
-
-  let currentSlot: PromptOptionSlot | null = options.defaultSlot ?? null;
-  let currentValue = options.defaultValue ?? options.preview ?? '';
-
-  const updatePreview = () => {
-    if (currentValue && currentValue.trim().length > 0) {
-      body.textContent = currentValue;
-    } else if (options.preview && options.preview.trim().length > 0) {
-      body.textContent = options.preview;
-    } else {
-      body.textContent = t('overlay.prompt.awaitingSelection');
-    }
-  };
-
-  let select: HTMLSelectElement | null = null;
-  let fill!: HTMLButtonElement;
-
-  const normalizeOptions = options.options ?? [];
-  if (normalizeOptions.length > 0) {
-    select = document.createElement('select');
-    select.className = 'overlay-select';
-
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = t('overlay.prompt.placeholder');
-    select.append(placeholder);
-
-    for (const option of normalizeOptions) {
-      const optionEl = document.createElement('option');
-      optionEl.value = option.slot;
-      optionEl.textContent = `${option.label} · ${truncate(option.value)}`;
-      optionEl.dataset.value = option.value;
-      select.append(optionEl);
-    }
-
-    if (currentSlot && normalizeOptions.some((opt) => opt.slot === currentSlot)) {
-      select.value = currentSlot;
-      currentValue = normalizeOptions.find((opt) => opt.slot === currentSlot)?.value ?? currentValue;
-    } else {
-      select.value = '';
-      if (!currentValue && normalizeOptions.length === 1) {
-        currentSlot = normalizeOptions[0].slot;
-        currentValue = normalizeOptions[0].value;
-        select.value = currentSlot;
-      }
-    }
-
-    select.addEventListener('change', (event) => {
-      const target = event.target as HTMLSelectElement;
-      const slot = target.value as PromptOptionSlot | '';
-      if (!slot) {
-        currentSlot = null;
-        currentValue = '';
-      } else {
-        const selected = normalizeOptions.find((opt) => opt.slot === slot);
-        currentSlot = selected?.slot ?? null;
-        currentValue = selected?.value ?? '';
-      }
-      updatePreview();
-      fill.disabled = normalizeOptions.length > 0 && currentValue.trim().length === 0;
-    });
-
-    const helper = document.createElement('div');
-    helper.className = 'overlay-helper';
-    helper.textContent = t('overlay.prompt.helper');
-
-    controls.append(select, helper);
-  } else {
-    currentSlot = null;
-  }
-
-  if (controls.childElementCount > 0) {
-    popover.append(controls);
-  }
-  popover.append(body);
-
-  const actions = document.createElement('div');
-  actions.className = 'overlay-actions';
-
-  fill = document.createElement('button');
-  fill.type = 'button';
-  fill.className = 'overlay-btn primary';
-  fill.textContent = t('overlay.prompt.fill');
-  fill.disabled = normalizeOptions.length > 0 && (!currentValue || currentValue.trim().length === 0);
-  fill.addEventListener('click', (event) => {
-    event.preventDefault();
-    if (normalizeOptions.length > 0 && (!currentValue || currentValue.trim().length === 0)) {
-      return;
-    }
-    options.onFill(currentValue ?? '', currentSlot ?? null);
-  });
-
-  const skip = document.createElement('button');
-  skip.type = 'button';
-  skip.className = 'overlay-btn';
-  skip.textContent = t('overlay.prompt.skip');
-  skip.addEventListener('click', (event) => {
-    event.preventDefault();
-    options.onSkip();
-  });
-
-  actions.append(fill, skip);
-  popover.append(actions);
-
-  updatePreview();
-}
-
-function attachRepositionListeners(
-  target: HTMLElement,
-  highlight: HTMLDivElement,
-  popover: HTMLDivElement,
-  hasPopover: boolean,
-): void {
+function attachRepositionListeners(target: HTMLElement, hasPopover: boolean): void {
   const reposition = () => {
     if (!currentTarget || currentTarget !== target) {
       return;
     }
-    updateHighlightRect(target, highlight);
+    highlightRect = computeHighlightLayout(target);
+    renderOverlay();
     if (hasPopover) {
-      void positionPopover(target, popover);
+      void updatePopoverPosition();
     }
   };
 
@@ -258,7 +117,7 @@ function attachRepositionListeners(
   });
 }
 
-function ensureElements(): OverlayElements {
+function ensureReactRoot(): void {
   let host = document.getElementById('__apply_overlay_host__');
   if (!host) {
     host = document.createElement('div');
@@ -353,54 +212,79 @@ function ensureElements(): OverlayElements {
     overlayRoot.append(style);
   }
 
-  const root = overlayRoot!;
-
-  let highlight = root.querySelector<HTMLDivElement>('.highlight');
-  if (!highlight) {
-    highlight = document.createElement('div');
-    highlight.className = 'highlight';
-    highlight.style.display = 'none';
-    root.append(highlight);
+  if (!hostContainer) {
+    hostContainer = document.createElement('div');
+    overlayRoot!.append(hostContainer);
   }
 
-  let popover = root.querySelector<HTMLDivElement>('.popover');
-  if (!popover) {
-    popover = document.createElement('div');
-    popover.className = 'popover';
-    popover.hidden = true;
-    root.append(popover);
+  if (!reactRoot) {
+    reactRoot = createRoot(hostContainer);
   }
-
-  return { highlight, popover };
 }
 
-async function positionPopover(target: HTMLElement, popover: HTMLDivElement): Promise<void> {
+const handlePopoverMount = (element: HTMLDivElement | null) => {
+  popoverElement = element;
+  if (element) {
+    void updatePopoverPosition();
+  }
+};
+
+function renderOverlay(): void {
+  ensureReactRoot();
+  if (!reactRoot) {
+    return;
+  }
+
+  reactRoot.render(
+    createElement(OverlayApp, {
+      state: overlayState,
+      highlightRect,
+      popoverPosition,
+      onPopoverMount: handlePopoverMount,
+    }),
+  );
+}
+
+async function updatePopoverPosition(): Promise<void> {
+  if (!currentTarget || !popoverElement) {
+    return;
+  }
+  if (overlayState.mode === 'hidden') {
+    return;
+  }
+  if (overlayState.mode === 'highlight' && overlayState.label.trim().length === 0) {
+    popoverPosition = null;
+    renderOverlay();
+    return;
+  }
+
   await nextFrame();
-  const { x, y } = await computePosition(target, popover, {
+  const { x, y } = await computePosition(currentTarget, popoverElement, {
     middleware: [offset(10), flip(), shift()],
   });
-  popover.style.left = `${Math.round(x)}px`;
-  popover.style.top = `${Math.round(y)}px`;
+  popoverPosition = { x: Math.round(x), y: Math.round(y), visible: true };
+  renderOverlay();
 }
 
-function updateHighlightRect(target: HTMLElement, highlight: HTMLDivElement): void {
+function computeHighlightLayout(target: HTMLElement): HighlightRect {
   const rect = target.getBoundingClientRect();
   const padding = 6;
-  highlight.style.display = 'block';
-  highlight.style.top = `${Math.max(rect.top - padding, 0)}px`;
-  highlight.style.left = `${Math.max(rect.left - padding, 0)}px`;
-  highlight.style.width = `${Math.max(rect.width + padding * 2, 0)}px`;
-  highlight.style.height = `${Math.max(rect.height + padding * 2, 0)}px`;
-  highlight.style.opacity = '1';
+  return {
+    top: Math.max(rect.top - padding, 0),
+    left: Math.max(rect.left - padding, 0),
+    width: Math.max(rect.width + padding * 2, 0),
+    height: Math.max(rect.height + padding * 2, 0),
+    visible: true,
+  };
+}
+
+function nextVersion(): number {
+  versionCounter += 1;
+  return versionCounter;
 }
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function truncate(value: string, limit = 80): string {
-  if (value.length <= limit) {
-    return value;
-  }
-  return `${value.slice(0, limit - 1)}…`;
-}
+export type { PromptOptions } from './ui/types';
