@@ -1,17 +1,14 @@
-import type { ChangeEvent, JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
-  Alert,
   Badge,
   Box,
   Button,
   Card,
   Group,
-  Menu,
   NativeSelect,
   Paper,
-  ScrollArea,
   Select,
   Stack,
   Tabs,
@@ -19,14 +16,9 @@ import {
   Textarea,
   TextInput,
   Title,
-  Tree,
   Tooltip,
-  getTreeExpandedState,
   useComputedColorScheme,
   useMantineTheme,
-  useTree,
-  type RenderTreeNodePayload,
-  type TreeNodeData,
 } from '@mantine/core';
 import {
   ArrowLeft,
@@ -71,6 +63,10 @@ import {
   ProviderConfigurationError,
   ProviderInvocationError,
 } from '../../shared/llm/errors';
+import { FieldReviewMode } from './components/FieldReviewMode';
+import { GuidedMode } from './components/GuidedMode';
+import { ManualCopyMode } from './components/ManualCopyMode';
+import type { FieldEntry, FieldStatus, ViewState } from './types';
 
 function isFieldSlotValue(slot: PromptOptionSlot | null | undefined): slot is FieldSlot {
   return typeof slot === 'string' && !slot.startsWith('profile.');
@@ -101,30 +97,7 @@ function hexToRgba(color: string | undefined, alpha: number): string {
 
 type PanelMode = 'dom' | 'guided' | 'manual';
 
-type FieldStatus = 'idle' | 'pending' | 'filled' | 'skipped' | 'failed';
-
 type RuntimePort = ReturnType<typeof browser.runtime.connect>;
-
-interface FieldEntry {
-  field: ScannedField;
-  slot: FieldSlot | null;
-  selectedSlot: PromptOptionSlot | null;
-  suggestion?: string;
-  manualValue: string;
-  status: FieldStatus;
-  reason?: string;
-  slotSource: 'heuristic' | 'model' | 'unset';
-  slotNote?: string;
-  autoKey?: string;
-  autoKeyLabel?: string;
-  autoNote?: string;
-  autoConfidence?: number;
-}
-
-interface ViewState {
-  loadingProfiles: boolean;
-  error?: string;
-}
 
 export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
@@ -898,18 +871,6 @@ export default function App() {
   const isFirst = guidedStarted ? guidedIndex <= 0 : true;
   const isLast = guidedStarted ? guidedIndex >= Math.max(guidedTotal - 1, 0) : false;
 
-  const renderStateAlert = (message: string, tone: 'gray' | 'red' | 'brand' = 'gray') => (
-    <Alert color={tone} variant="light" radius="lg">
-      {message}
-    </Alert>
-  );
-
-  const renderPanel = (content: ReactNode) => (
-    <ScrollArea style={{ height: '100%' }} px="md" py="md">
-      <Stack gap="md">{content}</Stack>
-    </ScrollArea>
-  );
-
   const renderDomToolbar = () => {
     const iconSize = 18;
     const baseDisabled = viewState.loadingProfiles || !selectedProfile;
@@ -1096,37 +1057,54 @@ export default function App() {
               value="dom"
               style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
-              <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
-                <Paper
-                  px="md"
-                  py="sm"
-                  withBorder
-                  shadow="xs"
-                  style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-                >
-                  {renderDomToolbar()}
-                </Paper>
-                <ScrollArea style={{ flex: 1 }} px="md" py="md">
-                  <Stack gap="md">
-                    {renderDomMode()}
-                  </Stack>
-                </ScrollArea>
-                <Paper
-                  px="md"
-                  py="sm"
-                  withBorder
-                  shadow="sm"
-                  style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
-                >
-                  {renderSelectionFooter()}
-                </Paper>
-              </Stack>
+              <FieldReviewMode
+                viewState={viewState}
+                selectedProfile={selectedProfile}
+                scanning={scanning}
+                fields={fields}
+                selectedFieldId={selectedFieldId}
+                toolbar={renderDomToolbar()}
+                footer={renderSelectionFooter()}
+                renderFieldCard={(entry, options) => renderFieldCard(entry, options)}
+                t={t}
+              />
             </Tabs.Panel>
             <Tabs.Panel value="guided" style={{ flex: 1, overflow: 'hidden' }}>
-              {renderPanel(renderGuidedMode())}
+              <GuidedMode
+                viewState={viewState}
+                selectedProfile={selectedProfile}
+                scanning={scanning}
+                fields={fields}
+                guidedStarted={guidedStarted}
+                guidedIndex={guidedIndex}
+                guidedFilled={guidedFilled}
+                guidedSkipped={guidedSkipped}
+                isFirst={isFirst}
+                isLast={isLast}
+                memoryList={memoryList}
+                onStart={startGuided}
+                onBack={navPrev}
+                onNext={navNext}
+                onJumpToUnfilled={navToFirstUnfilled}
+                onRestart={restartGuided}
+                onHighlight={highlightCurrent}
+                onFinish={finishGuided}
+                onRefreshMemory={refreshMemory}
+                onClearMemory={clearMemory}
+                onRemoveMemory={removeMemory}
+                renderGuidedControls={renderGuidedControls}
+                truncate={truncate}
+                t={t}
+              />
             </Tabs.Panel>
             <Tabs.Panel value="manual" style={{ flex: 1, overflow: 'hidden' }}>
-              {renderPanel(renderManualMode())}
+              <ManualCopyMode
+                viewState={viewState}
+                selectedProfile={selectedProfile}
+                manualTree={manualTree}
+                onCopy={handleCopy}
+                t={t}
+              />
             </Tabs.Panel>
           </Tabs>
         </Stack>
@@ -1134,215 +1112,6 @@ export default function App() {
       {permissionOverlay}
     </Box>
   );
-
-  function renderDomMode() {
-    if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
-    }
-    if (viewState.error) {
-      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
-    }
-    if (!selectedProfile) {
-      return renderStateAlert(t('sidepanel.states.noProfile'));
-    }
-    if (scanning) {
-      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'brand');
-    }
-    if (fields.length === 0) {
-      return renderStateAlert(t('sidepanel.states.noFields'));
-    }
-    return (
-      <Stack gap="sm">
-        {fields.map((entry) => renderFieldCard(entry, { isSelected: entry.field.id === selectedFieldId }))}
-      </Stack>
-    );
-  }
-
-  function renderGuidedMode() {
-    if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
-    }
-    if (viewState.error) {
-      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
-    }
-    if (!selectedProfile) {
-      return renderStateAlert(t('sidepanel.states.noProfile'));
-    }
-    if (scanning) {
-      return renderStateAlert(t('sidepanel.toolbar.scanning'), 'brand');
-    }
-    if (fields.length === 0) {
-      return renderStateAlert(t('sidepanel.states.noFields'));
-    }
-
-    const current = guidedStarted ? fields[guidedIndex] : null;
-    const progressText = t('sidepanel.guided.progress', [
-      String(guidedFilled),
-      String(guidedTotal),
-      String(guidedSkipped),
-    ]);
-
-    return (
-      <Stack gap="sm">
-        <Alert color="brand" variant="light" radius="lg">
-          {t('sidepanel.guided.description')}
-        </Alert>
-        <Stack gap={4}>
-          <Group gap="xs" wrap="wrap" align="center">
-            {!guidedStarted ? (
-              <Button size="sm" leftSection={<Play size={16} />} onClick={startGuided}>
-                {t('sidepanel.guided.start')}
-              </Button>
-            ) : (
-              <>
-                <Badge variant="light" color="gray">
-                  {t('sidepanel.guided.paused', [
-                    current?.field.label || t('sidepanel.field.noLabel'),
-                    String(guidedIndex + 1),
-                    String(guidedTotal),
-                  ])}
-                </Badge>
-                <Group gap="xs" wrap="wrap" align="center">
-                  <Tooltip label={t('sidepanel.guided.back')} withArrow>
-                    <ActionIcon
-                      aria-label={t('sidepanel.guided.back')}
-                      size="lg"
-                      radius="md"
-                      variant="light"
-                      color="gray"
-                      onClick={navPrev}
-                      disabled={isFirst}
-                    >
-                      <ArrowLeft size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label={t('sidepanel.guided.next')} withArrow>
-                    <ActionIcon
-                      aria-label={t('sidepanel.guided.next')}
-                      size="lg"
-                      radius="md"
-                      variant="light"
-                      color="gray"
-                      onClick={navNext}
-                      disabled={isLast}
-                    >
-                      <ArrowRight size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label={t('sidepanel.guided.jumpToUnfilled')} withArrow>
-                    <ActionIcon
-                      aria-label={t('sidepanel.guided.jumpToUnfilled')}
-                      size="lg"
-                      radius="md"
-                      variant="light"
-                      color="gray"
-                      onClick={navToFirstUnfilled}
-                    >
-                      <ListChecks size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label={t('sidepanel.guided.restart')} withArrow>
-                    <ActionIcon
-                      aria-label={t('sidepanel.guided.restart')}
-                      size="lg"
-                      radius="md"
-                      variant="light"
-                      color="gray"
-                      onClick={restartGuided}
-                    >
-                      <RotateCcw size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label={t('sidepanel.buttons.highlight')} withArrow>
-                    <ActionIcon
-                      aria-label={t('sidepanel.buttons.highlight')}
-                      size="lg"
-                      radius="md"
-                      variant="light"
-                      color="gray"
-                      onClick={() => highlightCurrent(current)}
-                      disabled={!current}
-                    >
-                      <Target size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Button
-                    size="sm"
-                    color="green"
-                    leftSection={<CheckCircle2 size={16} />}
-                    onClick={finishGuided}
-                  >
-                    {t('sidepanel.guided.done')}
-                  </Button>
-                </Group>
-              </>
-            )}
-          </Group>
-          <Text fz="xs" c="dimmed">{progressText}</Text>
-        </Stack>
-
-        <Stack gap="sm">
-          {guidedStarted && current && renderGuidedControls(current)}
-        </Stack>
-
-        <Card withBorder radius="md" shadow="sm">
-          <Stack gap="sm">
-            <Group justify="space-between">
-              <Text fw={600}>{t('sidepanel.guided.memory.heading')}</Text>
-              <Tooltip label={t('sidepanel.guided.memory.refresh')} withArrow>
-                <ActionIcon
-                  aria-label={t('sidepanel.guided.memory.refresh')}
-                  size="lg"
-                  radius="md"
-                  variant="light"
-                  color="gray"
-                  onClick={refreshMemory}
-                >
-                  <RefreshCcw size={18} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-            {memoryList.length === 0 ? (
-              <Text fz="sm" c="dimmed">{t('sidepanel.guided.memory.empty')}</Text>
-            ) : (
-              <Stack gap={6}>
-                {memoryList.map(({ key, association }) => (
-                  <Group key={key} justify="space-between" align="center">
-                    <Text fz="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
-                      {key} · {association.preferredSlot ?? ''} {association.lastValue ? `· ${truncate(association.lastValue, 60)}` : ''}
-                    </Text>
-                    <Tooltip label={t('sidepanel.guided.memory.delete')} withArrow>
-                      <ActionIcon
-                        aria-label={t('sidepanel.guided.memory.delete')}
-                        size="md"
-                        radius="md"
-                        variant="subtle"
-                        color="red"
-                        onClick={() => removeMemory(key)}
-                      >
-                        <Trash2 size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                ))}
-                <Group justify="flex-end">
-                  <Button
-                    size="xs"
-                    color="red"
-                    variant="light"
-                    leftSection={<Trash2 size={14} />}
-                    onClick={clearMemory}
-                  >
-                    {t('sidepanel.guided.memory.clearAll')}
-                  </Button>
-                </Group>
-              </Stack>
-            )}
-          </Stack>
-        </Card>
-      </Stack>
-    );
-  }
 
   function renderGuidedControls(entry: FieldEntry) {
     const { fallbackOption, manualValue, value } = resolveEntryData(entry);
@@ -1362,7 +1131,11 @@ export default function App() {
                 {entry.field.required ? ' *' : ''}
               </Text>
               <Text fz="xs" c="dimmed">
-                {t('sidepanel.field.meta', [t(`sidepanel.fieldKind.${entry.field.kind}`), entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped'), String(entry.field.frameId)])}
+                {t('sidepanel.field.meta', [
+                  t(`sidepanel.fieldKind.${entry.field.kind}`),
+                  entry.slot ? formatSlotLabel(entry.slot) : t('sidepanel.field.unmapped'),
+                  String(entry.field.frameId),
+                ])}
               </Text>
             </Stack>
             {entry.status !== 'idle' && (
@@ -1386,7 +1159,7 @@ export default function App() {
           {entry.field.kind !== 'file' ? (
             <Textarea
               label={t('sidepanel.guided.manualInputLabel')}
-              placeholder={t(placeholderKey )}
+              placeholder={t(placeholderKey)}
               autosize
               minRows={2}
               maxRows={6}
@@ -1534,7 +1307,6 @@ export default function App() {
     const idx = fieldsRef.current.findIndex((e) => e.field.id === current.field.id);
     const nextIndex = idx + 1;
     if (nextIndex >= fieldsRef.current.length) {
-      // At the end — do not advance further.
       return;
     }
     setGuidedIndex(nextIndex);
@@ -1545,7 +1317,6 @@ export default function App() {
     }
   }
 
-  // Clamp guided index if fields change size while guided mode is active
   useEffect(() => {
     if (!guidedStarted) return;
     if (fields.length === 0) {
@@ -1784,7 +1555,7 @@ export default function App() {
         />
         <Textarea
           label={t('sidepanel.guided.manualInputLabel')}
-          placeholder={t(placeholderKey )}
+          placeholder={t(placeholderKey)}
           autosize
           minRows={2}
           maxRows={6}
@@ -1797,66 +1568,6 @@ export default function App() {
             {t('sidepanel.buttons.fillField')}
           </Button>
         </Group>
-      </Stack>
-    );
-  }
-
-  function renderManualMode() {
-    if (viewState.loadingProfiles) {
-      return renderStateAlert(t('sidepanel.states.loadingProfiles'), 'brand');
-    }
-    if (viewState.error) {
-      return renderStateAlert(t('sidepanel.states.error', [viewState.error]), 'red');
-    }
-    if (!selectedProfile) {
-      return renderStateAlert(t('sidepanel.states.noProfileManual'));
-    }
-    return (
-      <Stack gap="md">
-        {manualTree.length === 0 && renderStateAlert(t('sidepanel.states.noManualValues'))}
-        {manualTree.length > 0 && (
-          <ManualTreeView
-            nodes={manualTree}
-            tooltipLabel={t('sidepanel.manual.copyHint')}
-            branchCopyLabel={t('sidepanel.manual.copyBranch')}
-            valueCopyLabel={t('sidepanel.manual.copyValue')}
-            searchPlaceholder={t('sidepanel.manual.searchPlaceholder')}
-            searchAriaLabel={t('sidepanel.manual.searchAria')}
-            previousMatchLabel={t('sidepanel.manual.searchPrevious')}
-            nextMatchLabel={t('sidepanel.manual.searchNext')}
-            onCopy={handleCopy}
-          />
-        )}
-        <Card withBorder radius="md" shadow="sm">
-          <Stack gap="sm">
-            <Group justify="space-between" align="flex-start">
-              <Text fw={600}>{t('sidepanel.manual.rawLabel')}</Text>
-              <Tooltip label={t('sidepanel.buttons.copyAll')} withArrow>
-                <ActionIcon
-                  aria-label={t('sidepanel.buttons.copyAll')}
-                  size="lg"
-                  radius="md"
-                  variant="light"
-                  color="gray"
-                  onClick={() => handleCopy(t('sidepanel.manual.rawLabel'), selectedProfile.rawText)}
-                >
-                  <Copy size={18} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-            <Paper withBorder radius="md" p="sm">
-              <ScrollArea h={220}>
-                <Text
-                  component="pre"
-                  fz="sm"
-                  style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                >
-                  {selectedProfile.rawText}
-                </Text>
-              </ScrollArea>
-            </Paper>
-          </Stack>
-        </Card>
       </Stack>
     );
   }
@@ -2061,544 +1772,6 @@ function truncate(value: string, limit = 120): string {
     return value;
   }
   return `${value.slice(0, limit - 1)}…`;
-}
-
-interface ManualTreeViewProps {
-  nodes: ManualValueNode[];
-  tooltipLabel: string;
-  branchCopyLabel: string;
-  valueCopyLabel: string;
-  searchPlaceholder: string;
-  searchAriaLabel: string;
-  previousMatchLabel: string;
-  nextMatchLabel: string;
-  onCopy: (label: string, value: string) => void;
-}
-
-type ManualTreeNodeData = TreeNodeData & { manualNode: ManualValueNode };
-
-function ManualTreeView({
-  nodes,
-  tooltipLabel,
-  branchCopyLabel,
-  valueCopyLabel,
-  searchPlaceholder,
-  searchAriaLabel,
-  previousMatchLabel,
-  nextMatchLabel,
-  onCopy,
-}: ManualTreeViewProps) {
-  if (nodes.length === 0) {
-    return null;
-  }
-
-  const theme = useMantineTheme();
-  const colorScheme = useComputedColorScheme('light');
-  const hoverBackground =
-    colorScheme === 'dark'
-      ? theme.colors.dark?.[6] ?? theme.colors.dark?.[5] ?? '#2c2e33'
-      : theme.colors.gray?.[1] ?? theme.colors.gray?.[2] ?? '#f1f3f5';
-  const treeData = useMemo<ManualTreeNodeData[]>(() => nodes.map(mapManualNodeToTreeNode), [nodes]);
-  const expandedState = useMemo(() => getTreeExpandedState(treeData, '*'), [treeData]);
-  const tree = useTree({ initialExpandedState: expandedState });
-  const { setExpandedState, clearSelected, setHoveredNode } = tree;
-  const [contextNodeId, setContextNodeId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
-
-  const flattenedNodes = useMemo(() => flattenManualNodes(nodes), [nodes]);
-  const matches = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return [] as string[];
-    }
-    return flattenedNodes
-      .filter((node) => {
-        const labelMatch = node.label.toLowerCase().includes(query);
-        const valueMatch =
-          typeof node.value === 'string' && node.value.toLowerCase().includes(query);
-        return labelMatch || valueMatch;
-      })
-      .map((node) => node.id);
-  }, [flattenedNodes, searchQuery]);
-  const matchesSet = useMemo(() => new Set(matches), [matches]);
-  const matchesCount = matches.length;
-  const hasMatches = matchesCount > 0;
-  const activeMatchId = hasMatches
-    ? matches[Math.min(activeMatchIndex, Math.max(matchesCount - 1, 0))]
-    : null;
-  const highlightColor =
-    theme.colors.blue?.[colorScheme === 'dark' ? 3 : 6] ??
-    (colorScheme === 'dark' ? '#4dabf7' : '#1c7ed6');
-  const matchBackground =
-    colorScheme === 'dark'
-      ? theme.colors.blue?.[9] ?? '#1864ab'
-      : theme.colors.blue?.[0] ?? '#e7f5ff';
-  const activeMatchBackground =
-    colorScheme === 'dark'
-      ? theme.colors.blue?.[8] ?? '#1c7ed6'
-      : theme.colors.blue?.[1] ?? '#d0ebff';
-  const activeMatchBorderColor = highlightColor;
-  const trimmedQuery = searchQuery.trim();
-  const searchBarBackground =
-    colorScheme === 'dark'
-      ? theme.colors.dark?.[7] ?? theme.colors.dark?.[6] ?? '#1a1b1e'
-      : theme.white ?? '#ffffff';
-  const highlightText = useCallback(
-    (text: string) => renderTextWithHighlight(text, trimmedQuery, highlightColor),
-    [highlightColor, trimmedQuery],
-  );
-
-  useEffect(() => {
-    setExpandedState(expandedState);
-    clearSelected();
-    setHoveredNode(null);
-  }, [
-    trimmedQuery,
-    expandedState,
-    setExpandedState,
-    clearSelected,
-    setHoveredNode,
-  ]);
-
-  useEffect(() => {
-    setContextNodeId(null);
-  }, [treeData]);
-
-  useEffect(() => {
-    setActiveMatchIndex(0);
-  }, [trimmedQuery]);
-
-  useEffect(() => {
-    setActiveMatchIndex((current) => {
-      if (!hasMatches) {
-        return 0;
-      }
-      return Math.min(current, matchesCount - 1);
-    });
-  }, [hasMatches, matchesCount]);
-
-  useEffect(() => {
-    if (!activeMatchId) {
-      return;
-    }
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const selector =
-      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-        ? `[data-manual-node-id="${CSS.escape(activeMatchId)}"]`
-        : `[data-manual-node-id="${activeMatchId.replace(/"/g, '\\"')}"]`;
-    const element = document.querySelector(selector);
-    element?.scrollIntoView({ block: 'center' });
-  }, [activeMatchId]);
-
-  const copyBranch = useCallback(
-    (node: ManualValueNode) => {
-      const text = buildManualBranchCopy(node);
-      if (!text) {
-        return;
-      }
-      onCopy(node.displayPath, text);
-    },
-    [onCopy],
-  );
-
-  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(event.currentTarget.value);
-  }, []);
-
-  const handleNextMatch = useCallback(() => {
-    if (!hasMatches) {
-      return;
-    }
-    setActiveMatchIndex((current) => (current + 1) % matchesCount);
-  }, [hasMatches, matchesCount]);
-
-  const handlePreviousMatch = useCallback(() => {
-    if (!hasMatches) {
-      return;
-    }
-    setActiveMatchIndex((current) => (current - 1 + matchesCount) % matchesCount);
-  }, [hasMatches, matchesCount]);
-
-  const renderNode = useCallback(
-    ({ node, elementProps, hasChildren, expanded }: RenderTreeNodePayload) => {
-      const manualNode = (node as ManualTreeNodeData).manualNode;
-      const isHovered = elementProps['data-hovered'] === true;
-      const { className, style, onClick, ...rest } = elementProps;
-      const isMatch = matchesSet.has(manualNode.id);
-      const isActiveMatch = activeMatchId === manualNode.id;
-      const backgroundColor = (() => {
-        if (isActiveMatch) {
-          return activeMatchBackground;
-        }
-        if (isMatch) {
-          return matchBackground;
-        }
-        if (isHovered) {
-          return hoverBackground;
-        }
-        return 'transparent';
-      })();
-      const borderColor = isActiveMatch ? activeMatchBorderColor : 'transparent';
-
-      if (!hasChildren && typeof manualNode.value === 'string') {
-        const value = manualNode.value;
-        const { onContextMenu, ...restElementProps } = rest as typeof rest & {
-          onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
-        };
-        const isMenuOpen = contextNodeId === manualNode.id;
-        const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          onContextMenu?.(event);
-          setContextNodeId(manualNode.id);
-        };
-        return (
-          <Menu
-            withinPortal
-            opened={isMenuOpen}
-            onClose={() => setContextNodeId((current) => (current === manualNode.id ? null : current))}
-            closeOnItemClick
-            closeOnEscape
-          >
-            <Menu.Target>
-              <Tooltip label={tooltipLabel} position="right" withArrow openDelay={250}>
-                <div
-                  className={className}
-                  style={{
-                    ...style,
-                    paddingBlock: '4px',
-                    paddingInlineEnd: '8px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: '2px',
-                    borderRadius: 'var(--mantine-radius-sm)',
-                    border: '1px solid transparent',
-                    backgroundColor,
-                    borderColor,
-                    transition: 'background-color 120ms ease, border-color 120ms ease',
-                  }}
-                  {...restElementProps}
-                  data-manual-node-id={manualNode.id}
-                  onClick={(event) => {
-                    onCopy(manualNode.displayPath, value);
-                    onClick?.(event);
-                  }}
-                  onContextMenu={handleContextMenu}
-                >
-                  <Text
-                    fz="sm"
-                    fw={500}
-                    style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                  >
-                    {highlightText(manualNode.label)}
-                  </Text>
-                  <Text
-                    fz="xs"
-                    c="dimmed"
-                    style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                  >
-                    {highlightText(value)}
-                  </Text>
-                </div>
-              </Tooltip>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<Copy size={14} aria-hidden />}
-                onClick={() => {
-                  onCopy(manualNode.displayPath, value);
-                  setContextNodeId(null);
-                }}
-              >
-                {valueCopyLabel}
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        );
-      }
-
-      if (hasChildren) {
-        const { onContextMenu, ...restElementProps } = rest as typeof rest & {
-          onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
-        };
-        const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          onContextMenu?.(event);
-          setContextNodeId(manualNode.id);
-        };
-        const nodeHasLeaves = manualNodeHasLeaf(manualNode);
-        const isMenuOpen = contextNodeId === manualNode.id;
-        return (
-          <Menu
-            withinPortal
-            opened={isMenuOpen}
-            onClose={() => setContextNodeId((current) => (current === manualNode.id ? null : current))}
-            closeOnItemClick
-            closeOnEscape
-          >
-            <Menu.Target>
-              <div
-                className={className}
-                style={{
-                  ...style,
-                  paddingBlock: '4px',
-                  paddingInlineEnd: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--mantine-spacing-xs)',
-                  cursor: 'pointer',
-                  borderRadius: 'var(--mantine-radius-sm)',
-                  border: '1px solid transparent',
-                  backgroundColor,
-                  borderColor,
-                  transition: 'background-color 120ms ease, border-color 120ms ease',
-                }}
-                onClick={onClick}
-                onContextMenu={handleContextMenu}
-                {...restElementProps}
-                data-manual-node-id={manualNode.id}
-              >
-                <ChevronRight
-                  size={16}
-                  strokeWidth={2}
-                  aria-hidden
-                  style={{
-                    transition: 'transform 150ms ease',
-                    transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                    flexShrink: 0,
-                  }}
-                />
-                <Text fw={600} fz="sm" style={{ margin: 0 }}>
-                  {highlightText(manualNode.label)}
-                </Text>
-              </div>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<Copy size={14} aria-hidden />}
-                onClick={() => {
-                  copyBranch(manualNode);
-                  setContextNodeId(null);
-                }}
-                disabled={!nodeHasLeaves}
-              >
-                {branchCopyLabel}
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        );
-      }
-
-      return (
-        <div
-          className={className}
-          style={{
-            ...style,
-            paddingBlock: '4px',
-            paddingInlineEnd: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--mantine-spacing-xs)',
-            cursor: 'pointer',
-            borderRadius: 'var(--mantine-radius-sm)',
-            border: '1px solid transparent',
-            backgroundColor,
-            borderColor,
-            transition: 'background-color 120ms ease, border-color 120ms ease',
-          }}
-          onClick={onClick}
-          {...rest}
-          data-manual-node-id={manualNode.id}
-        >
-          <ChevronRight
-            size={16}
-            strokeWidth={2}
-            aria-hidden
-            style={{
-              transition: 'transform 150ms ease',
-              transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-              flexShrink: 0,
-            }}
-          />
-          <Text fw={600} fz="sm" style={{ margin: 0 }}>
-            {highlightText(manualNode.label)}
-          </Text>
-        </div>
-      );
-    },
-    [
-      activeMatchBackground,
-      activeMatchBorderColor,
-      activeMatchId,
-      branchCopyLabel,
-      contextNodeId,
-      copyBranch,
-      hoverBackground,
-      matchBackground,
-      matchesSet,
-      highlightText,
-      onCopy,
-      tooltipLabel,
-      valueCopyLabel,
-    ],
-  );
-
-  return (
-    <Stack gap={0} style={{ position: 'relative' }}>
-      <Box
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 2,
-          backgroundColor: searchBarBackground,
-          paddingBottom: 'var(--mantine-spacing-xs)',
-        }}
-      >
-        <TextInput
-          value={searchQuery}
-          onChange={handleSearchChange}
-          placeholder={searchPlaceholder}
-          aria-label={searchAriaLabel}
-          size="sm"
-          leftSection={<Search size={16} strokeWidth={2} aria-hidden />}
-          rightSection={
-            <Group gap={4} wrap="nowrap">
-              {hasMatches && (
-                <Text size="xs" c="dimmed" fw={500}>
-                  {`${Math.min(activeMatchIndex + 1, matchesCount)} / ${matchesCount}`}
-                </Text>
-              )}
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="gray"
-                aria-label={previousMatchLabel}
-                disabled={!hasMatches}
-                onClick={handlePreviousMatch}
-              >
-                <ChevronUp size={16} strokeWidth={2} />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="gray"
-                aria-label={nextMatchLabel}
-                disabled={!hasMatches}
-                onClick={handleNextMatch}
-              >
-                <ChevronDown size={16} strokeWidth={2} />
-              </ActionIcon>
-            </Group>
-          }
-          rightSectionPointerEvents="auto"
-          rightSectionWidth={hasMatches ? 144 : 112}
-        />
-      </Box>
-      <Tree data={treeData} tree={tree} levelOffset="sm" renderNode={renderNode} />
-    </Stack>
-  );
-}
-
-function mapManualNodeToTreeNode(node: ManualValueNode): ManualTreeNodeData {
-  return {
-    value: node.id,
-    label: node.label,
-    manualNode: node,
-    children: node.children?.map(mapManualNodeToTreeNode),
-  };
-}
-
-function flattenManualNodes(nodes: ManualValueNode[]): ManualValueNode[] {
-  const result: ManualValueNode[] = [];
-  nodes.forEach((node) => {
-    result.push(node);
-    if (node.children && node.children.length > 0) {
-      result.push(...flattenManualNodes(node.children));
-    }
-  });
-  return result;
-}
-
-function renderTextWithHighlight(text: string, query: string, highlightColor: string): ReactNode {
-  if (!query) {
-    return text;
-  }
-  const normalizedQuery = query.toLowerCase();
-  if (!normalizedQuery) {
-    return text;
-  }
-  const normalizedText = text.toLowerCase();
-  let searchIndex = 0;
-  const segments: Array<{ value: string; match: boolean }> = [];
-  let matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
-
-  while (matchIndex !== -1) {
-    if (matchIndex > searchIndex) {
-      segments.push({ value: text.slice(searchIndex, matchIndex), match: false });
-    }
-    segments.push({
-      value: text.slice(matchIndex, matchIndex + query.length),
-      match: true,
-    });
-    searchIndex = matchIndex + query.length;
-    matchIndex = normalizedText.indexOf(normalizedQuery, searchIndex);
-  }
-
-  if (searchIndex < text.length) {
-    segments.push({ value: text.slice(searchIndex), match: false });
-  }
-
-  return segments.map((segment, index) => {
-    if (!segment.match) {
-      return (
-        <span key={`segment-${index}`} style={{ fontWeight: 'inherit', fontSize: 'inherit' }}>
-          {segment.value}
-        </span>
-      );
-    }
-    return (
-      <mark
-        key={`segment-${index}`}
-        style={{
-          backgroundColor: 'transparent',
-          color: highlightColor,
-          fontWeight: 'inherit',
-          fontSize: 'inherit',
-        }}
-      >
-        {segment.value}
-      </mark>
-    );
-  });
-}
-
-function manualNodeHasLeaf(node: ManualValueNode): boolean {
-  if (typeof node.value === 'string' && node.value.trim().length > 0) {
-    return true;
-  }
-  if (!node.children) {
-    return false;
-  }
-  return node.children.some((child) => manualNodeHasLeaf(child));
-}
-
-function buildManualBranchCopy(node: ManualValueNode): string | null {
-  const entries: Array<{ path: string; value: string }> = [];
-  const visit = (current: ManualValueNode) => {
-    if (typeof current.value === 'string' && current.value.trim().length > 0) {
-      entries.push({ path: current.displayPath, value: current.value });
-    }
-    current.children?.forEach(visit);
-  };
-  visit(node);
-  if (entries.length === 0) {
-    return null;
-  }
-  return entries.map((entry) => entry.value).join('\n');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
