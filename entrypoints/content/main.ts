@@ -232,7 +232,17 @@ export default defineContentScript({
     }
 
     function readElementValue(element: Element): string {
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      if (element instanceof HTMLInputElement) {
+        const type = element.type?.toLowerCase?.() ?? '';
+        if (type === 'checkbox' || type === 'radio') {
+          if (!element.checked) {
+            return '';
+          }
+          return element.value ?? '';
+        }
+        return element.value ?? '';
+      }
+      if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
         return element.value ?? '';
       }
       return '';
