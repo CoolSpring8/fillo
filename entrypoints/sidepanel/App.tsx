@@ -1058,14 +1058,6 @@ export default function App() {
   return (
     <Box style={{ position: 'relative', height: '100vh' }}>
       <Stack gap={0} style={{ height: '100%' }}>
-        <Paper shadow="sm" withBorder={false} px="md" py="sm">
-          <Stack gap={2}>
-            <Title order={3}>{t('sidepanel.title')}</Title>
-            <Text fz="sm" c="dimmed">
-              {t('sidepanel.subtitle')}
-            </Text>
-          </Stack>
-        </Paper>
         <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
           <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
             <Group gap="xs" wrap="nowrap" align="flex-end">

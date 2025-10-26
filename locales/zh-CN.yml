@@ -280,8 +280,6 @@ popup:
   info:
     noStructured: 尚未保存结构化简历，请先在工作台运行 AI 解析。
 sidepanel:
-  title: 简历助手
-  subtitle: 选择一份简历，在填写前逐项确认。
   permission:
     title: 允许 Apply Pilot 扫描此页面吗？
     body: Apply Pilot 会扫描当前页面以识别申请表单字段，并在提供建议前将其匹配到你的简历信息。
