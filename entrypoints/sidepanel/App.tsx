@@ -35,6 +35,7 @@ import {
   resolveSlotFromText,
 } from '../../shared/apply/slots';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
+import { GUIDED_AI_SUGGESTION_SCHEMA, type GuidedAiSuggestion } from '../../shared/schema/guidedAiSuggestion';
 import { classifyFieldDescriptors, type FieldClassification, type FieldDescriptor } from './classifySlots';
 import type { MemoryAssociation } from '../../shared/memory/types';
 import { getSettings } from '../../shared/storage/settings';
@@ -1565,10 +1566,14 @@ export default function App() {
           content: JSON.stringify(payload),
         },
       ];
-      const raw = await invokeWithProvider(provider, messages, { temperature: 0.2 });
-      let proposed = raw.trim();
+      const raw = await invokeWithProvider(provider, messages, {
+        responseSchema: GUIDED_AI_SUGGESTION_SCHEMA,
+        temperature: 0.2,
+      });
+      const trimmed = raw.trim();
+      let proposed = trimmed;
       try {
-        const parsed = JSON.parse(raw) as { value?: unknown };
+        const parsed = JSON.parse(trimmed) as GuidedAiSuggestion;
         if (parsed && typeof parsed.value === 'string') {
           proposed = parsed.value;
         }
