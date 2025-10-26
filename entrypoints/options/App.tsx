@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Affix,
   Alert,
@@ -16,6 +16,7 @@ import {
   Textarea,
   Title,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { useForm } from '@mantine/form';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
@@ -67,6 +68,34 @@ interface StatusState {
   message: string;
 }
 
+const STATUS_NOTIFICATION_ID = 'options-status';
+
+function getStatusColor(phase: StatusPhase): string {
+  if (phase === 'error') {
+    return 'red';
+  }
+  if (phase === 'complete') {
+    return 'green';
+  }
+  if (phase === 'idle') {
+    return 'gray';
+  }
+  return 'brand';
+}
+
+function getStatusAutoClose(phase: StatusPhase): number | false {
+  if (phase === 'error') {
+    return 7000;
+  }
+  if (phase === 'complete') {
+    return 5000;
+  }
+  if (phase === 'idle') {
+    return 2000;
+  }
+  return false;
+}
+
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
   return createOpenAIProvider(apiKey, model, apiBaseUrl);
 }
@@ -109,6 +138,7 @@ export default function App() {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusState>({ phase: 'idle', message: '' });
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const statusNotificationVisibleRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<'upload' | 'parse' | 'save' | null>(null);
   const [rawText, setRawText] = useState('');
@@ -197,6 +227,41 @@ export default function App() {
     browser.storage.onChanged.addListener(listener);
     return () => browser.storage.onChanged.removeListener(listener);
   }, [refreshProfiles]);
+
+  useEffect(() => {
+    if (!status.message) {
+      if (statusNotificationVisibleRef.current) {
+        notifications.hide(STATUS_NOTIFICATION_ID);
+        statusNotificationVisibleRef.current = false;
+      }
+      return;
+    }
+
+    const payload = {
+      id: STATUS_NOTIFICATION_ID,
+      color: getStatusColor(status.phase),
+      title: status.message,
+      message: errorDetails ?? undefined,
+      autoClose: getStatusAutoClose(status.phase),
+      withCloseButton: true,
+    };
+
+    if (statusNotificationVisibleRef.current) {
+      notifications.update(payload);
+    } else {
+      notifications.show(payload);
+      statusNotificationVisibleRef.current = true;
+    }
+  }, [status, errorDetails]);
+
+  useEffect(() => {
+    return () => {
+      if (statusNotificationVisibleRef.current) {
+        notifications.hide(STATUS_NOTIFICATION_ID);
+        statusNotificationVisibleRef.current = false;
+      }
+    };
+  }, []);
 
   const handleProviderChange = async (value: 'on-device' | 'openai') => {
     setSelectedProvider(value);
@@ -732,15 +797,6 @@ export default function App() {
     ? t('onboarding.manage.error', [profilesState.error])
     : undefined;
 
-  const statusColor =
-    status.phase === 'error'
-      ? 'red'
-      : status.phase === 'complete'
-        ? 'green'
-        : status.phase === 'idle'
-          ? 'gray'
-          : 'brand';
-
   return (
     <Container size="lg" py="xl" style={{ minHeight: '100vh' }}>
       <Stack gap="xl">
@@ -800,19 +856,6 @@ export default function App() {
                         </Button>
                       </Stack>
                     </Paper>
-                  )}
-
-                  {status.message && (
-                    <Alert variant="light" color={statusColor}>
-                      <Stack gap={4}>
-                        <Text fw={600}>{status.message}</Text>
-                        {errorDetails && (
-                          <Text fz="sm" c="dimmed">
-                            {errorDetails}
-                          </Text>
-                        )}
-                      </Stack>
-                    </Alert>
                   )}
 
                   {validationErrors.length > 0 && (
