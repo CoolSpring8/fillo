@@ -44,7 +44,11 @@ const pendingFills = new Map<string, PendingFill>();
 
 async function openSidePanelForTab(tabId: number): Promise<void> {
   try {
-    await browser.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: true });
+    void browser.sidePanel
+      .setOptions({ tabId, path: 'sidepanel.html', enabled: true })
+      .catch((error: unknown) => {
+        console.warn('Unable to configure side panel for tab.', error);
+      });
     await browser.sidePanel.open({ tabId });
   } catch (error) {
     console.warn('Unable to open side panel for tab.', error);
