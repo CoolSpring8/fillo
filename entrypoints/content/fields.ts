@@ -17,6 +17,8 @@ export interface InternalField {
   hasValue: boolean;
 }
 
+const elementIds = new WeakMap<Element, string>();
+
 export function scanFields(): InternalField[] {
   clearRegistry();
 
@@ -29,39 +31,10 @@ export function scanFields(): InternalField[] {
   const candidates: InternalField[] = [];
 
   for (const element of nodes) {
-    if (!isSupported(element)) {
-      continue;
+    const field = buildFieldForElement(element);
+    if (field) {
+      candidates.push(field);
     }
-    if (!isEditable(element)) {
-      continue;
-    }
-
-    const kind = classify(element);
-    if (!kind) {
-      continue;
-    }
-
-    const label = buildLabel(element);
-    const rect = extractRect(element);
-    const id = crypto.randomUUID();
-    const autocomplete = (element as HTMLInputElement).autocomplete;
-    const context = buildContext(element, label);
-    const attributes = extractAttributes(element);
-    const hasValue = elementHasValue(element);
-
-    registerElement(id, element);
-    candidates.push({
-      id,
-      element,
-      kind,
-      label,
-      context,
-      rect,
-      required: isRequired(element),
-      autocomplete: autocomplete && autocomplete !== 'on' ? autocomplete : undefined,
-      attributes,
-      hasValue,
-    });
   }
 
   candidates.sort((a, b) => {
@@ -73,6 +46,43 @@ export function scanFields(): InternalField[] {
   });
 
   return candidates;
+}
+
+export function buildFieldForElement(element: Element): InternalField | null {
+  if (!isSupported(element)) {
+    return null;
+  }
+  if (!isEditable(element)) {
+    return null;
+  }
+
+  const kind = classify(element);
+  if (!kind) {
+    return null;
+  }
+
+  const id = ensureElementId(element);
+  const label = buildLabel(element);
+  const rect = extractRect(element);
+  const autocomplete = (element as HTMLInputElement).autocomplete;
+  const context = buildContext(element, label);
+  const attributes = extractAttributes(element);
+  const hasValue = elementHasValue(element);
+
+  registerElement(id, element);
+
+  return {
+    id,
+    element,
+    kind,
+    label,
+    context,
+    rect,
+    required: isRequired(element),
+    autocomplete: autocomplete && autocomplete !== 'on' ? autocomplete : undefined,
+    attributes,
+    hasValue,
+  };
 }
 
 function isSupported(element: Element): element is SupportedElement {
@@ -307,20 +317,27 @@ function extractAttributes(element: SupportedElement): FieldAttributes {
   return attributes;
 }
 
-function elementHasValue(element: SupportedElement): boolean {
+export function elementHasValue(element: SupportedElement): boolean {
   if (element instanceof HTMLInputElement) {
     if (element.type === 'checkbox' || element.type === 'radio') {
       return element.checked;
     }
     return element.value.trim().length > 0;
   }
-  if (element instanceof HTMLTextAreaElement) {
-    return element.value.trim().length > 0;
-  }
   if (element instanceof HTMLSelectElement) {
     return element.value.trim().length > 0;
   }
-  return false;
+  return element.value.trim().length > 0;
+}
+
+function ensureElementId(element: Element): string {
+  const existing = elementIds.get(element);
+  if (existing) {
+    return existing;
+  }
+  const id = crypto.randomUUID();
+  elementIds.set(element, id);
+  return id;
 }
 
 function normalizeContext(value: string): string {

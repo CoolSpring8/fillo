@@ -20,26 +20,7 @@ import {
   useComputedColorScheme,
   useMantineTheme,
 } from '@mantine/core';
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Copy,
-  Eraser,
-  ListChecks,
-  Play,
-  RefreshCcw,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Target,
-  Trash2,
-  Users,
-  Wand2,
-} from 'lucide-react';
+import { CheckCircle2, Eraser, RefreshCcw, Sparkles, Users, Wand2 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -54,7 +35,8 @@ import {
   resolveSlotFromText,
 } from '../../shared/apply/slots';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
-import { classifyFieldDescriptors, type FieldDescriptor } from './classifySlots';
+import { classifyFieldDescriptors, type FieldClassification, type FieldDescriptor } from './classifySlots';
+import type { MemoryAssociation } from '../../shared/memory/types';
 import { getSettings } from '../../shared/storage/settings';
 // Auto mode removed; new guided mode uses side panel controls and shared memory
 import {
@@ -63,6 +45,7 @@ import {
   ProviderConfigurationError,
   ProviderInvocationError,
 } from '../../shared/llm/errors';
+import { invokeWithProvider } from '../../shared/llm/runtime';
 import { FieldReviewMode } from './components/FieldReviewMode';
 import { GuidedMode } from './components/GuidedMode';
 import { ManualCopyMode } from './components/ManualCopyMode';
@@ -114,11 +97,16 @@ export default function App() {
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
   // Guided mode state
   const [guidedStarted, setGuidedStarted] = useState(false);
-  const [guidedIndex, setGuidedIndex] = useState<number>(0);
+  const [guidedActiveId, setGuidedActiveId] = useState<string | null>(null);
+  const [guidedFrameId, setGuidedFrameId] = useState<number>(0);
   const [guidedFilled, setGuidedFilled] = useState<number>(0);
   const [guidedSkipped, setGuidedSkipped] = useState<number>(0);
+  const [guidedOrder, setGuidedOrder] = useState<string[]>([]);
+  const [guidedPrompt, setGuidedPrompt] = useState('');
+  const [guidedAiLoading, setGuidedAiLoading] = useState(false);
   const [memoryList, setMemoryList] = useState<Array<{ key: string; association: any }>>([]);
   const { t } = i18n;
+  const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
   const theme = useMantineTheme();
   const colorScheme = useComputedColorScheme('light');
   const primaryPalette = theme.colors[theme.primaryColor] ?? theme.colors.blue ?? [];
@@ -139,12 +127,14 @@ export default function App() {
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
   const adapterIdsRef = useRef<string[]>(defaultAdapterIds);
-  const guidedIndexRef = useRef<number>(0);
   const fillResolversRef = useRef<Map<string, (result: FillResultMessage) => void>>(new Map());
   const fieldsRef = useRef<FieldEntry[]>([]);
   const providerRef = useRef<ProviderConfig | null>(null);
   const selectedFieldRef = useRef<string | null>(null);
   const lastFocusedFieldRef = useRef<string | null>(null);
+  const guidedEnhancedRef = useRef<Set<string>>(new Set());
+  const guidedFrameIdRef = useRef<number>(0);
+  const guidedProviderWarningRef = useRef(false);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -162,14 +152,22 @@ export default function App() {
   }, [fields]);
 
   useEffect(() => {
+    guidedFrameIdRef.current = guidedFrameId;
+  }, [guidedFrameId]);
+
+  useEffect(() => {
     if (fields.length === 0) {
       setSelectedFieldId(null);
+      return;
+    }
+    if (mode === 'guided' && guidedActiveId) {
+      setSelectedFieldId(guidedActiveId);
       return;
     }
     if (!selectedFieldRef.current || !fields.some((entry) => entry.field.id === selectedFieldRef.current)) {
       setSelectedFieldId(fields[0].field.id);
     }
-  }, [fields]);
+  }, [fields, mode, guidedActiveId]);
 
   useEffect(() => {
     selectedFieldRef.current = selectedFieldId;
@@ -178,10 +176,6 @@ export default function App() {
   useEffect(() => {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
   }, [activeAdapterIds, defaultAdapterIds]);
-
-  useEffect(() => {
-    guidedIndexRef.current = guidedIndex;
-  }, [guidedIndex]);
 
   const formatFillReason = (reason: string): string => {
     const map: Record<string, string> = {
@@ -254,6 +248,7 @@ export default function App() {
         const settings = await getSettings();
         if (cancelled) return;
         providerRef.current = settings.provider;
+        guidedProviderWarningRef.current = false;
         setActiveAdapterIds(settings.adapters.length > 0 ? settings.adapters : defaultAdapterIds);
       } catch (error) {
         console.warn('Failed to load settings', error);
@@ -305,6 +300,20 @@ export default function App() {
 
     const handleMessage = (message: unknown) => {
       if (!isRecord(message)) {
+        return;
+      }
+
+      if (message.kind === 'GUIDED_CANDIDATE') {
+        const parsed = parseGuidedCandidateMessage(message);
+        if (!parsed) return;
+        handleGuidedCandidate(parsed.field, parsed.origin, parsed.frameId);
+        return;
+      }
+
+      if (message.kind === 'GUIDED_INPUT_CAPTURE') {
+        const parsed = parseGuidedInputCaptureMessage(message);
+        if (!parsed) return;
+        handleGuidedInputCapture(parsed.field, parsed.value, parsed.frameId);
         return;
       }
 
@@ -724,6 +733,11 @@ export default function App() {
     [fields, selectedFieldId],
   );
 
+  const guidedActiveEntry = useMemo(
+    () => (guidedActiveId ? fields.find((entry) => entry.field.id === guidedActiveId) ?? null : null),
+    [fields, guidedActiveId],
+  );
+
   const resolveEntryData = useCallback(
     (entry: FieldEntry) => {
       if (entry.field.kind === 'file') {
@@ -867,9 +881,9 @@ export default function App() {
     );
 
   const classifyDisabled = classifying || fields.length === 0;
-  const guidedTotal = fields.length;
-  const isFirst = guidedStarted ? guidedIndex <= 0 : true;
-  const isLast = guidedStarted ? guidedIndex >= Math.max(guidedTotal - 1, 0) : false;
+  const guidedSeenCount = guidedOrder.length;
+  const guidedCanGoBack = guidedStarted && guidedActiveId ? guidedOrder.indexOf(guidedActiveId) > 0 : guidedSeenCount > 1;
+  const hasGuidedCandidate = Boolean(guidedActiveEntry);
 
   const renderDomToolbar = () => {
     const iconSize = 18;
@@ -1074,13 +1088,13 @@ export default function App() {
                 viewState={viewState}
                 selectedProfile={selectedProfile}
                 scanning={scanning}
-                fields={fields}
                 guidedStarted={guidedStarted}
-                guidedIndex={guidedIndex}
+                guidedActive={guidedActiveEntry}
                 guidedFilled={guidedFilled}
                 guidedSkipped={guidedSkipped}
-                isFirst={isFirst}
-                isLast={isLast}
+                seenCount={guidedSeenCount}
+                canGoBack={guidedCanGoBack}
+                hasCandidate={hasGuidedCandidate}
                 memoryList={memoryList}
                 onStart={startGuided}
                 onBack={navPrev}
@@ -1120,6 +1134,7 @@ export default function App() {
     const placeholderKey = fallbackOption
       ? 'sidepanel.guided.manualInputPlaceholderWithValue'
       : 'sidepanel.guided.manualInputPlaceholder';
+    const acceptLabel = tLoose('sidepanel.guided.acceptNext');
 
     return (
       <Card withBorder radius="md" shadow="sm">
@@ -1157,16 +1172,40 @@ export default function App() {
             comboboxProps={{ withinPortal: true }}
           />
           {entry.field.kind !== 'file' ? (
-            <Textarea
-              label={t('sidepanel.guided.manualInputLabel')}
-              placeholder={t(placeholderKey)}
-              autosize
-              minRows={2}
-              maxRows={6}
-              value={manualValue}
-              onChange={(event) => handleManualValueChange(entry.field.id, event.currentTarget.value)}
-              description={t('sidepanel.guided.manualInputHint')}
-            />
+            <Stack gap="sm">
+              <Textarea
+                label={t('sidepanel.guided.manualInputLabel')}
+                placeholder={t(placeholderKey)}
+                autosize
+                minRows={2}
+                maxRows={6}
+                value={manualValue}
+                onChange={(event) => handleManualValueChange(entry.field.id, event.currentTarget.value)}
+                description={t('sidepanel.guided.manualInputHint')}
+              />
+              <Textarea
+                label={tLoose('sidepanel.guided.aiPromptLabel')}
+                placeholder={tLoose('sidepanel.guided.aiPromptPlaceholder')}
+                autosize
+                minRows={1}
+                maxRows={3}
+                value={guidedPrompt}
+                onChange={(event) => setGuidedPrompt(event.currentTarget.value)}
+                description={tLoose('sidepanel.guided.aiPromptHint')}
+              />
+              <Group justify="flex-end">
+                <Button
+                  size="sm"
+                  variant="light"
+                  leftSection={<Sparkles size={16} />}
+                  loading={guidedAiLoading}
+                  disabled={guidedAiLoading || guidedPrompt.trim().length === 0}
+                  onClick={() => handleGuidedAi(entry)}
+                >
+                  {tLoose('sidepanel.guided.aiPromptAction')}
+                </Button>
+              </Group>
+            </Stack>
           ) : (
             <Text fz="xs" c="dimmed">
               {t('sidepanel.preview.file')}
@@ -1184,9 +1223,10 @@ export default function App() {
             <Button
               size="sm"
               disabled={fillDisabled}
-              onClick={() => handleGuidedAccept(entry, !isLast)}
+              loading={entry.status === 'pending'}
+              onClick={() => handleGuidedAccept(entry)}
             >
-              {isLast ? t('sidepanel.guided.fill') : t('sidepanel.guided.accept')}
+              {acceptLabel}
             </Button>
           </Group>
         </Stack>
@@ -1196,12 +1236,16 @@ export default function App() {
 
   function startGuided() {
     setGuidedStarted(true);
-    setGuidedIndex(0);
     setGuidedFilled(0);
     setGuidedSkipped(0);
-    if (fields.length > 0) {
-      setSelectedFieldId(fields[0].field.id);
-      highlightCurrent(fields[0]);
+    setGuidedPrompt('');
+    setGuidedOrder(guidedActiveId ? [guidedActiveId] : []);
+    guidedEnhancedRef.current.clear();
+    const frameId = guidedFrameIdRef.current;
+    sendMessage({ kind: 'GUIDED_RESET' });
+    sendMessage({ kind: 'GUIDED_REQUEST_CURRENT', frameId });
+    if (!guidedActiveId) {
+      sendGuidedStep(1);
     }
     refreshMemory().catch(console.error);
   }
@@ -1211,62 +1255,75 @@ export default function App() {
     sendMessage({ kind: 'HIGHLIGHT_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId, label: entry.field.label });
   }
 
+  function sendGuidedStep(direction: 1 | -1) {
+    const frameId = guidedFrameIdRef.current;
+    sendMessage({ kind: 'GUIDED_STEP', direction, frameId });
+  }
+
   function navPrev() {
     if (!guidedStarted) return;
-    const prevIndex = Math.max(0, guidedIndexRef.current - 1);
-    if (prevIndex === guidedIndexRef.current) return;
-    setGuidedIndex(prevIndex);
-    const prev = fieldsRef.current[prevIndex];
-    if (prev) {
-      setSelectedFieldId(prev.field.id);
-      highlightCurrent(prev);
-    }
+    sendGuidedStep(-1);
   }
 
   function navNext() {
     if (!guidedStarted) return;
-    const nextIndex = guidedIndexRef.current + 1;
-    if (nextIndex >= fieldsRef.current.length) return;
-    setGuidedIndex(nextIndex);
-    const next = fieldsRef.current[nextIndex];
-    if (next) {
-      setSelectedFieldId(next.field.id);
-      highlightCurrent(next);
-    }
+    sendGuidedStep(1);
   }
 
   function navToFirstUnfilled() {
-    if (!guidedStarted) return;
-    const idx = fieldsRef.current.findIndex((e) => e.status !== 'filled');
-    if (idx === -1) {
+    const targetId = guidedOrder.find((id) => {
+      const entry = fieldsRef.current.find((item) => item.field.id === id);
+      return entry && entry.status !== 'filled';
+    });
+    if (!targetId) {
       return;
     }
-    setGuidedIndex(idx);
-    const entry = fieldsRef.current[idx];
+    const entry = fieldsRef.current.find((item) => item.field.id === targetId);
     if (entry) {
+      setGuidedActiveId(entry.field.id);
       setSelectedFieldId(entry.field.id);
+      setGuidedFrameId(entry.field.frameId);
+      setGuidedOrder((current) => (current.includes(entry.field.id) ? current : [...current, entry.field.id]));
+      sendMessage({ kind: 'FOCUS_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId });
       highlightCurrent(entry);
     }
   }
 
   function restartGuided() {
+    const frameId = guidedFrameIdRef.current;
     setGuidedStarted(true);
-    setGuidedIndex(0);
     setGuidedFilled(0);
     setGuidedSkipped(0);
-    if (fieldsRef.current.length > 0) {
-      const first = fieldsRef.current[0];
-      setSelectedFieldId(first.field.id);
-      highlightCurrent(first);
-    }
+    setGuidedPrompt('');
+    setGuidedOrder([]);
+    setGuidedActiveId(null);
+    guidedEnhancedRef.current.clear();
+    setFields((current) =>
+      current.map((entry) => ({
+        ...entry,
+        status: entry.field.kind === 'file' ? entry.status : 'idle',
+        reason: undefined,
+      })),
+    );
+    sendMessage({ kind: 'GUIDED_RESET' });
+    sendMessage({ kind: 'GUIDED_REQUEST_CURRENT', frameId });
+    sendGuidedStep(1);
+    refreshMemory().catch(console.error);
   }
 
   function finishGuided() {
     setGuidedStarted(false);
+    setGuidedPrompt('');
+    setGuidedActiveId(null);
+    setGuidedOrder([]);
+    setGuidedFilled(0);
+    setGuidedSkipped(0);
+    guidedEnhancedRef.current.clear();
+    sendMessage({ kind: 'GUIDED_RESET' });
     sendMessage({ kind: 'CLEAR_OVERLAY' });
   }
 
-  async function handleGuidedAccept(entry: FieldEntry, advance = true) {
+  async function handleGuidedAccept(entry: FieldEntry) {
     const { value } = resolveEntryData(entry);
     if (!value) {
       notify(t('sidepanel.feedback.noValues'), 'info');
@@ -1290,9 +1347,8 @@ export default function App() {
       const { learnAccept } = await import('../../shared/memory/store');
       await learnAccept(entry.field, { slot: entry.selectedSlot, value });
     }
-    if (advance) {
-      goToNext(entry);
-    }
+    setGuidedPrompt('');
+    sendGuidedStep(1);
   }
 
   async function handleGuidedSkip(entry: FieldEntry) {
@@ -1300,36 +1356,249 @@ export default function App() {
     const { learnReject } = await import('../../shared/memory/store');
     await learnReject(entry.field);
     setGuidedSkipped((n) => n + 1);
-    goToNext(entry);
+    setGuidedPrompt('');
+    sendGuidedStep(1);
   }
 
-  function goToNext(current: FieldEntry) {
-    const idx = fieldsRef.current.findIndex((e) => e.field.id === current.field.id);
-    const nextIndex = idx + 1;
-    if (nextIndex >= fieldsRef.current.length) {
+  function handleGuidedCandidate(field: ScannedField, origin: 'focus' | 'step' | 'request', frameId: number) {
+    const entry = ensureGuidedEntry(field);
+    setGuidedFrameId(frameId);
+    setGuidedActiveId(field.id);
+    setSelectedFieldId(field.id);
+    setGuidedPrompt('');
+    setGuidedOrder((current) => (current.includes(field.id) ? current : [...current, field.id]));
+    if (origin === 'step' && guidedStarted) {
+      highlightCurrent(entry);
+    }
+    scheduleGuidedEnhancement(field);
+  }
+
+  async function handleGuidedInputCapture(field: ScannedField, value: string, frameId: number) {
+    const normalized = value.trim();
+    if (!normalized) {
       return;
     }
-    setGuidedIndex(nextIndex);
-    const next = fieldsRef.current[nextIndex];
-    if (next) {
-      setSelectedFieldId(next.field.id);
-      highlightCurrent(next);
+    const entry = ensureGuidedEntry(field);
+    const wasFilled = entry.status === 'filled';
+    setGuidedFrameId(frameId);
+    setGuidedActiveId(field.id);
+    setSelectedFieldId(field.id);
+    setGuidedOrder((current) => (current.includes(field.id) ? current : [...current, field.id]));
+    setGuidedPrompt('');
+    handleManualValueChange(field.id, normalized);
+    setFieldStatus(field.id, 'filled');
+    if (!wasFilled) {
+      setGuidedFilled((count) => count + 1);
+    }
+    try {
+      const { learnAccept } = await import('../../shared/memory/store');
+      await learnAccept(field, { slot: entry.selectedSlot ?? entry.slot, value: normalized });
+    } catch (error) {
+      console.warn('Failed to learn from user input capture', error);
     }
   }
 
-  useEffect(() => {
-    if (!guidedStarted) return;
-    if (fields.length === 0) {
-      setGuidedStarted(false);
+  function ensureGuidedEntry(field: ScannedField): FieldEntry {
+    const existing = fieldsRef.current.find((entry) => entry.field.id === field.id);
+    if (existing) {
+      setFields((current) =>
+        current.map((entry) => (entry.field.id === field.id ? { ...entry, field } : entry)),
+      );
+      return { ...existing, field };
+    }
+    const [created] = buildFieldEntries([field], slotValuesRef.current, adapterIdsRef.current);
+    setFields((current) => [...current, created]);
+    return created;
+  }
+
+  function scheduleGuidedEnhancement(field: ScannedField): void {
+    if (guidedEnhancedRef.current.has(field.id)) {
       return;
     }
-    const clamped = Math.min(guidedIndexRef.current, fields.length - 1);
-    if (clamped !== guidedIndexRef.current) {
-      setGuidedIndex(clamped);
-      const entry = fields[clamped];
-      if (entry) setSelectedFieldId(entry.field.id);
+    guidedEnhancedRef.current.add(field.id);
+    void enhanceGuidedField(field);
+  }
+
+  async function enhanceGuidedField(field: ScannedField): Promise<void> {
+    try {
+      const { getAssociationFor } = await import('../../shared/memory/store');
+      const association = await getAssociationFor(field);
+      if (association) {
+        applyGuidedAssociation(field, association);
+      }
+    } catch (error) {
+      console.warn('Failed to load association for guided field', error);
     }
-  }, [fields.length, guidedStarted]);
+
+    const provider = providerRef.current;
+    if (!provider) {
+      return;
+    }
+
+    try {
+      const descriptors: FieldDescriptor[] = [
+        {
+          id: field.id,
+          label: field.label,
+          type: field.kind,
+          autocomplete: field.autocomplete ?? null,
+          required: field.required,
+        },
+      ];
+      const map = await classifyFieldDescriptors(provider, descriptors);
+      guidedProviderWarningRef.current = false;
+      const match = map.get(field.id);
+      if (match?.slot) {
+        applyGuidedClassification(field, match);
+      }
+    } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        if (!guidedProviderWarningRef.current) {
+          notify(error.message, 'error');
+          guidedProviderWarningRef.current = true;
+        }
+        return;
+      }
+      console.warn('Guided classification failed', error);
+    }
+  }
+
+  function applyGuidedAssociation(field: ScannedField, association: MemoryAssociation): void {
+    setFields((current) =>
+      current.map((entry) => {
+        if (entry.field.id !== field.id) {
+          return entry;
+        }
+        const next = { ...entry, field };
+        let selectedSlot = entry.selectedSlot;
+        let suggestion = entry.suggestion;
+        if (association.preferredSlot && isFieldSlotValue(association.preferredSlot)) {
+          const preferred = slotValuesRef.current[association.preferredSlot];
+          if (preferred && preferred.trim().length > 0) {
+            selectedSlot = association.preferredSlot;
+            suggestion = preferred;
+          }
+        }
+        if (!suggestion && association.lastValue && association.lastValue.trim().length > 0) {
+          suggestion = association.lastValue.trim();
+        }
+        if (suggestion) {
+          const manualValue = deriveManualValue(entry, suggestion);
+          return {
+            ...next,
+            selectedSlot,
+            suggestion,
+            manualValue,
+          };
+        }
+        return {
+          ...next,
+          selectedSlot,
+        };
+      }),
+    );
+  }
+
+  function applyGuidedClassification(field: ScannedField, classification: FieldClassification): void {
+    setFields((current) =>
+      current.map((entry) => {
+        if (entry.field.id !== field.id) {
+          return entry;
+        }
+        const next = { ...entry, field, slotNote: classification.reason };
+        if (classification.slot) {
+          next.slot = classification.slot;
+          next.slotSource = 'model';
+          const suggestion = slotValuesRef.current[classification.slot];
+          if (suggestion && suggestion.trim().length > 0) {
+            next.selectedSlot = classification.slot;
+            next.suggestion = suggestion;
+            next.manualValue = deriveManualValue(entry, suggestion);
+          }
+        }
+        return next;
+      }),
+    );
+  }
+
+  async function handleGuidedAi(entry: FieldEntry): Promise<void> {
+    const instruction = guidedPrompt.trim();
+    if (!instruction) {
+      return;
+    }
+    const provider = providerRef.current;
+    if (!provider) {
+      notify(tLoose('sidepanel.guided.aiPromptNoProvider'), 'error');
+      return;
+    }
+    setGuidedAiLoading(true);
+    try {
+      const payload = {
+        field: {
+          label: entry.field.label,
+          kind: entry.field.kind,
+          context: entry.field.context,
+          autocomplete: entry.field.autocomplete ?? null,
+          required: entry.field.required,
+        },
+        slot: entry.selectedSlot ?? entry.slot ?? null,
+        currentValue: entry.manualValue ?? '',
+        suggestion: entry.suggestion ?? '',
+        instruction,
+        profile: selectedProfile?.resume ?? null,
+      };
+      const messages = [
+        {
+          role: 'system' as const,
+          content:
+            'You help job applicants fill out form fields using their resume data. ' +
+            'Return a JSON object with keys "value" (string) and optional "reason" explaining your choice. ' +
+            'Respect the provided instruction and prefer precise, professional values.',
+        },
+        {
+          role: 'user' as const,
+          content: JSON.stringify(payload),
+        },
+      ];
+      const raw = await invokeWithProvider(provider, messages, { temperature: 0.2 });
+      let proposed = raw.trim();
+      try {
+        const parsed = JSON.parse(raw) as { value?: unknown };
+        if (parsed && typeof parsed.value === 'string') {
+          proposed = parsed.value;
+        }
+      } catch {
+        // Non-JSON response; fall back to raw text.
+      }
+      const normalized = proposed.trim();
+      if (!normalized) {
+        notify(tLoose('sidepanel.guided.aiPromptEmpty'), 'error');
+        return;
+      }
+      handleManualValueChange(entry.field.id, normalized);
+      notify(tLoose('sidepanel.guided.aiPromptApplied'), 'success');
+    } catch (error) {
+      if (
+        error instanceof NoProviderConfiguredError ||
+        error instanceof ProviderConfigurationError ||
+        error instanceof ProviderAvailabilityError ||
+        error instanceof ProviderInvocationError
+      ) {
+        notify(error.message, 'error');
+      } else {
+        console.warn('Guided AI prompt failed', error);
+        notify(tLoose('sidepanel.guided.aiPromptError'), 'error');
+      }
+    } finally {
+      setGuidedAiLoading(false);
+      setGuidedPrompt('');
+    }
+  }
 
   async function refreshMemory() {
     const { listAssociations } = await import('../../shared/memory/store');
@@ -1785,6 +2054,41 @@ function parseFieldsResponse(value: Record<string, unknown>): { requestId: strin
   return {
     requestId: value.requestId,
     fields: value.fields as ScannedField[],
+  };
+}
+
+function isScannedField(value: unknown): value is ScannedField {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.id === 'string' && typeof record.kind === 'string' && typeof record.label === 'string';
+}
+
+function parseGuidedCandidateMessage(
+  value: Record<string, unknown>,
+): { field: ScannedField; origin: 'focus' | 'step' | 'request'; frameId: number } | null {
+  if (!isScannedField(value.field) || typeof value.frameId !== 'number') {
+    return null;
+  }
+  const origin = value.origin === 'step' ? 'step' : value.origin === 'request' ? 'request' : 'focus';
+  return {
+    field: value.field,
+    origin,
+    frameId: value.frameId,
+  };
+}
+
+function parseGuidedInputCaptureMessage(
+  value: Record<string, unknown>,
+): { field: ScannedField; value: string; frameId: number } | null {
+  if (!isScannedField(value.field) || typeof value.value !== 'string' || typeof value.frameId !== 'number') {
+    return null;
+  }
+  return {
+    field: value.field,
+    value: value.value,
+    frameId: value.frameId,
   };
 }
 
