@@ -11,20 +11,24 @@ export interface PromptOptions {
 }
 
 export type OverlayComponentState =
-  | { mode: 'hidden'; version: number }
-  | { mode: 'highlight'; version: number; label: string }
-  | { mode: 'prompt'; version: number; prompt: PromptOptions };
+  | { mode: 'hidden' }
+  | { mode: 'highlight'; label: string }
+  | { mode: 'prompt'; prompt: PromptOptions };
+
+export interface OverlayRenderState {
+  component: OverlayComponentState;
+  highlightRect: HighlightRect | null;
+  popoverPosition: PopoverPosition | null;
+}
 
 export interface HighlightRect {
   top: number;
   left: number;
   width: number;
   height: number;
-  visible: boolean;
 }
 
 export interface PopoverPosition {
   x: number;
   y: number;
-  visible: boolean;
 }

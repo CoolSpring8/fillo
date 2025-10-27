@@ -2,12 +2,7 @@ import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { OverlayApp } from './ui/OverlayApp';
-import type {
-  HighlightRect,
-  OverlayComponentState,
-  PopoverPosition,
-  PromptOptions,
-} from './ui/types';
+import type { HighlightRect, OverlayRenderState, PopoverPosition, PromptOptions } from './ui/types';
 
 interface HighlightOptions {
   label: string;
@@ -21,10 +16,11 @@ let dismissTimer: number | null = null;
 let hostContainer: HTMLDivElement | null = null;
 let reactRoot: Root | null = null;
 let popoverElement: HTMLDivElement | null = null;
-let highlightRect: HighlightRect | null = null;
-let popoverPosition: PopoverPosition | null = null;
-let overlayState: OverlayComponentState = { mode: 'hidden', version: 0 };
-let versionCounter = 0;
+let overlayState: OverlayRenderState = {
+  component: { mode: 'hidden' },
+  highlightRect: null,
+  popoverPosition: null,
+};
 
 export function clearOverlay(): void {
   if (dismissTimer !== null) {
@@ -35,10 +31,11 @@ export function clearOverlay(): void {
   cleanupFns = [];
   currentTarget = null;
 
-  highlightRect = null;
-  popoverPosition = null;
-  overlayState = { mode: 'hidden', version: nextVersion() };
-  renderOverlay();
+  setOverlayState({
+    component: { mode: 'hidden' },
+    highlightRect: null,
+    popoverPosition: null,
+  });
 }
 
 export function showHighlight(target: Element, options: HighlightOptions): void {
@@ -50,12 +47,15 @@ export function showHighlight(target: Element, options: HighlightOptions): void 
   currentTarget = target;
   target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
 
-  highlightRect = computeHighlightLayout(target);
-  popoverPosition = options.label.trim().length > 0 ? { x: 0, y: 0, visible: false } : null;
-  overlayState = { mode: 'highlight', version: nextVersion(), label: options.label };
-  renderOverlay();
-  void updatePopoverPosition();
-  attachRepositionListeners(target, Boolean(popoverPosition));
+  setOverlayState({
+    component: { mode: 'highlight', label: options.label },
+    highlightRect: computeHighlightLayout(target),
+    popoverPosition: null,
+  });
+  if (options.label.trim().length > 0) {
+    void updatePopoverPosition();
+  }
+  attachRepositionListeners(target, options.label.trim().length > 0);
 
   const duration = Math.max(0, options.duration ?? 1000);
   if (duration > 0) {
@@ -81,10 +81,11 @@ export function showPrompt(target: Element, options: PromptOptions): void {
   currentTarget = target;
   target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
 
-  highlightRect = computeHighlightLayout(target);
-  popoverPosition = { x: 0, y: 0, visible: false };
-  overlayState = { mode: 'prompt', version: nextVersion(), prompt: options };
-  renderOverlay();
+  setOverlayState({
+    component: { mode: 'prompt', prompt: clonePromptOptions(options) },
+    highlightRect: computeHighlightLayout(target),
+    popoverPosition: null,
+  });
   void updatePopoverPosition();
   attachRepositionListeners(target, true);
 }
@@ -94,8 +95,16 @@ function attachRepositionListeners(target: HTMLElement, hasPopover: boolean): vo
     if (!currentTarget || currentTarget !== target) {
       return;
     }
-    highlightRect = computeHighlightLayout(target);
-    renderOverlay();
+    const nextHighlight = computeHighlightLayout(target);
+    updateOverlayState((previous) => {
+      if (rectEquals(previous.highlightRect, nextHighlight)) {
+        return previous;
+      }
+      return {
+        ...previous,
+        highlightRect: nextHighlight,
+      };
+    });
     if (hasPopover) {
       void updatePopoverPosition();
     }
@@ -237,9 +246,9 @@ function renderOverlay(): void {
 
   reactRoot.render(
     createElement(OverlayApp, {
-      state: overlayState,
-      highlightRect,
-      popoverPosition,
+      state: overlayState.component,
+      highlightRect: overlayState.highlightRect,
+      popoverPosition: overlayState.popoverPosition,
       onPopoverMount: handlePopoverMount,
     }),
   );
@@ -249,12 +258,17 @@ async function updatePopoverPosition(): Promise<void> {
   if (!currentTarget || !popoverElement) {
     return;
   }
-  if (overlayState.mode === 'hidden') {
+  if (overlayState.component.mode === 'hidden') {
     return;
   }
-  if (overlayState.mode === 'highlight' && overlayState.label.trim().length === 0) {
-    popoverPosition = null;
-    renderOverlay();
+  if (
+    overlayState.component.mode === 'highlight' &&
+    overlayState.component.label.trim().length === 0
+  ) {
+    updateOverlayState((previous) => ({
+      ...previous,
+      popoverPosition: null,
+    }));
     return;
   }
 
@@ -262,8 +276,16 @@ async function updatePopoverPosition(): Promise<void> {
   const { x, y } = await computePosition(currentTarget, popoverElement, {
     middleware: [offset(10), flip(), shift()],
   });
-  popoverPosition = { x: Math.round(x), y: Math.round(y), visible: true };
-  renderOverlay();
+  const nextPosition: PopoverPosition = { x: Math.round(x), y: Math.round(y) };
+  updateOverlayState((previous) => {
+    if (pointEquals(previous.popoverPosition, nextPosition)) {
+      return previous;
+    }
+    return {
+      ...previous,
+      popoverPosition: nextPosition,
+    };
+  });
 }
 
 function computeHighlightLayout(target: HTMLElement): HighlightRect {
@@ -274,17 +296,59 @@ function computeHighlightLayout(target: HTMLElement): HighlightRect {
     left: Math.max(rect.left - padding, 0),
     width: Math.max(rect.width + padding * 2, 0),
     height: Math.max(rect.height + padding * 2, 0),
-    visible: true,
   };
-}
-
-function nextVersion(): number {
-  versionCounter += 1;
-  return versionCounter;
 }
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function setOverlayState(nextState: OverlayRenderState): void {
+  overlayState = nextState;
+  renderOverlay();
+}
+
+function updateOverlayState(
+  updater: (previous: OverlayRenderState) => OverlayRenderState,
+): void {
+  const nextState = updater(overlayState);
+  if (nextState === overlayState) {
+    return;
+  }
+  setOverlayState(nextState);
+}
+
+function clonePromptOptions(options: PromptOptions): PromptOptions {
+  const clonedOptions = options.options?.map((option) => ({ ...option }));
+  return {
+    ...options,
+    options: clonedOptions,
+  };
+}
+
+function rectEquals(left: HighlightRect | null, right: HighlightRect | null): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return (
+    left.top === right.top &&
+    left.left === right.left &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+function pointEquals(left: PopoverPosition | null, right: PopoverPosition | null): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left.x === right.x && left.y === right.y;
 }
 
 export type { PromptOptions } from './ui/types';

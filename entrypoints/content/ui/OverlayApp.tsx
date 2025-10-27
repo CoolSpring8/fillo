@@ -26,7 +26,7 @@ export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMou
     };
   }, [onPopoverMount]);
 
-  const highlightStyle = highlightRect?.visible
+  const highlightStyle = highlightRect
     ? {
         display: 'block',
         opacity: 1,
@@ -42,11 +42,11 @@ export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMou
 
   const shouldShowPopover =
     state.mode === 'prompt' || (state.mode === 'highlight' && state.label.trim().length > 0);
-  const isPopoverVisible = shouldShowPopover && Boolean(popoverPosition?.visible);
-  const popoverStyle = isPopoverVisible
+  const isPopoverVisible = shouldShowPopover && Boolean(popoverPosition);
+  const popoverStyle = popoverPosition
     ? {
-        left: `${Math.round(popoverPosition!.x)}px`,
-        top: `${Math.round(popoverPosition!.y)}px`,
+        left: `${Math.round(popoverPosition.x)}px`,
+        top: `${Math.round(popoverPosition.y)}px`,
       }
     : undefined;
 
@@ -93,7 +93,7 @@ function PromptContent({ state }: PromptContentProps) {
 
     setSelectedSlot(slot);
     setCurrentValue(value);
-  }, [prompt, state.version]);
+  }, [prompt]);
 
   const previewText = currentValue.trim().length > 0
     ? currentValue
