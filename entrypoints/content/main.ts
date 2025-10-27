@@ -8,6 +8,7 @@ import type {
   PromptFieldState,
   PromptFillRequest,
   PromptOptionSlot,
+  PromptPreviewRequest,
 } from '../../shared/apply/types';
 import { fillField, triggerClick } from './fill';
 import type { InternalField } from './fields';
@@ -22,6 +23,7 @@ type ContentInboundMessage =
       requestId: string;
     }
   | ({ kind: 'PROMPT_FILL' } & PromptFillRequest)
+  | ({ kind: 'PROMPT_PREVIEW' } & PromptPreviewRequest)
   | {
       kind: 'HIGHLIGHT_FIELD';
       fieldId: string;
@@ -155,6 +157,9 @@ export default defineContentScript({
           break;
         case 'PROMPT_FILL':
           handlePromptFill(message);
+          break;
+        case 'PROMPT_PREVIEW':
+          handlePromptPreview(message);
           break;
         case 'HIGHLIGHT_FIELD':
           handleHighlight(message.fieldId, message.label);
@@ -451,6 +456,101 @@ export default defineContentScript({
             profileId,
           };
           const response = (await browser.runtime.sendMessage(messagePayload)) as PromptAiSuggestResponse | undefined;
+          if (!response) {
+            throw new Error('AI request failed');
+          }
+          if (response.status === 'ok') {
+            return {
+              value: response.value,
+              slot: response.slot ?? null,
+              reason: response.reason,
+            };
+          }
+          throw new Error(response.error || 'AI request failed');
+        },
+      });
+    }
+
+    function handlePromptPreview(message: Extract<ContentInboundMessage, { kind: 'PROMPT_PREVIEW' }>): void {
+      const meta = fieldMetadata.get(message.fieldId);
+      const element = getElement(message.fieldId);
+      if (!element || !(element instanceof HTMLElement)) {
+        return;
+      }
+
+      const requestId = message.previewId && message.previewId.trim().length > 0 ? message.previewId : `preview:${message.fieldId}`;
+      const profileId = message.profileId ?? null;
+
+      let promptField: PromptFieldState | null = message.field ?? null;
+      if (!promptField && meta) {
+        promptField = {
+          id: message.fieldId,
+          label: meta.label,
+          kind: meta.kind,
+          context: meta.context,
+          autocomplete: meta.autocomplete,
+          required: meta.required,
+        };
+      }
+      if (!promptField) {
+        promptField = {
+          id: message.fieldId,
+          label: message.label,
+          kind: meta?.kind ?? 'text',
+          context: meta?.context ?? '',
+          autocomplete: meta?.autocomplete,
+          required: meta?.required ?? false,
+        };
+      }
+
+      const resolvedLabel = message.label.length > 0 ? message.label : promptField.label;
+      const baseValue = message.value ?? message.preview ?? '';
+
+      const promptFieldSnapshot = promptField;
+
+      showPrompt(element, {
+        requestId,
+        label: resolvedLabel,
+        preview: message.preview,
+        options: message.options,
+        defaultSlot: message.defaultSlot ?? null,
+        defaultValue: message.value ?? undefined,
+        field: promptFieldSnapshot,
+        profileId,
+        onFill: (selectedValue) => {
+          const value = selectedValue && selectedValue.trim().length > 0 ? selectedValue : baseValue;
+          if (!value.trim()) {
+            clearOverlay();
+            return;
+          }
+          markProgrammaticFill(message.fieldId);
+          const filled = fillField(message.fieldId, value);
+          send({
+            kind: 'FILL_RESULT',
+            requestId,
+            fieldId: message.fieldId,
+            status: filled ? 'filled' : 'failed',
+            reason: filled ? undefined : 'fill-failed',
+          });
+          clearOverlay();
+        },
+        onSkip: () => {
+          clearOverlay();
+        },
+        onRequestAi: async (input) => {
+          const payload: PromptAiSuggestMessage = {
+            kind: 'PROMPT_AI_SUGGEST',
+            requestId,
+            fieldId: message.fieldId,
+            frameId: message.frameId,
+            field: promptFieldSnapshot,
+            instruction: input.instruction,
+            currentValue: input.currentValue,
+            suggestion: input.suggestion,
+            selectedSlot: input.selectedSlot ?? null,
+            profileId,
+          };
+          const response = (await browser.runtime.sendMessage(payload)) as PromptAiSuggestResponse | undefined;
           if (!response) {
             throw new Error('AI request failed');
           }

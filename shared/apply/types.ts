@@ -74,6 +74,19 @@ export interface PromptAiResult {
   slot?: PromptOptionSlot | null;
 }
 
+export interface PromptPreviewRequest {
+  previewId?: string;
+  fieldId: string;
+  frameId: number;
+  label: string;
+  preview?: string;
+  value?: string;
+  options?: PromptOption[];
+  defaultSlot?: PromptOptionSlot | null;
+  profileId?: string | null;
+  field?: PromptFieldState;
+}
+
 export interface PromptAiSuggestMessage {
   kind: 'PROMPT_AI_SUGGEST';
   requestId: string;

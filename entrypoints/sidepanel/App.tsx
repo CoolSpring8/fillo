@@ -146,6 +146,7 @@ export default function App() {
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId],
   );
+  const selectedProfileIdValue = selectedProfile?.id ?? null;
 
   const slotValues = useMemo(() => buildSlotValues(selectedProfile), [selectedProfile]);
 
@@ -421,20 +422,6 @@ export default function App() {
       withCloseButton: true,
     });
   }, []);
-
-  const focusField = useCallback(
-    (entry: FieldEntry | null) => {
-      if (!entry) {
-        return;
-      }
-      sendMessage({
-        kind: 'FOCUS_FIELD',
-        fieldId: entry.field.id,
-        frameId: entry.field.frameId,
-      });
-    },
-    [sendMessage],
-  );
 
   const setFieldStatus = useCallback((fieldId: string, status: FieldStatus, reason?: string) => {
     setFields((current) =>
@@ -784,6 +771,69 @@ export default function App() {
       return { selectedOption, fallbackOption, manualValue, value };
     },
     [manualOptions],
+  );
+
+  const showPromptOverlay = useCallback(
+    (entry: FieldEntry | null) => {
+      if (!entry) {
+        sendMessage({ kind: 'CLEAR_OVERLAY' });
+        return;
+      }
+
+      sendMessage({
+        kind: 'HIGHLIGHT_FIELD',
+        fieldId: entry.field.id,
+        frameId: entry.field.frameId,
+        label: entry.field.label,
+      });
+
+      if (entry.field.kind === 'file') {
+        return;
+      }
+
+      const { fallbackOption, manualValue, value } = resolveEntryData(entry);
+      const defaultSlot = entry.selectedSlot ?? entry.slot ?? (fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : null);
+      const defaultValue = manualValue.trim().length > 0 ? manualValue : fallbackOption?.value ?? entry.suggestion ?? '';
+      const preview = fallbackOption?.value ?? entry.suggestion ?? value;
+
+      sendMessage({
+        kind: 'PROMPT_PREVIEW',
+        previewId: `preview:${entry.field.id}`,
+        fieldId: entry.field.id,
+        frameId: entry.field.frameId,
+        label: entry.field.label,
+        preview,
+        value: defaultValue,
+        defaultSlot,
+        options: manualOptions,
+        profileId: selectedProfileIdValue,
+        field: {
+          id: entry.field.id,
+          label: entry.field.label,
+          kind: entry.field.kind,
+          context: entry.field.context,
+          autocomplete: entry.field.autocomplete ?? null,
+          required: entry.field.required,
+        },
+      });
+    },
+    [manualOptions, resolveEntryData, selectedProfileIdValue, sendMessage],
+  );
+
+  const focusField = useCallback(
+    (entry: FieldEntry | null) => {
+      if (!entry) {
+        showPromptOverlay(null);
+        return;
+      }
+      sendMessage({
+        kind: 'FOCUS_FIELD',
+        fieldId: entry.field.id,
+        frameId: entry.field.frameId,
+      });
+      showPromptOverlay(entry);
+    },
+    [sendMessage, showPromptOverlay],
   );
 
   useEffect(() => {
@@ -1372,8 +1422,7 @@ export default function App() {
   }
 
   function highlightCurrent(entry: FieldEntry | null) {
-    if (!entry) return;
-    sendMessage({ kind: 'HIGHLIGHT_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId, label: entry.field.label });
+    showPromptOverlay(entry);
   }
 
   function sendGuidedStep(direction: 1 | -1) {
@@ -1493,9 +1542,7 @@ export default function App() {
     setSelectedFieldId(field.id);
     setGuidedPrompt('');
     setGuidedOrder((current) => (current.includes(field.id) ? current : [...current, field.id]));
-    if (origin === 'step' && guidedStarted) {
-      highlightCurrent(entry);
-    }
+    highlightCurrent(entry);
     scheduleGuidedEnhancement(field);
   }
 

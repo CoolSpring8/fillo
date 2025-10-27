@@ -9,6 +9,7 @@ import type {
   PromptFillRequest,
   PromptOption,
   PromptOptionSlot,
+  PromptPreviewRequest,
   ScannedField,
 } from '../shared/apply/types';
 import { requestGuidedSuggestion } from '../shared/llm/guidedSuggestion';
@@ -112,13 +113,21 @@ export default defineBackground(() => {
     await openSidePanelForTab(tab.id);
   });
 
-  browser.runtime.onMessage.addListener((raw) => {
+  browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     if (!raw || typeof raw !== 'object') {
       return undefined;
     }
     const message = raw as Record<string, unknown>;
     if (message.kind === 'PROMPT_AI_SUGGEST') {
-      return handlePromptAiSuggestMessage(message);
+      handlePromptAiSuggestMessage(message)
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          const fallback = error instanceof Error ? error.message : String(error ?? 'Unknown AI error');
+          sendResponse({ status: 'error', error: fallback } satisfies PromptAiSuggestResponse);
+        });
+      return true;
     }
     return undefined;
   });
@@ -214,6 +223,9 @@ async function handleSidePanelMessage(port: RuntimePort, raw: unknown): Promise<
       break;
     case 'GUIDED_REQUEST_CURRENT':
       await handleGuidedRequestCurrent(port, message);
+      break;
+    case 'PROMPT_PREVIEW':
+      await handlePromptPreview(port, message);
       break;
   }
 }
@@ -438,6 +450,61 @@ async function handleGuidedRequestCurrent(_: RuntimePort, payload: Record<string
   }
   const framePort = contentPorts.get(tab.id)?.get(frameId);
   framePort?.postMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
+}
+
+async function handlePromptPreview(_: RuntimePort, payload: Record<string, unknown>): Promise<void> {
+  const fieldId = typeof payload.fieldId === 'string' ? payload.fieldId : null;
+  const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
+  if (!fieldId) {
+    return;
+  }
+  const label = typeof payload.label === 'string' ? payload.label : '';
+  const preview = typeof payload.preview === 'string' ? payload.preview : undefined;
+  const value = typeof payload.value === 'string' ? payload.value : undefined;
+  const defaultSlot = typeof payload.defaultSlot === 'string' ? (payload.defaultSlot as PromptOption['slot']) : null;
+  const profileId =
+    typeof payload.profileId === 'string' && payload.profileId.trim().length > 0 ? payload.profileId : null;
+  const previewId = typeof payload.previewId === 'string' ? payload.previewId : undefined;
+  const options = Array.isArray(payload.options)
+    ? (payload.options as Record<string, unknown>[]) // eslint-disable-line @typescript-eslint/consistent-type-assertions
+        .map((entry) => {
+          const slot = typeof entry.slot === 'string' ? (entry.slot as PromptOption['slot']) : null;
+          const optionLabel = typeof entry.label === 'string' ? entry.label : null;
+          const optionValue = typeof entry.value === 'string' ? entry.value : null;
+          if (!slot || !optionLabel || !optionValue) {
+            return null;
+          }
+          return { slot, label: optionLabel, value: optionValue } satisfies PromptOption;
+        })
+        .filter((entry): entry is PromptOption => entry !== null)
+    : undefined;
+
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  const framePort = contentPorts.get(tab.id)?.get(frameId);
+  if (!framePort) {
+    return;
+  }
+
+  const field = parsePromptFieldState(payload.field, fieldId, label);
+  const message: PromptPreviewRequest = {
+    fieldId,
+    frameId,
+    label,
+    preview,
+    value,
+    defaultSlot,
+    options,
+    profileId,
+    previewId,
+  };
+  if (field) {
+    message.field = field;
+  }
+
+  framePort.postMessage({ kind: 'PROMPT_PREVIEW', ...message });
 }
 
 async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promise<PromptAiSuggestResponse> {
