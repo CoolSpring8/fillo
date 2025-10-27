@@ -3,10 +3,23 @@ import type {
   FieldAttributes,
   FieldKind,
   FillResultMessage,
+  PromptAiSuggestMessage,
+  PromptAiSuggestResponse,
+  PromptFieldState,
   PromptFillRequest,
   PromptOption,
+  PromptOptionSlot,
   ScannedField,
 } from '../shared/apply/types';
+import { requestGuidedSuggestion } from '../shared/llm/guidedSuggestion';
+import {
+  NoProviderConfiguredError,
+  ProviderAvailabilityError,
+  ProviderConfigurationError,
+  ProviderInvocationError,
+} from '../shared/llm/errors';
+import { getSettings } from '../shared/storage/settings';
+import { getProfile } from '../shared/storage/profiles';
 
 type BrowserApi = typeof browser;
 type RuntimePort = ReturnType<BrowserApi['runtime']['connect']>;
@@ -97,6 +110,17 @@ export default defineBackground(() => {
     }
 
     await openSidePanelForTab(tab.id);
+  });
+
+  browser.runtime.onMessage.addListener((raw) => {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const message = raw as Record<string, unknown>;
+    if (message.kind === 'PROMPT_AI_SUGGEST') {
+      return handlePromptAiSuggestMessage(message);
+    }
+    return undefined;
   });
 });
 
@@ -238,6 +262,16 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
   const value = typeof payload.value === 'string' ? payload.value : undefined;
   const preview = typeof payload.preview === 'string' ? payload.preview : undefined;
   const label = typeof payload.label === 'string' ? payload.label : '';
+  const profileId =
+    typeof payload.profileId === 'string' && payload.profileId.trim().length > 0 ? payload.profileId : null;
+  const fieldKind = payload.fieldKind ? parseFieldKind(payload.fieldKind) : undefined;
+  const fieldContext = typeof payload.fieldContext === 'string' ? payload.fieldContext : undefined;
+  const fieldAutocomplete =
+    typeof payload.fieldAutocomplete === 'string' && payload.fieldAutocomplete.trim().length > 0
+      ? payload.fieldAutocomplete
+      : undefined;
+  const fieldRequired =
+    typeof payload.fieldRequired === 'boolean' ? payload.fieldRequired : undefined;
   let mode: PromptFillRequest['mode'];
   if (payload.mode === 'click') {
     mode = 'click';
@@ -308,6 +342,21 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
   if (options && options.length > 0) {
     message.options = options;
     message.defaultSlot = defaultSlot;
+  }
+  if (profileId !== undefined) {
+    message.profileId = profileId;
+  }
+  if (fieldKind) {
+    message.fieldKind = fieldKind;
+  }
+  if (fieldContext !== undefined) {
+    message.fieldContext = fieldContext;
+  }
+  if (fieldAutocomplete !== undefined) {
+    message.fieldAutocomplete = fieldAutocomplete;
+  }
+  if (fieldRequired !== undefined) {
+    message.fieldRequired = fieldRequired;
   }
   framePort.postMessage({ kind: 'PROMPT_FILL', ...message });
 }
@@ -389,6 +438,67 @@ async function handleGuidedRequestCurrent(_: RuntimePort, payload: Record<string
   }
   const framePort = contentPorts.get(tab.id)?.get(frameId);
   framePort?.postMessage({ kind: 'GUIDED_REQUEST_CURRENT' });
+}
+
+async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promise<PromptAiSuggestResponse> {
+  const instruction = typeof raw.instruction === 'string' ? raw.instruction : '';
+  if (!instruction.trim()) {
+    return { status: 'error', error: 'Instruction required.' };
+  }
+  const currentValue = typeof raw.currentValue === 'string' ? raw.currentValue : '';
+  const suggestion = typeof raw.suggestion === 'string' ? raw.suggestion : '';
+  const selectedSlot =
+    typeof raw.selectedSlot === 'string' ? (raw.selectedSlot as PromptOptionSlot) : null;
+  const profileId =
+    typeof raw.profileId === 'string' && raw.profileId.trim().length > 0 ? raw.profileId : null;
+  const field = parsePromptFieldState(raw.field, typeof raw.fieldId === 'string' ? raw.fieldId : undefined);
+  if (!field) {
+    return { status: 'error', error: 'Missing field context.' };
+  }
+
+  try {
+    const settings = await getSettings();
+    const provider = settings.provider;
+    const profileRecord = profileId ? await getProfile(profileId) : undefined;
+    const result = await requestGuidedSuggestion({
+      provider,
+      instruction,
+      field: {
+        label: field.label,
+        kind: field.kind,
+        context: field.context,
+        autocomplete: field.autocomplete ?? null,
+        required: field.required,
+      },
+      slot: selectedSlot ?? null,
+      currentValue,
+      suggestion,
+      profile: profileRecord?.resume ?? null,
+    });
+    const normalized = result.value.trim();
+    if (!normalized) {
+      return { status: 'error', error: 'AI returned an empty response.' };
+    }
+    return {
+      status: 'ok',
+      value: normalized,
+      reason: result.reason,
+      slot: selectedSlot ?? null,
+    };
+  } catch (error) {
+    if (
+      error instanceof NoProviderConfiguredError ||
+      error instanceof ProviderConfigurationError ||
+      error instanceof ProviderAvailabilityError ||
+      error instanceof ProviderInvocationError
+    ) {
+      return { status: 'error', error: error.message };
+    }
+    if (error instanceof Error) {
+      return { status: 'error', error: error.message };
+    }
+    return { status: 'error', error: 'Unknown AI error.' };
+  }
 }
 
 function handleContentMessage(tabId: number, frameId: number, raw: unknown): void {
@@ -529,6 +639,38 @@ function sendFields(port: RuntimePort, requestId: string, fields: ScannedField[]
 function sendFillResult(port: RuntimePort, result: FillResultMessage): void {
   const payload: FillResultResponse = { kind: 'FILL_RESULT', ...result };
   safePostMessage(port, payload);
+}
+
+function parsePromptFieldState(
+  value: unknown,
+  fallbackId?: string,
+  fallbackLabel?: string,
+): PromptFieldState | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const data = value as Record<string, unknown>;
+  const id = typeof data.id === 'string' && data.id.trim().length > 0 ? data.id : fallbackId ?? '';
+  if (!id) {
+    return null;
+  }
+  const label =
+    typeof data.label === 'string' && data.label.trim().length > 0 ? data.label : fallbackLabel ?? '';
+  const kind = parseFieldKind(data.kind);
+  const context = typeof data.context === 'string' ? data.context : '';
+  const autocomplete =
+    typeof data.autocomplete === 'string' && data.autocomplete.trim().length > 0
+      ? data.autocomplete
+      : undefined;
+  const required = data.required === true;
+  return {
+    id,
+    label,
+    kind,
+    context,
+    autocomplete,
+    required,
+  };
 }
 
 function parseFieldKind(value: unknown): FieldKind {

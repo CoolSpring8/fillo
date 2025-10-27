@@ -25,7 +25,13 @@ import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord, ProviderConfig } from '../../shared/types';
-import type { FillResultMessage, PromptOption, PromptOptionSlot, ScannedField } from '../../shared/apply/types';
+import type {
+  FillResultMessage,
+  PromptAiRequestInput,
+  PromptOption,
+  PromptOptionSlot,
+  ScannedField,
+} from '../../shared/apply/types';
 import type { FieldSlot } from '../../shared/apply/slotTypes';
 import { buildManualValueTree, flattenManualLeaves, type ManualValueNode } from './manualValues';
 import {
@@ -35,7 +41,6 @@ import {
   resolveSlotFromText,
 } from '../../shared/apply/slots';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
-import { GUIDED_AI_SUGGESTION_SCHEMA, type GuidedAiSuggestion } from '../../shared/schema/guidedAiSuggestion';
 import { classifyFieldDescriptors, type FieldClassification, type FieldDescriptor } from './classifySlots';
 import type { MemoryAssociation } from '../../shared/memory/types';
 import { getSettings } from '../../shared/storage/settings';
@@ -46,7 +51,8 @@ import {
   ProviderConfigurationError,
   ProviderInvocationError,
 } from '../../shared/llm/errors';
-import { invokeWithProvider } from '../../shared/llm/runtime';
+import { requestGuidedSuggestion } from '../../shared/llm/guidedSuggestion';
+import { PromptEditor } from '../shared/components/PromptEditor';
 import { FieldReviewMode } from './components/FieldReviewMode';
 import { GuidedMode } from './components/GuidedMode';
 import { ManualCopyMode } from './components/ManualCopyMode';
@@ -104,7 +110,6 @@ export default function App() {
   const [guidedSkipped, setGuidedSkipped] = useState<number>(0);
   const [guidedOrder, setGuidedOrder] = useState<string[]>([]);
   const [guidedPrompt, setGuidedPrompt] = useState('');
-  const [guidedAiLoading, setGuidedAiLoading] = useState(false);
   const [memoryList, setMemoryList] = useState<Array<{ key: string; association: any }>>([]);
   const { t } = i18n;
   const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
@@ -490,6 +495,11 @@ export default function App() {
         label: target.field.label,
         mode: 'auto',
         value: target.suggestion ?? '',
+        fieldKind: target.field.kind,
+        fieldContext: target.field.context,
+        fieldAutocomplete: target.field.autocomplete ?? null,
+        fieldRequired: target.field.required,
+        profileId: selectedProfile?.id ?? null,
       });
     }
     setFields((current) =>
@@ -504,7 +514,7 @@ export default function App() {
       ),
     );
     notify(t('sidepanel.feedback.autofill', targets.length, [String(targets.length)]));
-  }, [fields, notify, sendMessage, t]);
+  }, [fields, notify, selectedProfile, sendMessage, t]);
 
   // Auto mode flow removed
 
@@ -626,15 +636,20 @@ export default function App() {
   const handleReview = (entry: FieldEntry) => {
     if (entry.field.kind === 'file') {
       const requestId = crypto.randomUUID();
-      sendMessage({
-        kind: 'PROMPT_FILL',
-        requestId,
-        fieldId: entry.field.id,
-        frameId: entry.field.frameId,
-        label: entry.field.label,
-        mode: 'click',
-        preview: t('sidepanel.preview.file'),
-      });
+    sendMessage({
+      kind: 'PROMPT_FILL',
+      requestId,
+      fieldId: entry.field.id,
+      frameId: entry.field.frameId,
+      label: entry.field.label,
+      mode: 'click',
+      preview: t('sidepanel.preview.file'),
+      fieldKind: entry.field.kind,
+      fieldContext: entry.field.context,
+      fieldAutocomplete: entry.field.autocomplete ?? null,
+      fieldRequired: entry.field.required,
+      profileId: selectedProfile?.id ?? null,
+    });
       setFields((current) =>
         current.map((item) =>
           item.field.id === entry.field.id
@@ -665,6 +680,11 @@ export default function App() {
       mode: 'fill',
       value,
       preview: value,
+      fieldKind: entry.field.kind,
+      fieldContext: entry.field.context,
+      fieldAutocomplete: entry.field.autocomplete ?? null,
+      fieldRequired: entry.field.required,
+      profileId: selectedProfile?.id ?? null,
     });
     setFields((current) =>
       current.map((item) =>
@@ -1136,6 +1156,29 @@ export default function App() {
       ? 'sidepanel.guided.manualInputPlaceholderWithValue'
       : 'sidepanel.guided.manualInputPlaceholder';
     const acceptLabel = tLoose('sidepanel.guided.acceptNext');
+    const defaultSlot = fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : undefined;
+
+    const requestAi = async (input: PromptAiRequestInput) => {
+      const provider = providerRef.current;
+      if (!provider) {
+        throw new NoProviderConfiguredError();
+      }
+      return await requestGuidedSuggestion({
+        provider,
+        instruction: input.instruction,
+        field: {
+          label: entry.field.label,
+          kind: entry.field.kind,
+          context: entry.field.context,
+          autocomplete: entry.field.autocomplete ?? null,
+          required: entry.field.required,
+        },
+        slot: input.selectedSlot ?? currentSlot ?? entry.slot ?? null,
+        currentValue: input.currentValue ?? manualValue ?? '',
+        suggestion: input.suggestion ?? entry.suggestion ?? '',
+        profile: selectedProfile?.resume ?? null,
+      });
+    };
 
     return (
       <Card withBorder radius="md" shadow="sm">
@@ -1161,57 +1204,134 @@ export default function App() {
             )}
           </Group>
 
-          <Select
-            label={t('sidepanel.field.selectorLabel')}
-            placeholder={t('sidepanel.field.selectPlaceholder')}
-            data={manualOptions.map((option) => ({ value: option.slot, label: `${option.label} · ${truncate(option.value)}` }))}
-            value={currentSlot}
-            onChange={(slot) => handleSlotSelectionChange(entry.field.id, slot ? (slot as PromptOptionSlot) : null)}
-            size="sm"
-            clearable
-            searchable={manualOptions.length > 7}
-            comboboxProps={{ withinPortal: true }}
-          />
-          {entry.field.kind !== 'file' ? (
-            <Stack gap="sm">
-              <Textarea
-                label={t('sidepanel.guided.manualInputLabel')}
-                placeholder={t(placeholderKey)}
-                autosize
-                minRows={2}
-                maxRows={6}
-                value={manualValue}
-                onChange={(event) => handleManualValueChange(entry.field.id, event.currentTarget.value)}
-                description={t('sidepanel.guided.manualInputHint')}
-              />
-              <Textarea
-                label={tLoose('sidepanel.guided.aiPromptLabel')}
-                placeholder={tLoose('sidepanel.guided.aiPromptPlaceholder')}
-                autosize
-                minRows={1}
-                maxRows={3}
-                value={guidedPrompt}
-                onChange={(event) => setGuidedPrompt(event.currentTarget.value)}
-                description={tLoose('sidepanel.guided.aiPromptHint')}
-              />
-              <Group justify="flex-end">
-                <Button
-                  size="sm"
-                  variant="light"
-                  leftSection={<Sparkles size={16} />}
-                  loading={guidedAiLoading}
-                  disabled={guidedAiLoading || guidedPrompt.trim().length === 0}
-                  onClick={() => handleGuidedAi(entry)}
-                >
-                  {tLoose('sidepanel.guided.aiPromptAction')}
-                </Button>
-              </Group>
-            </Stack>
-          ) : (
-            <Text fz="xs" c="dimmed">
-              {t('sidepanel.preview.file')}
-            </Text>
-          )}
+          <PromptEditor
+            options={manualOptions}
+            defaultSlot={defaultSlot}
+            defaultValue={fallbackOption?.value}
+            preview={entry.suggestion ?? undefined}
+            value={manualValue ?? ''}
+            selectedSlot={currentSlot ?? null}
+            onValueChange={(next) => handleManualValueChange(entry.field.id, next)}
+            onSlotChange={(slot) => handleSlotSelectionChange(entry.field.id, slot)}
+            instruction={guidedPrompt}
+            onInstructionChange={setGuidedPrompt}
+            onRequestAi={requestAi}
+          >
+            {(editor) => {
+              const handleAiClick = async () => {
+                try {
+                  const result = await editor.requestAi();
+                  if (!result) {
+                    const message = tLoose('sidepanel.guided.aiPromptError');
+                    notify(message, 'error');
+                    editor.setAiError(message);
+                    return;
+                  }
+                  const normalized = result.value?.trim?.() ?? '';
+                  if (!normalized) {
+                    const message = tLoose('sidepanel.guided.aiPromptEmpty');
+                    notify(message, 'error');
+                    editor.setAiError(message);
+                    return;
+                  }
+                  editor.setValue(normalized);
+                  if (Object.prototype.hasOwnProperty.call(result, 'slot')) {
+                    editor.setSelectedSlot(result.slot ?? null);
+                  }
+                  editor.setAiError(null);
+                  notify(tLoose('sidepanel.guided.aiPromptApplied'), 'success');
+                } catch (error) {
+                  if (
+                    error instanceof NoProviderConfiguredError ||
+                    error instanceof ProviderConfigurationError ||
+                    error instanceof ProviderAvailabilityError ||
+                    error instanceof ProviderInvocationError
+                  ) {
+                    notify(error.message, 'error');
+                    editor.setAiError(error.message);
+                  } else if (error instanceof Error) {
+                    const message =
+                      error.message === 'AI returned an empty response.' || error.message === 'instruction-missing'
+                        ? tLoose('sidepanel.guided.aiPromptEmpty')
+                        : tLoose('sidepanel.guided.aiPromptError');
+                    notify(message, 'error');
+                    editor.setAiError(message);
+                  } else {
+                    const message = tLoose('sidepanel.guided.aiPromptError');
+                    notify(message, 'error');
+                    editor.setAiError(message);
+                  }
+                } finally {
+                  setGuidedPrompt('');
+                  editor.setInstruction('');
+                }
+              };
+
+              return (
+                <>
+                  <Select
+                    label={t('sidepanel.field.selectorLabel')}
+                    placeholder={t('sidepanel.field.selectPlaceholder')}
+                    data={editor.options.map((option) => ({
+                      value: option.slot,
+                      label: `${option.label} · ${truncate(option.value)}`,
+                    }))}
+                    value={editor.selectedSlot ?? null}
+                    onChange={(slot) => editor.setSelectedSlot(slot ? (slot as PromptOptionSlot) : null)}
+                    size="sm"
+                    clearable
+                    searchable={editor.options.length > 7}
+                    comboboxProps={{ withinPortal: true }}
+                  />
+                  {entry.field.kind !== 'file' ? (
+                    <Stack gap="sm">
+                      <Textarea
+                        label={t('sidepanel.guided.manualInputLabel')}
+                        placeholder={t(placeholderKey)}
+                        autosize
+                        minRows={2}
+                        maxRows={6}
+                        value={editor.value}
+                        onChange={(event) => editor.setValue(event.currentTarget.value)}
+                        description={t('sidepanel.guided.manualInputHint')}
+                      />
+                      <Textarea
+                        label={tLoose('sidepanel.guided.aiPromptLabel')}
+                        placeholder={tLoose('sidepanel.guided.aiPromptPlaceholder')}
+                        autosize
+                        minRows={1}
+                        maxRows={3}
+                        value={editor.instruction}
+                        onChange={(event) => editor.setInstruction(event.currentTarget.value)}
+                        description={tLoose('sidepanel.guided.aiPromptHint')}
+                      />
+                      {editor.aiError ? (
+                        <Text fz="xs" c="red">
+                          {editor.aiError}
+                        </Text>
+                      ) : null}
+                      <Group justify="flex-end">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          leftSection={<Sparkles size={16} />}
+                          loading={editor.aiLoading}
+                          disabled={editor.aiLoading || editor.instruction.trim().length === 0}
+                          onClick={handleAiClick}
+                        >
+                          {tLoose('sidepanel.guided.aiPromptAction')}
+                        </Button>
+                      </Group>
+                    </Stack>
+                  ) : (
+                    <Text fz="xs" c="dimmed">
+                      {t('sidepanel.preview.file')}
+                    </Text>
+                  )}
+                </>
+              );
+            }}
+          </PromptEditor>
           <Group gap="sm" justify="flex-end">
             <Button
               size="sm"
@@ -1341,6 +1461,11 @@ export default function App() {
       mode: 'fill',
       value,
       preview: value,
+      fieldKind: entry.field.kind,
+      fieldContext: entry.field.context,
+      fieldAutocomplete: entry.field.autocomplete ?? null,
+      fieldRequired: entry.field.required,
+      profileId: selectedProfile?.id ?? null,
     });
     const result = await waitForFillCompletion(requestId);
     if (result?.status === 'filled') {
@@ -1525,84 +1650,6 @@ export default function App() {
         return next;
       }),
     );
-  }
-
-  async function handleGuidedAi(entry: FieldEntry): Promise<void> {
-    const instruction = guidedPrompt.trim();
-    if (!instruction) {
-      return;
-    }
-    const provider = providerRef.current;
-    if (!provider) {
-      notify(tLoose('sidepanel.guided.aiPromptNoProvider'), 'error');
-      return;
-    }
-    setGuidedAiLoading(true);
-    try {
-      const payload = {
-        field: {
-          label: entry.field.label,
-          kind: entry.field.kind,
-          context: entry.field.context,
-          autocomplete: entry.field.autocomplete ?? null,
-          required: entry.field.required,
-        },
-        slot: entry.selectedSlot ?? entry.slot ?? null,
-        currentValue: entry.manualValue ?? '',
-        suggestion: entry.suggestion ?? '',
-        instruction,
-        profile: selectedProfile?.resume ?? null,
-      };
-      const messages = [
-        {
-          role: 'system' as const,
-          content:
-            'You help job applicants fill out form fields using their resume data. ' +
-            'Return a JSON object with keys "value" (string) and optional "reason" explaining your choice. ' +
-            'Respect the provided instruction and prefer precise, professional values.',
-        },
-        {
-          role: 'user' as const,
-          content: JSON.stringify(payload),
-        },
-      ];
-      const raw = await invokeWithProvider(provider, messages, {
-        responseSchema: GUIDED_AI_SUGGESTION_SCHEMA,
-        temperature: 0.2,
-      });
-      const trimmed = raw.trim();
-      let proposed = trimmed;
-      try {
-        const parsed = JSON.parse(trimmed) as GuidedAiSuggestion;
-        if (parsed && typeof parsed.value === 'string') {
-          proposed = parsed.value;
-        }
-      } catch {
-        // Non-JSON response; fall back to raw text.
-      }
-      const normalized = proposed.trim();
-      if (!normalized) {
-        notify(tLoose('sidepanel.guided.aiPromptEmpty'), 'error');
-        return;
-      }
-      handleManualValueChange(entry.field.id, normalized);
-      notify(tLoose('sidepanel.guided.aiPromptApplied'), 'success');
-    } catch (error) {
-      if (
-        error instanceof NoProviderConfiguredError ||
-        error instanceof ProviderConfigurationError ||
-        error instanceof ProviderAvailabilityError ||
-        error instanceof ProviderInvocationError
-      ) {
-        notify(error.message, 'error');
-      } else {
-        console.warn('Guided AI prompt failed', error);
-        notify(tLoose('sidepanel.guided.aiPromptError'), 'error');
-      }
-    } finally {
-      setGuidedAiLoading(false);
-      setGuidedPrompt('');
-    }
   }
 
   async function refreshMemory() {

@@ -52,6 +52,45 @@ export interface PromptOption {
   value: string;
 }
 
+export interface PromptFieldState {
+  id: string;
+  label: string;
+  kind: FieldKind;
+  context: string;
+  autocomplete?: string | null;
+  required: boolean;
+}
+
+export interface PromptAiRequestInput {
+  instruction: string;
+  currentValue: string;
+  suggestion?: string;
+  selectedSlot?: PromptOptionSlot | null;
+}
+
+export interface PromptAiResult {
+  value: string;
+  reason?: string;
+  slot?: PromptOptionSlot | null;
+}
+
+export interface PromptAiSuggestMessage {
+  kind: 'PROMPT_AI_SUGGEST';
+  requestId: string;
+  fieldId: string;
+  frameId: number;
+  field: PromptFieldState;
+  instruction: string;
+  currentValue: string;
+  suggestion?: string;
+  selectedSlot?: PromptOptionSlot | null;
+  profileId?: string | null;
+}
+
+export type PromptAiSuggestResponse =
+  | { status: 'ok'; value: string; reason?: string; slot?: PromptOptionSlot | null }
+  | { status: 'error'; error: string };
+
 export interface PromptFillRequest {
   requestId: string;
   fieldId: string;
@@ -62,6 +101,11 @@ export interface PromptFillRequest {
   preview?: string;
   options?: PromptOption[];
   defaultSlot?: PromptOptionSlot | null;
+  profileId?: string | null;
+  fieldKind?: FieldKind;
+  fieldContext?: string;
+  fieldAutocomplete?: string | null;
+  fieldRequired?: boolean;
 }
 
 export type FillResultStatus = 'filled' | 'skipped' | 'failed';

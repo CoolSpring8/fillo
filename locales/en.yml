@@ -464,6 +464,16 @@ overlay:
     awaitingSelection: Select a value to continue.
     placeholder: Choose a value…
     helper: Pick the data to use for this field.
+    inputLabel: Edit value
+    inputPlaceholder: Type or paste the value to fill.
+    aiInstructionLabel: Tell AI what to change
+    aiInstructionPlaceholder: e.g. "Make this more concise"
+    aiInstructionHint: Use clear instructions; we won't send the field until you apply.
+    aiInstructionRequired: Provide an instruction before asking AI.
+    aiButton: Ask AI
+    aiLoading: Asking…
+    aiError: Unable to generate a suggestion.
+    aiEmpty: AI returned an empty response.
     fill: Fill
     skip: Skip
 onboarding:

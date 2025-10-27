@@ -1,5 +1,14 @@
 import { browser } from 'wxt/browser';
-import type { FieldAttributes, FillResultStatus, PromptFillRequest } from '../../shared/apply/types';
+import type {
+  FieldAttributes,
+  FieldKind,
+  FillResultStatus,
+  PromptAiSuggestMessage,
+  PromptAiSuggestResponse,
+  PromptFieldState,
+  PromptFillRequest,
+  PromptOptionSlot,
+} from '../../shared/apply/types';
 import { fillField, triggerClick } from './fill';
 import type { InternalField } from './fields';
 import { buildFieldForElement, elementHasValue, scanFields } from './fields';
@@ -90,7 +99,10 @@ export default defineContentScript({
       string,
       {
         label: string;
-        kind: string;
+        kind: FieldKind;
+        context: string;
+        autocomplete?: string;
+        required: boolean;
       }
     >();
     const ignoreCaptures = new Set<string>();
@@ -180,7 +192,13 @@ export default defineContentScript({
     }
 
     function rememberField(field: InternalField): void {
-      fieldMetadata.set(field.id, { label: field.label, kind: field.kind });
+      fieldMetadata.set(field.id, {
+        label: field.label,
+        kind: field.kind,
+        context: field.context,
+        autocomplete: field.autocomplete,
+        required: field.required,
+      });
     }
 
     function emitGuidedCandidate(field: InternalField, origin: 'focus' | 'step' | 'request'): void {
@@ -359,12 +377,33 @@ export default defineContentScript({
         return;
       }
 
+      const profileId = message.profileId ?? null;
+      const contextOverride =
+        meta.context && meta.context.trim().length > 0
+          ? meta.context
+          : typeof message.fieldContext === 'string'
+            ? message.fieldContext
+            : '';
+      const autocompleteOverride =
+        meta.autocomplete ?? (typeof message.fieldAutocomplete === 'string' ? message.fieldAutocomplete : undefined);
+      const promptField: PromptFieldState = {
+        id: message.fieldId,
+        label: meta.label,
+        kind: meta.kind,
+        context: contextOverride,
+        autocomplete: autocompleteOverride,
+        required: meta.required,
+      };
+
       showPrompt(element, {
+        requestId: message.requestId,
         label: message.label || meta.label,
         preview: message.preview,
         options: message.options,
         defaultSlot: message.defaultSlot ?? null,
         defaultValue: message.value,
+        field: promptField,
+        profileId,
         onFill: (selectedValue) => {
           const value = selectedValue && selectedValue.trim().length > 0 ? selectedValue : message.value ?? '';
           if (!value) {
@@ -397,6 +436,32 @@ export default defineContentScript({
             status: 'skipped',
           });
           clearOverlay();
+        },
+        onRequestAi: async (input) => {
+          const messagePayload: PromptAiSuggestMessage = {
+            kind: 'PROMPT_AI_SUGGEST',
+            requestId: message.requestId,
+            fieldId: message.fieldId,
+            frameId: message.frameId,
+            field: promptField,
+            instruction: input.instruction,
+            currentValue: input.currentValue,
+            suggestion: input.suggestion,
+            selectedSlot: input.selectedSlot ?? null,
+            profileId,
+          };
+          const response = (await browser.runtime.sendMessage(messagePayload)) as PromptAiSuggestResponse | undefined;
+          if (!response) {
+            throw new Error('AI request failed');
+          }
+          if (response.status === 'ok') {
+            return {
+              value: response.value,
+              slot: response.slot ?? null,
+              reason: response.reason,
+            };
+          }
+          throw new Error(response.error || 'AI request failed');
         },
       });
     }

@@ -1,13 +1,8 @@
-import {
-  type ChangeEvent,
-  type MouseEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import type { PromptOptionSlot } from '../../../shared/apply/types';
+import { type ChangeEvent, type MouseEvent, useRef, useEffect } from 'react';
 import type { HighlightRect, OverlayComponentState, PopoverPosition } from './types';
+import { PromptEditor } from '../../shared/components/PromptEditor';
+import type { PromptEditorState } from '../../shared/components/PromptEditor';
+import type { PromptOption, PromptOptionSlot } from '../../../shared/apply/types';
 
 interface OverlayAppProps {
   state: OverlayComponentState;
@@ -69,51 +64,103 @@ interface PromptContentProps {
 
 function PromptContent({ state }: PromptContentProps) {
   const { t } = i18n;
+  const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
   const prompt = state.prompt;
-  const normalizedOptions = useMemo(() => prompt.options ?? [], [prompt.options]);
-  const [selectedSlot, setSelectedSlot] = useState<PromptOptionSlot | null>(prompt.defaultSlot ?? null);
-  const [currentValue, setCurrentValue] = useState<string>(
-    prompt.defaultValue ?? prompt.preview ?? '',
+
+  return (
+    <PromptEditor
+      options={prompt.options}
+      defaultSlot={prompt.defaultSlot ?? null}
+      defaultValue={prompt.defaultValue}
+      preview={prompt.preview}
+      onRequestAi={prompt.onRequestAi}
+    >
+      {(editor) => renderPromptContent(t, tLoose, prompt, editor)}
+    </PromptEditor>
   );
+}
 
-  useEffect(() => {
-    const options = prompt.options ?? [];
-    let slot: PromptOptionSlot | null = prompt.defaultSlot ?? null;
-    let value = prompt.defaultValue ?? prompt.preview ?? '';
+function renderPromptContent(
+  t: typeof i18n.t,
+  tLoose: (key: string, params?: unknown[]) => string,
+  prompt: PromptContentProps['state']['prompt'],
+  editor: PromptEditorState,
+) {
+  const normalizedOptions = editor.options;
+  const disableFill = editor.value.trim().length === 0;
+  const canRequestAi = typeof prompt.onRequestAi === 'function';
 
-    if (options.length > 0) {
-      const existing = slot ? options.find((option) => option.slot === slot) : undefined;
-      if (existing) {
-        value = existing.value;
-      } else if (!value && options.length === 1) {
-        slot = options[0].slot;
-        value = options[0].value;
-      }
-    }
-
-    setSelectedSlot(slot);
-    setCurrentValue(value);
-  }, [prompt]);
-
-  const previewText = currentValue.trim().length > 0
-    ? currentValue
-    : prompt.preview && prompt.preview.trim().length > 0
-      ? prompt.preview
-      : t('overlay.prompt.awaitingSelection');
-
-  const disableFill = normalizedOptions.length > 0 && currentValue.trim().length === 0;
-
-  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+  const handleOptionChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value as PromptOptionSlot | '';
     if (!value) {
-      setSelectedSlot(null);
-      setCurrentValue('');
+      editor.setSelectedSlot(null);
+      editor.setValue('');
+      editor.setAiError(null);
       return;
     }
-
     const selected = normalizedOptions.find((option) => option.slot === value);
-    setSelectedSlot(selected?.slot ?? null);
-    setCurrentValue(selected?.value ?? '');
+    editor.setSelectedSlot(selected?.slot ?? null);
+    editor.setValue(selected?.value ?? '');
+    editor.setAiError(null);
+  };
+
+  const handleValueChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    editor.setValue(event.target.value);
+    editor.setAiError(null);
+  };
+
+  const handleInstructionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    editor.setInstruction(event.target.value);
+    if (editor.aiError) {
+      editor.setAiError(null);
+    }
+  };
+
+  const handleAskAi = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!canRequestAi) {
+      return;
+    }
+    const trimmed = editor.instruction.trim();
+    if (!trimmed) {
+      editor.setAiError(tLoose('overlay.prompt.aiInstructionRequired'));
+      return;
+    }
+    try {
+      const result = await editor.requestAi();
+      if (!result) {
+        editor.setAiError(tLoose('overlay.prompt.aiError'));
+        return;
+      }
+      const normalized = result.value?.trim?.() ?? '';
+      if (!normalized) {
+        editor.setAiError(tLoose('overlay.prompt.aiEmpty'));
+        return;
+      }
+      editor.setValue(normalized);
+      if (Object.prototype.hasOwnProperty.call(result, 'slot')) {
+        editor.setSelectedSlot(result.slot ?? null);
+      }
+      editor.setInstruction('');
+      editor.setAiError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      switch (message) {
+        case 'instruction-missing':
+        case 'Instruction required.':
+          editor.setAiError(tLoose('overlay.prompt.aiInstructionRequired'));
+          break;
+        case 'Missing field context.':
+          editor.setAiError(tLoose('overlay.prompt.aiError'));
+          break;
+        case 'AI returned an empty response.':
+          editor.setAiError(tLoose('overlay.prompt.aiEmpty'));
+          break;
+        default:
+          editor.setAiError(message || tLoose('overlay.prompt.aiError'));
+          break;
+      }
+    }
   };
 
   const handleFill = (event: MouseEvent<HTMLButtonElement>) => {
@@ -121,7 +168,7 @@ function PromptContent({ state }: PromptContentProps) {
     if (disableFill) {
       return;
     }
-    prompt.onFill(currentValue, selectedSlot);
+    prompt.onFill(editor.value, editor.selectedSlot);
   };
 
   const handleSkip = (event: MouseEvent<HTMLButtonElement>) => {
@@ -138,11 +185,11 @@ function PromptContent({ state }: PromptContentProps) {
         <div className="overlay-controls">
           <select
             className="overlay-select"
-            value={selectedSlot ?? ''}
-            onChange={handleChange}
+            value={editor.selectedSlot ?? ''}
+            onChange={handleOptionChange}
           >
             <option value="">{t('overlay.prompt.placeholder')}</option>
-            {normalizedOptions.map((option) => (
+            {normalizedOptions.map((option: PromptOption) => (
               <option key={option.slot} value={option.slot} data-value={option.value}>
                 {`${option.label} · ${truncate(option.value)}`}
               </option>
@@ -151,7 +198,46 @@ function PromptContent({ state }: PromptContentProps) {
           <div className="overlay-helper">{t('overlay.prompt.helper')}</div>
         </div>
       ) : null}
-      <div className="overlay-body">{previewText}</div>
+      <div className="overlay-section">
+        <label className="overlay-field-label" htmlFor="apply-overlay-value">
+          {tLoose('overlay.prompt.inputLabel')}
+        </label>
+        <textarea
+          id="apply-overlay-value"
+          className="overlay-textarea"
+          rows={3}
+          value={editor.value}
+          placeholder={tLoose('overlay.prompt.inputPlaceholder')}
+          onChange={handleValueChange}
+        />
+      </div>
+      {canRequestAi ? (
+        <div className="overlay-section">
+          <label className="overlay-field-label" htmlFor="apply-overlay-instruction">
+            {tLoose('overlay.prompt.aiInstructionLabel')}
+          </label>
+          <textarea
+            id="apply-overlay-instruction"
+            className="overlay-textarea"
+            rows={2}
+            value={editor.instruction}
+            placeholder={tLoose('overlay.prompt.aiInstructionPlaceholder')}
+            onChange={handleInstructionChange}
+          />
+          <div className="overlay-ai-footer">
+            <div className="overlay-helper">{tLoose('overlay.prompt.aiInstructionHint')}</div>
+            <button
+              type="button"
+              className="overlay-btn secondary"
+              disabled={editor.aiLoading || editor.instruction.trim().length === 0}
+              onClick={handleAskAi}
+            >
+              {editor.aiLoading ? tLoose('overlay.prompt.aiLoading') : tLoose('overlay.prompt.aiButton')}
+            </button>
+          </div>
+          {editor.aiError ? <div className="overlay-error">{editor.aiError}</div> : null}
+        </div>
+      ) : null}
       <div className="overlay-actions">
         <button
           type="button"

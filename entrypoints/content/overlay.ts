@@ -386,6 +386,49 @@ function createOverlayController(registerBridge: boolean): OverlayController {
           font-size: 12px;
           color: #475569;
         }
+        .overlay-section {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-bottom: 12px;
+        }
+        .overlay-field-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: #1f2937;
+        }
+        .overlay-textarea {
+          width: 100%;
+          border: 1px solid rgba(15, 23, 42, 0.2);
+          border-radius: 6px;
+          padding: 6px 8px;
+          font: inherit;
+          resize: vertical;
+          min-height: 64px;
+        }
+        .overlay-textarea:focus {
+          outline: 2px solid rgba(137, 100, 89, 0.35);
+          outline-offset: 1px;
+        }
+        .overlay-ai-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
+        .overlay-error {
+          margin-top: 6px;
+          font-size: 12px;
+          color: #b91c1c;
+        }
+        .overlay-btn.secondary {
+          background: transparent;
+          border-color: rgba(137, 100, 89, 0.35);
+        }
+        .overlay-btn.secondary:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
       `;
       overlayRoot.append(style);
     }

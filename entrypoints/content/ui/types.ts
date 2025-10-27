@@ -1,13 +1,23 @@
-import type { PromptOption, PromptOptionSlot } from '../../../shared/apply/types';
+import type {
+  PromptAiRequestInput,
+  PromptAiResult,
+  PromptFieldState,
+  PromptOption,
+  PromptOptionSlot,
+} from '../../../shared/apply/types';
 
 export interface PromptOptions {
+  requestId: string;
   label: string;
   preview?: string;
   options?: PromptOption[];
   defaultSlot?: PromptOptionSlot | null;
   defaultValue?: string;
+  field?: PromptFieldState;
+  profileId?: string | null;
   onFill: (value: string, slot: PromptOptionSlot | null) => void;
   onSkip: () => void;
+  onRequestAi?: (input: PromptAiRequestInput) => Promise<PromptAiResult | null>;
 }
 
 export type OverlayComponentState =
