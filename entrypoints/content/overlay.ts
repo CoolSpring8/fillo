@@ -227,7 +227,6 @@ function createOverlayController(registerBridge: boolean): OverlayController {
 
     const targetWindow = target.ownerDocument.defaultView ?? window;
     const targetDocumentElement = target.ownerDocument.documentElement;
-    const frameElement = targetWindow.frameElement instanceof HTMLElement ? targetWindow.frameElement : null;
 
     const hostObserver = new ResizeObserver(reposition);
     hostObserver.observe(document.documentElement);
@@ -243,26 +242,52 @@ function createOverlayController(registerBridge: boolean): OverlayController {
       cleanupFns.push(() => docObserver.disconnect());
     }
 
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
-    cleanupFns.push(() => {
-      window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener('resize', reposition);
-    });
-
-    if (targetWindow !== window) {
-      targetWindow.addEventListener('scroll', reposition, true);
-      targetWindow.addEventListener('resize', reposition);
+    const attachedWindows = new Set<Window>();
+    const observedFrames = new Set<Element>();
+    const attachWindowListeners = (win: Window) => {
+      if (attachedWindows.has(win)) {
+        return;
+      }
+      win.addEventListener('scroll', reposition, true);
+      win.addEventListener('resize', reposition);
       cleanupFns.push(() => {
-        targetWindow.removeEventListener('scroll', reposition, true);
-        targetWindow.removeEventListener('resize', reposition);
+        win.removeEventListener('scroll', reposition, true);
+        win.removeEventListener('resize', reposition);
+        attachedWindows.delete(win);
       });
-    }
+      attachedWindows.add(win);
+    };
 
-    if (frameElement) {
-      const frameObserver = new ResizeObserver(reposition);
-      frameObserver.observe(frameElement);
-      cleanupFns.push(() => frameObserver.disconnect());
+    let currentWindow: Window | null = targetWindow;
+    while (currentWindow) {
+      attachWindowListeners(currentWindow);
+
+      let frameElement: Element | null = null;
+      try {
+        frameElement = currentWindow.frameElement;
+      } catch {
+        frameElement = null;
+      }
+      if (frameElement instanceof HTMLElement && !observedFrames.has(frameElement)) {
+        const frameObserver = new ResizeObserver(reposition);
+        frameObserver.observe(frameElement);
+        cleanupFns.push(() => frameObserver.disconnect());
+        observedFrames.add(frameElement);
+      }
+
+      if (currentWindow === window) {
+        break;
+      }
+      let parentWindow: Window | null = null;
+      try {
+        parentWindow = currentWindow.parent;
+      } catch {
+        parentWindow = null;
+      }
+      if (!parentWindow || parentWindow === currentWindow) {
+        break;
+      }
+      currentWindow = parentWindow;
     }
   };
 
