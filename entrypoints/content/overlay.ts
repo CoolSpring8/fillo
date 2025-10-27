@@ -199,6 +199,10 @@ function ensureReactRoot(): void {
       .overlay-label {
         font-weight: 500;
       }
+      .popover[data-apply-measuring='true'] {
+        visibility: hidden;
+        pointer-events: none;
+      }
       .overlay-select {
         width: 100%;
         border: 1px solid rgba(15, 23, 42, 0.2);
@@ -272,10 +276,9 @@ async function updatePopoverPosition(): Promise<void> {
     return;
   }
 
-  const previousVisibility = popoverElement.style.visibility;
   // Temporarily unhide so Floating UI measures the popover with real dimensions.
   popoverElement.hidden = false;
-  popoverElement.style.visibility = 'hidden';
+  popoverElement.setAttribute('data-apply-measuring', 'true');
 
   try {
     await nextFrame();
@@ -293,7 +296,7 @@ async function updatePopoverPosition(): Promise<void> {
       };
     });
   } finally {
-    popoverElement.style.visibility = previousVisibility;
+    popoverElement.removeAttribute('data-apply-measuring');
   }
 }
 
