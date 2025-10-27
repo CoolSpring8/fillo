@@ -272,20 +272,29 @@ async function updatePopoverPosition(): Promise<void> {
     return;
   }
 
-  await nextFrame();
-  const { x, y } = await computePosition(currentTarget, popoverElement, {
-    middleware: [offset(10), flip(), shift()],
-  });
-  const nextPosition: PopoverPosition = { x: Math.round(x), y: Math.round(y) };
-  updateOverlayState((previous) => {
-    if (pointEquals(previous.popoverPosition, nextPosition)) {
-      return previous;
-    }
-    return {
-      ...previous,
-      popoverPosition: nextPosition,
-    };
-  });
+  const previousVisibility = popoverElement.style.visibility;
+  // Temporarily unhide so Floating UI measures the popover with real dimensions.
+  popoverElement.hidden = false;
+  popoverElement.style.visibility = 'hidden';
+
+  try {
+    await nextFrame();
+    const { x, y } = await computePosition(currentTarget, popoverElement, {
+      middleware: [offset(10), flip(), shift()],
+    });
+    const nextPosition: PopoverPosition = { x: Math.round(x), y: Math.round(y) };
+    updateOverlayState((previous) => {
+      if (pointEquals(previous.popoverPosition, nextPosition)) {
+        return previous;
+      }
+      return {
+        ...previous,
+        popoverPosition: nextPosition,
+      };
+    });
+  } finally {
+    popoverElement.style.visibility = previousVisibility;
+  }
 }
 
 function computeHighlightLayout(target: HTMLElement): HighlightRect {
