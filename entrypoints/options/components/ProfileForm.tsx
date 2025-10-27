@@ -10,8 +10,8 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import { UseFormReturnType } from '@mantine/form';
 import { Plus, Trash2 } from 'lucide-react';
+import { FieldArrayPath, FieldPath, FieldPathValue, UseFormReturn, useFieldArray } from 'react-hook-form';
 import type { ResumeExtractionResult } from '@/shared/types';
 
 export interface ResumeFormValues {
@@ -278,8 +278,37 @@ function createEmptyProjectEntry(): ResumeFormValues['projects'][number] {
   };
 }
 
+type ArrayElement<T> = T extends Array<infer U> ? U : never;
+
+function useResumeArrayField<TName extends FieldArrayPath<ResumeFormValues>>(
+  form: UseFormReturn<ResumeFormValues>,
+  name: TName,
+) {
+  const fieldArray = useFieldArray({
+    control: form.control,
+    name,
+  });
+  const watched = form.watch(name) as FieldPathValue<ResumeFormValues, TName> | undefined;
+  const items = (watched ?? []) as FieldPathValue<ResumeFormValues, TName>;
+  const append = (value: ArrayElement<FieldPathValue<ResumeFormValues, TName>>) =>
+    fieldArray.append(value as never);
+  const remove = fieldArray.remove;
+  return { fields: fieldArray.fields, items, append, remove };
+}
+
+function setListValue<TName extends FieldPath<ResumeFormValues>>(
+  form: UseFormReturn<ResumeFormValues>,
+  name: TName,
+  value: FieldPathValue<ResumeFormValues, TName>,
+) {
+  form.setValue(name, value, {
+    shouldDirty: true,
+    shouldTouch: true,
+  });
+}
+
 interface ProfileFormProps {
-  form: UseFormReturnType<ResumeFormValues>;
+  form: UseFormReturn<ResumeFormValues>;
   onSubmit: (values: ResumeFormValues) => void;
   onReset: () => void;
   disabled?: boolean;
@@ -305,11 +334,12 @@ export function ProfileForm({
 }: ProfileFormProps) {
   const { t } = i18n;
   const translate = t as unknown as (key: string, substitutions?: unknown) => string;
-  const isDirty = form.isDirty();
+  const { formState } = form;
+  const { isDirty } = formState;
 
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
-      <form onSubmit={form.onSubmit(onSubmit)}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
         <Stack gap="xl">
           <Stack gap={4}>
             <Text fw={600} fz="lg">
@@ -412,12 +442,14 @@ export function ProfileForm({
 }
 
 interface SectionProps {
-  form: UseFormReturnType<ResumeFormValues>;
+  form: UseFormReturn<ResumeFormValues>;
   disabled: boolean;
 }
 
 function BasicsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const profilesArray = useResumeArrayField(form, 'basics.profiles');
+
   return (
     <Stack gap="md">
       <Group grow>
@@ -425,12 +457,12 @@ function BasicsSection({ form, disabled }: SectionProps) {
           label={t('options.profileForm.basics.name')}
           placeholder={t('options.profileForm.basics.namePlaceholder')}
           disabled={disabled}
-          {...form.getInputProps('basics.name')}
+          {...form.register('basics.name')}
         />
         <TextInput
           label={t('options.profileForm.basics.label')}
           disabled={disabled}
-          {...form.getInputProps('basics.label')}
+          {...form.register('basics.label')}
         />
       </Group>
 
@@ -438,12 +470,12 @@ function BasicsSection({ form, disabled }: SectionProps) {
         <TextInput
           label={t('options.profileForm.basics.email')}
           disabled={disabled}
-          {...form.getInputProps('basics.email')}
+          {...form.register('basics.email')}
         />
         <TextInput
           label={t('options.profileForm.basics.phone')}
           disabled={disabled}
-          {...form.getInputProps('basics.phone')}
+          {...form.register('basics.phone')}
         />
       </Group>
 
@@ -451,12 +483,12 @@ function BasicsSection({ form, disabled }: SectionProps) {
         <TextInput
           label={t('options.profileForm.basics.url')}
           disabled={disabled}
-          {...form.getInputProps('basics.url')}
+          {...form.register('basics.url')}
         />
         <TextInput
           label={t('options.profileForm.basics.image')}
           disabled={disabled}
-          {...form.getInputProps('basics.image')}
+          {...form.register('basics.image')}
         />
       </Group>
 
@@ -465,7 +497,7 @@ function BasicsSection({ form, disabled }: SectionProps) {
         minRows={4}
         autosize
         disabled={disabled}
-        {...form.getInputProps('basics.summary')}
+        {...form.register('basics.summary')}
       />
 
       <Stack gap={4}>
@@ -476,29 +508,29 @@ function BasicsSection({ form, disabled }: SectionProps) {
           <TextInput
             label={t('options.profileForm.basics.location.address')}
             disabled={disabled}
-            {...form.getInputProps('basics.location.address')}
+            {...form.register('basics.location.address')}
           />
           <TextInput
             label={t('options.profileForm.basics.location.city')}
             disabled={disabled}
-            {...form.getInputProps('basics.location.city')}
+            {...form.register('basics.location.city')}
           />
         </Group>
         <Group grow>
           <TextInput
             label={t('options.profileForm.basics.location.region')}
             disabled={disabled}
-            {...form.getInputProps('basics.location.region')}
+            {...form.register('basics.location.region')}
           />
           <TextInput
             label={t('options.profileForm.basics.location.countryCode')}
             disabled={disabled}
-            {...form.getInputProps('basics.location.countryCode')}
+            {...form.register('basics.location.countryCode')}
           />
           <TextInput
             label={t('options.profileForm.basics.location.postalCode')}
             disabled={disabled}
-            {...form.getInputProps('basics.location.postalCode')}
+            {...form.register('basics.location.postalCode')}
           />
         </Group>
       </Stack>
@@ -511,27 +543,27 @@ function BasicsSection({ form, disabled }: SectionProps) {
           <Button
             variant="light"
             leftSection={<Plus size={16} />}
-            onClick={() => form.insertListItem('basics.profiles', createEmptyProfileLink())}
+            onClick={() => profilesArray.append(createEmptyProfileLink())}
             disabled={disabled}
           >
             {t('options.profileForm.basics.profiles.add')}
           </Button>
         </Group>
         <Stack gap="sm">
-          {form.values.basics.profiles.length === 0 && (
+          {profilesArray.items.length === 0 && (
             <Text fz="sm" c="dimmed">
               {t('options.profileForm.basics.profiles.empty')}
             </Text>
           )}
-          {form.values.basics.profiles.map((profile, index) => (
-            <Paper key={index} withBorder radius="md" p="md">
+          {profilesArray.fields.map((profileField, index) => (
+            <Paper key={profileField.id} withBorder radius="md" p="md">
               <Stack gap="sm">
                 <Group justify="space-between" align="center">
                   <Text fw={600}>{t('options.profileForm.basics.profiles.item', [index + 1])}</Text>
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    onClick={() => form.removeListItem('basics.profiles', index)}
+                    onClick={() => profilesArray.remove(index)}
                     disabled={disabled}
                     aria-label={t('options.profileForm.basics.profiles.remove')}
                   >
@@ -542,18 +574,18 @@ function BasicsSection({ form, disabled }: SectionProps) {
                   <TextInput
                     label={t('options.profileForm.basics.profiles.network')}
                     disabled={disabled}
-                    {...form.getInputProps(`basics.profiles.${index}.network`)}
+                    {...form.register(`basics.profiles.${index}.network` as const)}
                   />
                   <TextInput
                     label={t('options.profileForm.basics.profiles.username')}
                     disabled={disabled}
-                    {...form.getInputProps(`basics.profiles.${index}.username`)}
+                    {...form.register(`basics.profiles.${index}.username` as const)}
                   />
                 </Group>
                 <TextInput
                   label={t('options.profileForm.basics.profiles.url')}
                   disabled={disabled}
-                  {...form.getInputProps(`basics.profiles.${index}.url`)}
+                  {...form.register(`basics.profiles.${index}.url` as const)}
                 />
               </Stack>
             </Paper>
@@ -566,6 +598,9 @@ function BasicsSection({ form, disabled }: SectionProps) {
 
 function WorkSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const workArray = useResumeArrayField(form, 'work');
+  const workEntries = workArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -575,29 +610,31 @@ function WorkSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('work', createEmptyWorkEntry())}
+          onClick={() => workArray.append(createEmptyWorkEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.work.add')}
         </Button>
       </Group>
 
-      {form.values.work.length === 0 && (
+      {workEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.work.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.work.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {workArray.fields.map((field, index) => {
+          const entry = workEntries[index] ?? createEmptyWorkEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.work.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('work', index)}
+                  onClick={() => workArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.work.remove')}
                 >
@@ -609,12 +646,12 @@ function WorkSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.work.name')}
                   disabled={disabled}
-                  {...form.getInputProps(`work.${index}.name`)}
+                  {...form.register(`work.${index}.name` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.work.position')}
                   disabled={disabled}
-                  {...form.getInputProps(`work.${index}.position`)}
+                  {...form.register(`work.${index}.position` as const)}
                 />
               </Group>
 
@@ -622,13 +659,13 @@ function WorkSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.work.location')}
                   disabled={disabled}
-                  {...form.getInputProps(`work.${index}.location`)}
+                  {...form.register(`work.${index}.location` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.work.url')}
                   disabled={disabled}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
-                  {...form.getInputProps(`work.${index}.url`)}
+                  {...form.register(`work.${index}.url` as const)}
                 />
               </Group>
 
@@ -637,13 +674,13 @@ function WorkSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.work.startDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`work.${index}.startDate`)}
+                  {...form.register(`work.${index}.startDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.work.endDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`work.${index}.endDate`)}
+                  {...form.register(`work.${index}.endDate` as const)}
                 />
               </Group>
 
@@ -652,7 +689,7 @@ function WorkSection({ form, disabled }: SectionProps) {
                 minRows={2}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`work.${index}.description`)}
+                {...form.register(`work.${index}.description` as const)}
               />
 
               <Textarea
@@ -660,19 +697,20 @@ function WorkSection({ form, disabled }: SectionProps) {
                 minRows={3}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`work.${index}.summary`)}
+                {...form.register(`work.${index}.summary` as const)}
               />
 
               <MultilineListInput
                 label={t('options.profileForm.work.highlights')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.highlights}
+                value={entry.highlights ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`work.${index}.highlights`, value)}
+                onChange={(value) => setListValue(form, `work.${index}.highlights` as const, value)}
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -680,6 +718,9 @@ function WorkSection({ form, disabled }: SectionProps) {
 
 function VolunteerSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const volunteerArray = useResumeArrayField(form, 'volunteer');
+  const volunteerEntries = volunteerArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -689,29 +730,31 @@ function VolunteerSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('volunteer', createEmptyVolunteerEntry())}
+          onClick={() => volunteerArray.append(createEmptyVolunteerEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.volunteer.add')}
         </Button>
       </Group>
 
-      {form.values.volunteer.length === 0 && (
+      {volunteerEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.volunteer.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.volunteer.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {volunteerArray.fields.map((field, index) => {
+          const entry = volunteerEntries[index] ?? createEmptyVolunteerEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.volunteer.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('volunteer', index)}
+                  onClick={() => volunteerArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.volunteer.remove')}
                 >
@@ -723,12 +766,12 @@ function VolunteerSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.volunteer.organization')}
                   disabled={disabled}
-                  {...form.getInputProps(`volunteer.${index}.organization`)}
+                  {...form.register(`volunteer.${index}.organization` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.volunteer.position')}
                   disabled={disabled}
-                  {...form.getInputProps(`volunteer.${index}.position`)}
+                  {...form.register(`volunteer.${index}.position` as const)}
                 />
               </Group>
 
@@ -737,19 +780,19 @@ function VolunteerSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.volunteer.url')}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`volunteer.${index}.url`)}
+                  {...form.register(`volunteer.${index}.url` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.volunteer.startDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`volunteer.${index}.startDate`)}
+                  {...form.register(`volunteer.${index}.startDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.volunteer.endDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`volunteer.${index}.endDate`)}
+                  {...form.register(`volunteer.${index}.endDate` as const)}
                 />
               </Group>
 
@@ -758,19 +801,22 @@ function VolunteerSection({ form, disabled }: SectionProps) {
                 minRows={3}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`volunteer.${index}.summary`)}
+                {...form.register(`volunteer.${index}.summary` as const)}
               />
 
               <MultilineListInput
                 label={t('options.profileForm.volunteer.highlights')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.highlights}
+                value={entry.highlights ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`volunteer.${index}.highlights`, value)}
+                onChange={(value) =>
+                  setListValue(form, `volunteer.${index}.highlights` as const, value)
+                }
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -778,6 +824,9 @@ function VolunteerSection({ form, disabled }: SectionProps) {
 
 function EducationSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const educationArray = useResumeArrayField(form, 'education');
+  const educationEntries = educationArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -787,29 +836,31 @@ function EducationSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('education', createEmptyEducationEntry())}
+          onClick={() => educationArray.append(createEmptyEducationEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.education.add')}
         </Button>
       </Group>
 
-      {form.values.education.length === 0 && (
+      {educationEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.education.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.education.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {educationArray.fields.map((field, index) => {
+          const entry = educationEntries[index] ?? createEmptyEducationEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.education.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('education', index)}
+                  onClick={() => educationArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.education.remove')}
                 >
@@ -821,13 +872,13 @@ function EducationSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.education.institution')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.institution`)}
+                  {...form.register(`education.${index}.institution` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.education.url')}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.url`)}
+                  {...form.register(`education.${index}.url` as const)}
                 />
               </Group>
 
@@ -835,12 +886,12 @@ function EducationSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.education.area')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.area`)}
+                  {...form.register(`education.${index}.area` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.education.studyType')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.studyType`)}
+                  {...form.register(`education.${index}.studyType` as const)}
                 />
               </Group>
 
@@ -849,31 +900,34 @@ function EducationSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.education.startDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.startDate`)}
+                  {...form.register(`education.${index}.startDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.education.endDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.endDate`)}
+                  {...form.register(`education.${index}.endDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.education.score')}
                   disabled={disabled}
-                  {...form.getInputProps(`education.${index}.score`)}
+                  {...form.register(`education.${index}.score` as const)}
                 />
               </Group>
 
               <MultilineListInput
                 label={t('options.profileForm.education.courses')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.courses}
+                value={entry.courses ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`education.${index}.courses`, value)}
+                onChange={(value) =>
+                  setListValue(form, `education.${index}.courses` as const, value)
+                }
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -881,6 +935,9 @@ function EducationSection({ form, disabled }: SectionProps) {
 
 function ProjectsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const projectsArray = useResumeArrayField(form, 'projects');
+  const projectsEntries = projectsArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -890,29 +947,31 @@ function ProjectsSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('projects', createEmptyProjectEntry())}
+          onClick={() => projectsArray.append(createEmptyProjectEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.projects.add')}
         </Button>
       </Group>
 
-      {form.values.projects.length === 0 && (
+      {projectsEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.projects.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.projects.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {projectsArray.fields.map((field, index) => {
+          const entry = projectsEntries[index] ?? createEmptyProjectEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.projects.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('projects', index)}
+                  onClick={() => projectsArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.projects.remove')}
                 >
@@ -924,12 +983,12 @@ function ProjectsSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.projects.name')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.name`)}
+                  {...form.register(`projects.${index}.name` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.projects.entity')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.entity`)}
+                  {...form.register(`projects.${index}.entity` as const)}
                 />
               </Group>
 
@@ -937,13 +996,13 @@ function ProjectsSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.projects.type')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.type`)}
+                  {...form.register(`projects.${index}.type` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.projects.url')}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.url`)}
+                  {...form.register(`projects.${index}.url` as const)}
                 />
               </Group>
 
@@ -952,13 +1011,13 @@ function ProjectsSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.projects.startDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.startDate`)}
+                  {...form.register(`projects.${index}.startDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.projects.endDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`projects.${index}.endDate`)}
+                  {...form.register(`projects.${index}.endDate` as const)}
                 />
               </Group>
 
@@ -967,35 +1026,40 @@ function ProjectsSection({ form, disabled }: SectionProps) {
                 minRows={3}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`projects.${index}.description`)}
+                {...form.register(`projects.${index}.description` as const)}
               />
 
               <MultilineListInput
                 label={t('options.profileForm.projects.roles')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.roles}
+                value={entry.roles ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`projects.${index}.roles`, value)}
+                onChange={(value) => setListValue(form, `projects.${index}.roles` as const, value)}
               />
 
               <MultilineListInput
                 label={t('options.profileForm.projects.highlights')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.highlights}
+                value={entry.highlights ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`projects.${index}.highlights`, value)}
+                onChange={(value) =>
+                  setListValue(form, `projects.${index}.highlights` as const, value)
+                }
               />
 
               <MultilineListInput
                 label={t('options.profileForm.projects.keywords')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.keywords}
+                value={entry.keywords ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`projects.${index}.keywords`, value)}
+                onChange={(value) =>
+                  setListValue(form, `projects.${index}.keywords` as const, value)
+                }
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -1003,6 +1067,9 @@ function ProjectsSection({ form, disabled }: SectionProps) {
 
 function SkillsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const skillsArray = useResumeArrayField(form, 'skills');
+  const skillsEntries = skillsArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1012,29 +1079,31 @@ function SkillsSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('skills', createEmptySkillEntry())}
+          onClick={() => skillsArray.append(createEmptySkillEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.skills.add')}
         </Button>
       </Group>
 
-      {form.values.skills.length === 0 && (
+      {skillsEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.skills.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.skills.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {skillsArray.fields.map((field, index) => {
+          const entry = skillsEntries[index] ?? createEmptySkillEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.skills.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('skills', index)}
+                  onClick={() => skillsArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.skills.remove')}
                 >
@@ -1046,25 +1115,28 @@ function SkillsSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.skills.name')}
                   disabled={disabled}
-                  {...form.getInputProps(`skills.${index}.name`)}
+                  {...form.register(`skills.${index}.name` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.skills.level')}
                   disabled={disabled}
-                  {...form.getInputProps(`skills.${index}.level`)}
+                  {...form.register(`skills.${index}.level` as const)}
                 />
               </Group>
 
               <MultilineListInput
                 label={t('options.profileForm.skills.keywords')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.keywords}
+                value={entry.keywords ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`skills.${index}.keywords`, value)}
+                onChange={(value) =>
+                  setListValue(form, `skills.${index}.keywords` as const, value)
+                }
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -1072,6 +1144,9 @@ function SkillsSection({ form, disabled }: SectionProps) {
 
 function AwardsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const awardsArray = useResumeArrayField(form, 'awards');
+  const awardsEntries = awardsArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1081,29 +1156,29 @@ function AwardsSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('awards', createEmptyAwardEntry())}
+          onClick={() => awardsArray.append(createEmptyAwardEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.awards.add')}
         </Button>
       </Group>
 
-      {form.values.awards.length === 0 && (
+      {awardsEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.awards.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.awards.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {awardsArray.fields.map((field, index) => (
+          <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.awards.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('awards', index)}
+                  onClick={() => awardsArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.awards.remove')}
                 >
@@ -1115,12 +1190,12 @@ function AwardsSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.awards.title')}
                   disabled={disabled}
-                  {...form.getInputProps(`awards.${index}.title`)}
+                  {...form.register(`awards.${index}.title` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.awards.awarder')}
                   disabled={disabled}
-                  {...form.getInputProps(`awards.${index}.awarder`)}
+                  {...form.register(`awards.${index}.awarder` as const)}
                 />
               </Group>
 
@@ -1128,7 +1203,7 @@ function AwardsSection({ form, disabled }: SectionProps) {
                 label={t('options.profileForm.awards.date')}
                 placeholder={t('options.profileForm.common.datePlaceholder')}
                 disabled={disabled}
-                {...form.getInputProps(`awards.${index}.date`)}
+                {...form.register(`awards.${index}.date` as const)}
               />
 
               <Textarea
@@ -1136,7 +1211,7 @@ function AwardsSection({ form, disabled }: SectionProps) {
                 minRows={2}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`awards.${index}.summary`)}
+                {...form.register(`awards.${index}.summary` as const)}
               />
             </Stack>
           </Paper>
@@ -1148,6 +1223,9 @@ function AwardsSection({ form, disabled }: SectionProps) {
 
 function CertificatesSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const certificatesArray = useResumeArrayField(form, 'certificates');
+  const certificatesEntries = certificatesArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1157,29 +1235,29 @@ function CertificatesSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('certificates', createEmptyCertificateEntry())}
+          onClick={() => certificatesArray.append(createEmptyCertificateEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.certificates.add')}
         </Button>
       </Group>
 
-      {form.values.certificates.length === 0 && (
+      {certificatesEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.certificates.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.certificates.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {certificatesArray.fields.map((field, index) => (
+          <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.certificates.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('certificates', index)}
+                  onClick={() => certificatesArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.certificates.remove')}
                 >
@@ -1191,12 +1269,12 @@ function CertificatesSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.certificates.name')}
                   disabled={disabled}
-                  {...form.getInputProps(`certificates.${index}.name`)}
+                  {...form.register(`certificates.${index}.name` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.certificates.issuer')}
                   disabled={disabled}
-                  {...form.getInputProps(`certificates.${index}.issuer`)}
+                  {...form.register(`certificates.${index}.issuer` as const)}
                 />
               </Group>
 
@@ -1205,13 +1283,13 @@ function CertificatesSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.certificates.date')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`certificates.${index}.date`)}
+                  {...form.register(`certificates.${index}.date` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.certificates.url')}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`certificates.${index}.url`)}
+                  {...form.register(`certificates.${index}.url` as const)}
                 />
               </Group>
             </Stack>
@@ -1224,6 +1302,9 @@ function CertificatesSection({ form, disabled }: SectionProps) {
 
 function PublicationsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const publicationsArray = useResumeArrayField(form, 'publications');
+  const publicationsEntries = publicationsArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1233,29 +1314,29 @@ function PublicationsSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('publications', createEmptyPublicationEntry())}
+          onClick={() => publicationsArray.append(createEmptyPublicationEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.publications.add')}
         </Button>
       </Group>
 
-      {form.values.publications.length === 0 && (
+      {publicationsEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.publications.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.publications.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {publicationsArray.fields.map((field, index) => (
+          <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.publications.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('publications', index)}
+                  onClick={() => publicationsArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.publications.remove')}
                 >
@@ -1267,12 +1348,12 @@ function PublicationsSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.publications.name')}
                   disabled={disabled}
-                  {...form.getInputProps(`publications.${index}.name`)}
+                  {...form.register(`publications.${index}.name` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.publications.publisher')}
                   disabled={disabled}
-                  {...form.getInputProps(`publications.${index}.publisher`)}
+                  {...form.register(`publications.${index}.publisher` as const)}
                 />
               </Group>
 
@@ -1281,13 +1362,13 @@ function PublicationsSection({ form, disabled }: SectionProps) {
                   label={t('options.profileForm.publications.releaseDate')}
                   placeholder={t('options.profileForm.common.datePlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`publications.${index}.releaseDate`)}
+                  {...form.register(`publications.${index}.releaseDate` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.publications.url')}
                   placeholder={t('options.profileForm.common.urlPlaceholder')}
                   disabled={disabled}
-                  {...form.getInputProps(`publications.${index}.url`)}
+                  {...form.register(`publications.${index}.url` as const)}
                 />
               </Group>
 
@@ -1296,7 +1377,7 @@ function PublicationsSection({ form, disabled }: SectionProps) {
                 minRows={3}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`publications.${index}.summary`)}
+                {...form.register(`publications.${index}.summary` as const)}
               />
             </Stack>
           </Paper>
@@ -1308,6 +1389,9 @@ function PublicationsSection({ form, disabled }: SectionProps) {
 
 function LanguagesSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const languagesArray = useResumeArrayField(form, 'languages');
+  const languagesEntries = languagesArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1317,29 +1401,29 @@ function LanguagesSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('languages', createEmptyLanguageEntry())}
+          onClick={() => languagesArray.append(createEmptyLanguageEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.languages.add')}
         </Button>
       </Group>
 
-      {form.values.languages.length === 0 && (
+      {languagesEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.languages.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.languages.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {languagesArray.fields.map((field, index) => (
+          <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.languages.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('languages', index)}
+                  onClick={() => languagesArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.languages.remove')}
                 >
@@ -1351,12 +1435,12 @@ function LanguagesSection({ form, disabled }: SectionProps) {
                 <TextInput
                   label={t('options.profileForm.languages.language')}
                   disabled={disabled}
-                  {...form.getInputProps(`languages.${index}.language`)}
+                  {...form.register(`languages.${index}.language` as const)}
                 />
                 <TextInput
                   label={t('options.profileForm.languages.fluency')}
                   disabled={disabled}
-                  {...form.getInputProps(`languages.${index}.fluency`)}
+                  {...form.register(`languages.${index}.fluency` as const)}
                 />
               </Group>
             </Stack>
@@ -1369,6 +1453,9 @@ function LanguagesSection({ form, disabled }: SectionProps) {
 
 function InterestsSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const interestsArray = useResumeArrayField(form, 'interests');
+  const interestsEntries = interestsArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1378,29 +1465,31 @@ function InterestsSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('interests', createEmptyInterestEntry())}
+          onClick={() => interestsArray.append(createEmptyInterestEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.interests.add')}
         </Button>
       </Group>
 
-      {form.values.interests.length === 0 && (
+      {interestsEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.interests.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.interests.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
-            <Stack gap="sm">
+        {interestsArray.fields.map((field, index) => {
+          const entry = interestsEntries[index] ?? createEmptyInterestEntry();
+          return (
+            <Paper key={field.id} withBorder radius="md" p="md">
+              <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.interests.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('interests', index)}
+                  onClick={() => interestsArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.interests.remove')}
                 >
@@ -1411,19 +1500,22 @@ function InterestsSection({ form, disabled }: SectionProps) {
               <TextInput
                 label={t('options.profileForm.interests.name')}
                 disabled={disabled}
-                {...form.getInputProps(`interests.${index}.name`)}
+                {...form.register(`interests.${index}.name` as const)}
               />
 
               <MultilineListInput
                 label={t('options.profileForm.interests.keywords')}
                 placeholder={t('options.profileForm.common.listPlaceholder')}
-                value={entry.keywords}
+                value={entry.keywords ?? []}
                 disabled={disabled}
-                onChange={(value) => form.setFieldValue(`interests.${index}.keywords`, value)}
+                onChange={(value) =>
+                  setListValue(form, `interests.${index}.keywords` as const, value)
+                }
               />
             </Stack>
           </Paper>
-        ))}
+        );
+        })}
       </Stack>
     </Stack>
   );
@@ -1431,6 +1523,9 @@ function InterestsSection({ form, disabled }: SectionProps) {
 
 function ReferencesSection({ form, disabled }: SectionProps) {
   const { t } = i18n;
+  const referencesArray = useResumeArrayField(form, 'references');
+  const referencesEntries = referencesArray.items;
+
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
@@ -1440,29 +1535,29 @@ function ReferencesSection({ form, disabled }: SectionProps) {
         <Button
           variant="light"
           leftSection={<Plus size={16} />}
-          onClick={() => form.insertListItem('references', createEmptyReferenceEntry())}
+          onClick={() => referencesArray.append(createEmptyReferenceEntry())}
           disabled={disabled}
         >
           {t('options.profileForm.references.add')}
         </Button>
       </Group>
 
-      {form.values.references.length === 0 && (
+      {referencesEntries.length === 0 && (
         <Text fz="sm" c="dimmed">
           {t('options.profileForm.references.empty')}
         </Text>
       )}
 
       <Stack gap="sm">
-        {form.values.references.map((entry, index) => (
-          <Paper key={index} withBorder radius="md" p="md">
+        {referencesArray.fields.map((field, index) => (
+          <Paper key={field.id} withBorder radius="md" p="md">
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600}>{t('options.profileForm.references.item', [index + 1])}</Text>
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  onClick={() => form.removeListItem('references', index)}
+                  onClick={() => referencesArray.remove(index)}
                   disabled={disabled}
                   aria-label={t('options.profileForm.references.remove')}
                 >
@@ -1473,7 +1568,7 @@ function ReferencesSection({ form, disabled }: SectionProps) {
               <TextInput
                 label={t('options.profileForm.references.name')}
                 disabled={disabled}
-                {...form.getInputProps(`references.${index}.name`)}
+                {...form.register(`references.${index}.name` as const)}
               />
 
               <Textarea
@@ -1481,7 +1576,7 @@ function ReferencesSection({ form, disabled }: SectionProps) {
                 minRows={2}
                 autosize
                 disabled={disabled}
-                {...form.getInputProps(`references.${index}.reference`)}
+                {...form.register(`references.${index}.reference` as const)}
               />
             </Stack>
           </Paper>
@@ -1499,18 +1594,18 @@ function MetaSection({ form, disabled }: SectionProps) {
         label={t('options.profileForm.meta.canonical')}
         placeholder={t('options.profileForm.common.urlPlaceholder')}
         disabled={disabled}
-        {...form.getInputProps('meta.canonical')}
+        {...form.register('meta.canonical')}
       />
       <TextInput
         label={t('options.profileForm.meta.version')}
         disabled={disabled}
-        {...form.getInputProps('meta.version')}
+        {...form.register('meta.version')}
       />
       <TextInput
         label={t('options.profileForm.meta.lastModified')}
         placeholder={t('options.profileForm.common.datePlaceholder')}
         disabled={disabled}
-        {...form.getInputProps('meta.lastModified')}
+        {...form.register('meta.lastModified')}
       />
     </Stack>
   );

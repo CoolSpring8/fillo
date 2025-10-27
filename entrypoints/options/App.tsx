@@ -16,7 +16,7 @@ import {
   Textarea,
   Title,
 } from '@mantine/core';
-import { useForm } from '@mantine/form';
+import { useForm } from 'react-hook-form';
 import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
@@ -87,7 +87,7 @@ function buildSettings(
 
 export default function App() {
   const form = useForm<ResumeFormValues>({
-    initialValues: createEmptyResumeFormValues(),
+    defaultValues: createEmptyResumeFormValues(),
   });
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai'>('on-device');
@@ -159,14 +159,12 @@ export default function App() {
   useEffect(() => {
     if (!selectedProfile) {
       const empty = createEmptyResumeFormValues();
-      form.setValues(empty);
-      form.resetDirty(empty);
+      form.reset(empty);
       setRawText('');
       return;
     }
     const values = resumeToFormValues(selectedProfile.resume);
-    form.setValues(values);
-    form.resetDirty(values);
+    form.reset(values);
     setRawText(selectedProfile.rawText);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProfile]);
@@ -382,8 +380,7 @@ export default function App() {
 
             const formValues = resumeToFormValues(resume);
             const mergedValues = mergeResumeFormValues(form.getValues(), formValues);
-            form.setValues(mergedValues);
-            form.resetDirty(mergedValues);
+            form.reset(mergedValues);
 
             const mergedResume = formValuesToResume(mergedValues);
             const validationResult = validateResume(mergedResume);
@@ -514,8 +511,7 @@ export default function App() {
 
       const parsedValues = resumeToFormValues(resume);
       const mergedValues = mergeResumeFormValues(form.getValues(), parsedValues);
-      form.setValues(mergedValues);
-      form.resetDirty(mergedValues);
+      form.reset(mergedValues);
 
       const mergedResume = formValuesToResume(mergedValues);
       const validationResult = validateResume(mergedResume);
@@ -591,7 +587,7 @@ export default function App() {
 
       await saveProfile(updated);
       await refreshProfiles(updated.id);
-      form.resetDirty(values);
+      form.reset(values);
 
       setStatus({ phase: 'complete', message: t('options.profileForm.status.savedForm') });
       setErrorDetails(null);
@@ -609,13 +605,11 @@ export default function App() {
   const handleResetForm = () => {
     if (!selectedProfile) {
       const empty = createEmptyResumeFormValues();
-      form.setValues(empty);
-      form.resetDirty(empty);
+      form.reset(empty);
       return;
     }
     const values = resumeToFormValues(selectedProfile.resume);
-    form.setValues(values);
-    form.resetDirty(values);
+    form.reset(values);
   };
 
   const handleSelectProfile = (id: string) => {
