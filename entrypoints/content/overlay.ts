@@ -117,6 +117,9 @@ function createOverlayController(registerBridge: boolean): OverlayController {
   };
   let currentReferenceRect: DOMRectReadOnly | null = null;
   let stylesInjected = false;
+  let constructableSheets: CSSStyleSheet[] | null = null;
+  const supportsConstructableStylesheets =
+    Array.isArray(document.adoptedStyleSheets) && 'replaceSync' in CSSStyleSheet.prototype;
 
   const virtualReference: VirtualElement = {
     getBoundingClientRect(): DOMRect {
@@ -296,6 +299,18 @@ function createOverlayController(registerBridge: boolean): OverlayController {
   };
 
   const appendStylesToShadowRoot = (root: ShadowRoot, styles: string[]): void => {
+    if (supportsConstructableStylesheets) {
+      if (!constructableSheets) {
+        constructableSheets = styles.map((cssText) => {
+          const sheet = new CSSStyleSheet();
+          sheet.replaceSync(cssText);
+          return sheet;
+        });
+      }
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, ...constructableSheets];
+      return;
+    }
+
     styles.forEach((cssText) => {
       const style = document.createElement('style');
       style.textContent = cssText;
