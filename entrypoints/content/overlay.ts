@@ -405,6 +405,7 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     try {
       await nextFrame();
       const { x, y } = await computePosition(virtualReference as ReferenceElement, popoverElement, {
+        strategy: 'fixed',
         middleware: [offset(10), flip(), shift()],
       });
       const nextPosition: PopoverPosition = { x: Math.round(x), y: Math.round(y) };
