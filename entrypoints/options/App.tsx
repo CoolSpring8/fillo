@@ -45,10 +45,12 @@ import type {
   ProfileRecord,
   ResumeExtractionResult,
 } from '../../shared/types';
+import { listAssociations, clearAllMemory, deleteAssociation } from '../../shared/memory/store';
 import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCard';
 import { ProviderCard } from './components/ProviderCard';
 import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
 import { AutofillCard } from './components/AutofillCard';
+import { MemoryCard, type MemoryEntry } from './components/MemoryCard';
 import {
   ProfileForm,
   createEmptyResumeFormValues,
@@ -65,6 +67,11 @@ type StatusPhase = 'idle' | 'extracting' | 'parsing' | 'saving' | 'complete' | '
 interface StatusState {
   phase: StatusPhase;
   message: string;
+}
+
+interface MemoryState {
+  loading: boolean;
+  error?: string;
 }
 
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
@@ -113,6 +120,8 @@ export default function App() {
   const [busyAction, setBusyAction] = useState<'upload' | 'parse' | 'save' | null>(null);
   const [rawText, setRawText] = useState('');
   const [activeTab, setActiveTab] = useState<'profiles' | 'settings'>('profiles');
+  const [memoryItems, setMemoryItems] = useState<MemoryEntry[]>([]);
+  const [memoryState, setMemoryState] = useState<MemoryState>({ loading: true });
   const { t } = i18n;
   const translate = t as unknown as (key: string, substitutions?: unknown) => string;
   const providerLabels: Record<'on-device' | 'openai', string> = {
@@ -142,6 +151,57 @@ export default function App() {
       }
     },
     [],
+  );
+
+  const refreshMemoryItems = useCallback(async () => {
+    setMemoryState({ loading: true, error: undefined });
+    try {
+      const list = await listAssociations();
+      setMemoryItems(list);
+      setMemoryState({ loading: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMemoryState({ loading: false, error: message });
+    }
+  }, []);
+
+  const handleClearMemory = useCallback(async () => {
+    setMemoryState((state) => ({ ...state, loading: true, error: undefined }));
+    try {
+      await clearAllMemory();
+      await refreshMemoryItems();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMemoryState({ loading: false, error: message });
+    }
+  }, [refreshMemoryItems]);
+
+  const handleDeleteMemory = useCallback(async (key: string) => {
+    setMemoryState((state) => ({ ...state, loading: true, error: undefined }));
+    try {
+      await deleteAssociation(key);
+      await refreshMemoryItems();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMemoryState({ loading: false, error: message });
+    }
+  }, [refreshMemoryItems]);
+
+  const formatMemoryEntry = useCallback(
+    ({ key, association }: MemoryEntry) => {
+      const parts: string[] = [key];
+      const preferred = association.preferredSlot;
+      if (preferred) {
+        parts.push(t('options.memory.preferredSlot', [preferred]));
+      }
+      const last = association.lastValue?.trim();
+      if (last && last.length > 0) {
+        const limited = last.length <= 80 ? last : `${last.slice(0, 79)}…`;
+        parts.push(t('options.memory.lastValue', [limited]));
+      }
+      return parts.join(' · ');
+    },
+    [t],
   );
 
   const selectedProfile = useMemo(
@@ -195,6 +255,18 @@ export default function App() {
     browser.storage.onChanged.addListener(listener);
     return () => browser.storage.onChanged.removeListener(listener);
   }, [refreshProfiles]);
+
+  useEffect(() => {
+    void refreshMemoryItems();
+    const listener = (changes: Record<string, unknown>, area: string) => {
+      if (area !== 'local') return;
+      if ('memory:associations' in changes) {
+        void refreshMemoryItems();
+      }
+    };
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
+  }, [refreshMemoryItems]);
 
   const handleProviderChange = async (value: 'on-device' | 'openai') => {
     setSelectedProvider(value);
@@ -867,6 +939,29 @@ export default function App() {
                   onChange={handleAutoFallbackChange}
                 />
               </SimpleGrid>
+
+              <MemoryCard
+                title={t('options.memory.heading')}
+                description={t('options.memory.description')}
+                refreshLabel={t('options.memory.refresh')}
+                clearLabel={t('options.memory.clearAll')}
+                deleteLabel={t('options.memory.delete')}
+                emptyLabel={t('options.memory.empty')}
+                loadingLabel={t('options.memory.loading')}
+                error={memoryState.error ? t('options.memory.error', [memoryState.error]) : undefined}
+                items={memoryItems}
+                loading={memoryState.loading}
+                onRefresh={() => {
+                  void refreshMemoryItems();
+                }}
+                onClearAll={() => {
+                  void handleClearMemory();
+                }}
+                onDelete={(key) => {
+                  void handleDeleteMemory(key);
+                }}
+                formatEntry={formatMemoryEntry}
+              />
             </Stack>
           </Tabs.Panel>
         </Tabs>

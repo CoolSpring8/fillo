@@ -35,6 +35,18 @@ options:
     description: Decide how ApplyPilot handles fields that need attention during auto fill.
     skip: Skip issues and continue automatically
     pause: Pause for manual review
+  memory:
+    heading: Field memory
+    description: Review and clear learned field associations used for suggestions.
+    refresh: Refresh
+    clearAll: Clear all
+    delete: Delete
+    empty: No saved field memory yet.
+    loading: Loading saved memory…
+    error: Unable to load memory ($1)
+    preferredSlot: 'Preferred slot: $1'
+    lastValue: 'Last value: $1'
+
   profileForm:
     heading: Profile details
     description: Provide structured resume data or import it from a PDF.
@@ -303,7 +315,6 @@ sidepanel:
     manageProfiles: Manage profiles
   tabs:
     dom: Field Review
-    guided: Guided
     manual: Manual Copy
   states:
     noProfilesOption: No profiles available

@@ -35,6 +35,18 @@ options:
     description: 选择自动填充遇到问题时的处理方式。
     skip: 跳过问题并继续
     pause: 暂停，等待手动处理
+  memory:
+    heading: 字段记忆
+    description: 管理填表时学习到的字段关联，可在此刷新或清除。
+    refresh: 刷新
+    clearAll: 清除全部
+    delete: 删除
+    empty: 尚未保存任何字段记忆。
+    loading: 正在加载字段记忆…
+    error: 无法加载字段记忆（$1）
+    preferredSlot: '首选槽位：$1'
+    lastValue: '上次填入：$1'
+
   profileForm:
     heading: 简历详情
     description: 填写结构化简历数据，或通过 PDF 导入。
