@@ -10,8 +10,7 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { OverlayApp } from './ui/OverlayApp';
 import type { HighlightRect, OverlayRenderState, PopoverPosition, PromptOptions } from './ui/types';
-import mantineLayerStyles from '@mantine/core/styles.layer.css?inline';
-import mantineCoreStyles from '@mantine/core/styles.css?inline';
+import overlayMantineStyles from './ui/overlay.mantine.css?inline';
 import overlayStyles from './ui/overlay.css?inline';
 
 interface HighlightOptions {
@@ -37,6 +36,7 @@ interface OverlayController {
 }
 
 const OVERLAY_BRIDGE_KEY = '__apply_overlay_bridge__';
+const OVERLAY_ROOT_ELEMENT_ID = '__apply_overlay_root__';
 const isTopWindow = window === window.top;
 
 let clearOverlayImpl: () => void;
@@ -321,12 +321,13 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     }
 
     if (overlayRoot && !stylesInjected) {
-      appendStylesToShadowRoot(overlayRoot, [mantineLayerStyles, mantineCoreStyles, overlayStyles]);
+      appendStylesToShadowRoot(overlayRoot, [overlayMantineStyles, overlayStyles]);
       stylesInjected = true;
     }
 
     if (!hostContainer) {
       hostContainer = document.createElement('div');
+      hostContainer.id = OVERLAY_ROOT_ELEMENT_ID;
       overlayRoot!.append(hostContainer);
     }
 
@@ -354,6 +355,8 @@ function createOverlayController(registerBridge: boolean): OverlayController {
         highlightRect: overlayState.highlightRect,
         popoverPosition: overlayState.popoverPosition,
         onPopoverMount: handlePopoverMount,
+        portalTarget: hostContainer,
+        mantineRoot: hostContainer,
       }),
     );
   };

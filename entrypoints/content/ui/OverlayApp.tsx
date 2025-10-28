@@ -1,4 +1,4 @@
-import { type ChangeEvent, type MouseEvent, useRef, useEffect } from 'react';
+import { type ChangeEvent, type MouseEvent, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Alert,
   Button,
@@ -10,6 +10,7 @@ import {
   Text,
   Textarea,
 } from '@mantine/core';
+import type { MantineTheme } from '@mantine/core';
 import type { HighlightRect, OverlayComponentState, PopoverPosition } from './types';
 import { PromptEditor } from '../../shared/components/PromptEditor';
 import type { PromptEditorState } from '../../shared/components/PromptEditor';
@@ -21,9 +22,18 @@ interface OverlayAppProps {
   highlightRect: HighlightRect | null;
   popoverPosition: PopoverPosition | null;
   onPopoverMount: (element: HTMLDivElement | null) => void;
+  portalTarget: HTMLElement | null;
+  mantineRoot: HTMLElement | null;
 }
 
-export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMount }: OverlayAppProps) {
+export function OverlayApp({
+  state,
+  highlightRect,
+  popoverPosition,
+  onPopoverMount,
+  portalTarget,
+  mantineRoot,
+}: OverlayAppProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -32,6 +42,32 @@ export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMou
       onPopoverMount(null);
     };
   }, [onPopoverMount]);
+
+  const overlayTheme = useMemo(
+    () => {
+      const baseComponents = applyTheme.components ?? {};
+      const basePortal = baseComponents.Portal ?? {};
+      const basePortalDefaults = basePortal.defaultProps ?? {};
+
+      return {
+        ...applyTheme,
+        components: {
+          ...baseComponents,
+          Portal: {
+            ...basePortal,
+            defaultProps: {
+              ...basePortalDefaults,
+              target: portalTarget ?? undefined,
+            },
+          },
+        },
+      } as MantineTheme;
+    },
+    [portalTarget],
+  );
+
+  const cssVariablesSelector = mantineRoot?.id ? `#${mantineRoot.id}` : ':host';
+  const rootElementGetter = useCallback(() => mantineRoot ?? undefined, [mantineRoot]);
 
   const highlightStyle = highlightRect
     ? {
@@ -61,7 +97,12 @@ export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMou
     shouldShowPopover && (state.mode === 'prompt' || state.label.trim().length > 0);
 
   return (
-    <MantineProvider theme={applyTheme} defaultColorScheme="light">
+    <MantineProvider
+      theme={overlayTheme}
+      defaultColorScheme="light"
+      cssVariablesSelector={cssVariablesSelector}
+      getRootElement={mantineRoot ? rootElementGetter : undefined}
+    >
       <div className="highlight" style={highlightStyle} />
       <div className="popover" ref={popoverRef} hidden={!isPopoverVisible} style={popoverStyle}>
         {shouldRenderPopoverContent ? (
