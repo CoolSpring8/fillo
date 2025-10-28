@@ -43,11 +43,10 @@ let sharedSession: ChromeLanguageModelSession | null = null;
 let sharedSessionQueue: Promise<void> = Promise.resolve();
 
 function getLanguageModel(): ChromeLanguageModel | undefined {
-  const win = window as unknown as {
+  const root = globalThis as typeof globalThis & {
     LanguageModel?: ChromeLanguageModel;
-    ai?: { languageModel?: ChromeLanguageModel };
   };
-  return win.ai?.languageModel ?? win.LanguageModel;
+  return root.LanguageModel;
 }
 
 function resetSharedSession(): void {
