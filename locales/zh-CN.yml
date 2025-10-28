@@ -491,6 +491,9 @@ overlay:
     aiEmpty: AI 返回了空结果。
     fill: 填写
     skip: 跳过
+    close: 关闭提示
+    disableHint: 如需关闭提示浮层，请在 ApplyPilot 弹窗中切换开关。
+    disableHintAria: 了解如何关闭提示浮层
 onboarding:
   title: ApplyPilot 工作台
   description: 在同一位置导入简历、配置 AI 服务并优化自动填充。

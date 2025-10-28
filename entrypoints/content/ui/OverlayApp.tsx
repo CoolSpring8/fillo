@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -21,7 +22,9 @@ import {
   Paper,
   Stack,
   Text,
+  Tooltip,
 } from '@mantine/core';
+import { CircleHelp, X } from 'lucide-react';
 import type { MantineTheme } from '@mantine/core';
 import type { HighlightRect, OverlayComponentState, PopoverPosition } from './types';
 import { PromptEditor } from '../../shared/components/PromptEditor';
@@ -356,13 +359,9 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
     [commitFill, resolveFillCandidate],
   );
 
-  const handleSkip = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      prompt.onSkip();
-    },
-    [prompt],
-  );
+  const handleClose = useCallback(() => {
+    prompt.onSkip();
+  }, [prompt]);
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -428,9 +427,34 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
 
   return (
     <Stack gap="md">
-      <Text fw={600} size="sm">
-        {prompt.label.length > 0 ? prompt.label : t('overlay.prompt.heading')}
-      </Text>
+      <Group justify="space-between" align="flex-start" gap="md">
+        <Text fw={600} size="sm">
+          {prompt.label.length > 0 ? prompt.label : t('overlay.prompt.heading')}
+        </Text>
+        <Group gap={4} align="center">
+          <Tooltip label={tLoose('overlay.prompt.disableHint')} position="bottom-end" withArrow>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              type="button"
+              aria-label={tLoose('overlay.prompt.disableHintAria')}
+            >
+              <CircleHelp size={16} strokeWidth={2} />
+            </ActionIcon>
+          </Tooltip>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="sm"
+            aria-label={tLoose('overlay.prompt.close')}
+            type="button"
+            onClick={handleClose}
+          >
+            <X size={16} strokeWidth={2} />
+          </ActionIcon>
+        </Group>
+      </Group>
       <Stack gap="xs">
         <PredictiveTextarea
           ref={textareaRef}
@@ -480,9 +504,6 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
       <Group justify="flex-end" gap="xs">
         <Button type="button" variant="filled" color="brand" disabled={!canFill} onClick={handleFill}>
           {t('overlay.prompt.fill')}
-        </Button>
-        <Button type="button" variant="default" onClick={handleSkip}>
-          {t('overlay.prompt.skip')}
         </Button>
       </Group>
     </Stack>

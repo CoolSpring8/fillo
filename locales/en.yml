@@ -490,6 +490,9 @@ overlay:
     aiEmpty: AI returned an empty response.
     fill: Fill
     skip: Skip
+    close: Close prompt
+    disableHint: Toggle prompt overlays from the ApplyPilot popup to hide these suggestions.
+    disableHintAria: Learn how to disable prompt overlays
 onboarding:
   title: ApplyPilot workspace
   description: Import resumes, configure AI providers, and fine-tune autofill settings in one place.
