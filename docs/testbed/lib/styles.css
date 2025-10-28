@@ -151,9 +151,50 @@ button:hover {
   font-size: 0.9rem;
 }
 
+.testbed-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .testbed-panel h2 {
   margin: 0;
   font-size: 1.05rem;
+}
+
+.testbed-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.testbed-panel__toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.testbed-panel--collapsed {
+  width: auto;
+  padding: 0.8rem 1rem;
+  gap: 0.5rem;
+}
+
+.testbed-panel--collapsed .testbed-panel__body {
+  display: none;
+}
+
+.testbed-panel--collapsed .testbed-panel__toggle span {
+  transform: translateY(-1px);
 }
 
 .testbed-panel__row {

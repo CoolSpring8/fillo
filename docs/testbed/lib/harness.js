@@ -37,6 +37,7 @@
     renameEnabled: false,
     shadowEnabled: false,
     loggingEnabled: false,
+    collapsed: false,
     noiseWrappers: new Map(),
     originalPositions: [],
     originalGroupOrder: new Map(),
@@ -44,10 +45,12 @@
     logListeners: [],
     logEntries: [],
     panel: null,
+    bodyEl: null,
     statusEl: null,
     logEl: null,
     diffEl: null,
     samplePreEl: null,
+    collapseButton: null,
   };
 
   function init() {
@@ -100,43 +103,61 @@
     const panel = document.createElement('aside');
     panel.className = 'testbed-panel';
     panel.innerHTML = `
-      <div>
+      <div class="testbed-panel__header">
         <h2>Test Harness</h2>
-        <p class="testbed-panel__status"></p>
-      </div>
-      <div class="testbed-panel__row">
-        <button type="button" data-action="fill">Fill sample</button>
-        <button type="button" data-action="diff">Diff vs expected</button>
-      </div>
-      <div class="testbed-panel__row">
-        <button type="button" data-action="noise" aria-pressed="false">DOM noise</button>
-        <button type="button" data-action="rename" aria-pressed="false">Rename attributes</button>
-      </div>
-      <div class="testbed-panel__row">
-        <button type="button" data-action="shadow" aria-pressed="false"${hasShadowTargets() ? '' : ' disabled'}>
-          Shadowize
+        <button
+          type="button"
+          class="testbed-panel__toggle"
+          data-action="collapse"
+          aria-expanded="true"
+          aria-label="Collapse test harness"
+          aria-controls="testbed-panel-body"
+          title="Collapse test harness"
+        >
+          <span aria-hidden="true">−</span>
         </button>
-        <button type="button" data-action="log" aria-pressed="false">Log events</button>
       </div>
-      <div class="testbed-panel__row">
-        <button type="button" data-action="reset">Reset page</button>
+      <div class="testbed-panel__body" id="testbed-panel-body">
+        <p class="testbed-panel__status"></p>
+        <div class="testbed-panel__row">
+          <button type="button" data-action="fill">Fill sample</button>
+          <button type="button" data-action="diff">Diff vs expected</button>
+        </div>
+        <div class="testbed-panel__row">
+          <button type="button" data-action="noise" aria-pressed="false">DOM noise</button>
+          <button type="button" data-action="rename" aria-pressed="false">Rename attributes</button>
+        </div>
+        <div class="testbed-panel__row">
+          <button type="button" data-action="shadow" aria-pressed="false"${hasShadowTargets() ? '' : ' disabled'}>
+            Shadowize
+          </button>
+          <button type="button" data-action="log" aria-pressed="false">Log events</button>
+        </div>
+        <div class="testbed-panel__row">
+          <button type="button" data-action="reset">Reset page</button>
+        </div>
+        <details data-action="sample">
+          <summary>Sample resume</summary>
+          <pre class="testbed-panel__sample">Loading sample…</pre>
+        </details>
+        <div class="testbed-panel__log" aria-live="polite"></div>
+        <div class="testbed-diff" hidden></div>
       </div>
-      <details data-action="sample">
-        <summary>Sample resume</summary>
-        <pre class="testbed-panel__sample">Loading sample…</pre>
-      </details>
-      <div class="testbed-panel__log" aria-live="polite"></div>
-      <div class="testbed-diff" hidden></div>
     `;
 
     panel.addEventListener('click', onPanelClick);
     document.body.append(panel);
 
     state.panel = panel;
+    state.bodyEl = panel.querySelector('.testbed-panel__body');
     state.statusEl = panel.querySelector('.testbed-panel__status');
     state.logEl = panel.querySelector('.testbed-panel__log');
     state.diffEl = panel.querySelector('.testbed-diff');
     state.samplePreEl = panel.querySelector('.testbed-panel__sample');
+    state.collapseButton = panel.querySelector('[data-action="collapse"]');
+    if (state.bodyEl) {
+      state.bodyEl.setAttribute('aria-hidden', 'false');
+    }
 
     preloadSample();
   }
@@ -169,8 +190,36 @@
       case 'reset':
         window.location.reload();
         break;
+      case 'collapse':
+        toggleCollapse(target);
+        break;
       default:
         break;
+    }
+  }
+
+  function toggleCollapse(button) {
+    state.collapsed = !state.collapsed;
+    if (state.panel) {
+      state.panel.classList.toggle('testbed-panel--collapsed', state.collapsed);
+    }
+    if (state.bodyEl) {
+      state.bodyEl.setAttribute('aria-hidden', String(state.collapsed));
+      if (typeof state.bodyEl.toggleAttribute === 'function') {
+        state.bodyEl.toggleAttribute('inert', state.collapsed);
+      } else if (state.collapsed) {
+        state.bodyEl.setAttribute('inert', '');
+      } else {
+        state.bodyEl.removeAttribute('inert');
+      }
+    }
+    button.setAttribute('aria-expanded', String(!state.collapsed));
+    const label = state.collapsed ? 'Expand test harness' : 'Collapse test harness';
+    button.setAttribute('aria-label', label);
+    button.setAttribute('title', label);
+    const icon = button.querySelector('span');
+    if (icon) {
+      icon.textContent = state.collapsed ? '+' : '−';
     }
   }
 
