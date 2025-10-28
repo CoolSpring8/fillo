@@ -1,6 +1,6 @@
 import {
   type ChangeEvent,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   forwardRef,
   useCallback,
@@ -365,7 +365,7 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
   );
 
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === 'Tab' && !event.shiftKey) {
         const candidate = resolveFillCandidate(true);
         if (!candidate) {
@@ -397,6 +397,27 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
     },
     [commitFill],
   );
+
+  useEffect(() => {
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || event.defaultPrevented || event.shiftKey) {
+        return;
+      }
+      if (textareaRef.current && event.target instanceof Node && textareaRef.current.contains(event.target)) {
+        return;
+      }
+      const candidate = resolveFillCandidate(true);
+      if (!candidate) {
+        return;
+      }
+      commitFill(candidate);
+    };
+
+    document.addEventListener('keydown', handleDocumentKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown, true);
+    };
+  }, [commitFill, resolveFillCandidate]);
 
   const suggestionSourceLabel = useMemo(() => {
     if (!suggestionCandidate) {
@@ -472,7 +493,7 @@ interface PredictiveTextareaProps {
   value: string;
   placeholder: string;
   onChange: (next: string) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
 const PredictiveTextarea = forwardRef<HTMLTextAreaElement, PredictiveTextareaProps>(
