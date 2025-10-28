@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Container, Loader, ScrollArea, Stack, Text, Title } from '@mantine/core';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, Container, Loader, ScrollArea, Stack, Switch, Text, Title } from '@mantine/core';
 import { deleteProfile, listProfiles } from '../../shared/storage/profiles';
 import { OPENAI_DEFAULT_BASE_URL } from '../../shared/storage/settings';
 import type { ProfileRecord } from '../../shared/types';
@@ -14,7 +14,12 @@ export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>({ loading: true });
+  const [overlayEnabled, setOverlayEnabled] = useState(false);
+  const [overlayLoading, setOverlayLoading] = useState(false);
+  const [overlayAvailable, setOverlayAvailable] = useState(true);
+  const [activeTabId, setActiveTabId] = useState<number | null>(null);
   const { t } = i18n;
+  const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
 
   const refresh = async () => {
     setViewState({ loading: true });
@@ -64,6 +69,66 @@ export default function App() {
   const openWorkspace = () => {
     void browser.tabs.create({ url: browser.runtime.getURL('/options.html') });
   };
+
+  const refreshOverlayStatus = useCallback(async () => {
+    setOverlayLoading(true);
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      const tabId = tab?.id ?? null;
+      setActiveTabId(tabId);
+      if (!tabId) {
+        setOverlayAvailable(false);
+        setOverlayEnabled(false);
+        return;
+      }
+      setOverlayAvailable(true);
+      const response = (await browser.runtime.sendMessage({
+        kind: 'POPUP_PROMPT_OVERLAY_GET',
+        tabId,
+      })) as { status?: string; enabled?: boolean } | undefined;
+      setOverlayEnabled(Boolean(response?.enabled));
+    } catch (error) {
+      console.warn('Unable to fetch prompt overlay status', error);
+      setOverlayAvailable(false);
+      setOverlayEnabled(false);
+    } finally {
+      setOverlayLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshOverlayStatus();
+  }, [refreshOverlayStatus]);
+
+  const handleOverlayToggle = useCallback(
+    async (nextValue: boolean) => {
+      if (!activeTabId) {
+        return;
+      }
+      const previousValue = overlayEnabled;
+      setOverlayEnabled(nextValue);
+      setOverlayLoading(true);
+      try {
+        const response = (await browser.runtime.sendMessage({
+          kind: 'POPUP_PROMPT_OVERLAY_SET',
+          tabId: activeTabId,
+          enabled: nextValue,
+        })) as { status?: string; enabled?: boolean; error?: string } | undefined;
+        if (!response || response.status !== 'ok') {
+          throw new Error(response?.error || 'toggle-failed');
+        }
+        if (typeof response.enabled === 'boolean') {
+          setOverlayEnabled(response.enabled);
+        }
+      } catch (error) {
+        console.warn('Unable to toggle prompt overlay', error);
+        setOverlayEnabled(previousValue);
+      } finally {
+        setOverlayLoading(false);
+      }
+    },
+    [activeTabId, overlayEnabled],
+  );
 
   const profileItems = useMemo<ProfileAccordionItem[]>(() => {
     return profiles.map((profile) => {
@@ -172,6 +237,20 @@ export default function App() {
                 deleteLabel={t('popup.buttons.delete')}
               />
             )}
+
+            <Stack gap={4}>
+              <Switch
+                checked={overlayEnabled}
+                onChange={(event) => void handleOverlayToggle(event.currentTarget.checked)}
+                disabled={overlayLoading || !overlayAvailable || viewState.loading}
+                label={tLoose('popup.overlay.toggleLabel')}
+              />
+              <Text fz="xs" c="dimmed">
+                {overlayAvailable
+                  ? tLoose('popup.overlay.toggleDescription')
+                  : tLoose('popup.overlay.toggleUnavailable')}
+              </Text>
+            </Stack>
 
             <Stack gap="xs">
               <Button variant="light" fullWidth onClick={openWorkspace}>

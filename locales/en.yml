@@ -279,6 +279,10 @@ popup:
     validationWarnings: Validation warnings
   info:
     noStructured: No structured resume stored yet. Run AI parsing from the workspace to populate this section.
+  overlay:
+    toggleLabel: Show prompt overlay on this tab
+    toggleDescription: Allow ApplyPilot to watch focused inputs and offer prompt overlays until you close the tab.
+    toggleUnavailable: Prompt overlays are unavailable on this page.
 sidepanel:
   permission:
     title: Allow Apply Pilot to scan this page?

@@ -279,6 +279,10 @@ popup:
     validationWarnings: 校验警告
   info:
     noStructured: 尚未保存结构化简历，请先在工作台运行 AI 解析。
+  overlay:
+    toggleLabel: 在此标签页显示提示覆盖层
+    toggleDescription: 允许 ApplyPilot 监听获得焦点的输入框并提供提示，直到关闭该标签页。
+    toggleUnavailable: 当前页面暂不支持提示覆盖层。
 sidepanel:
   permission:
     title: 允许 Apply Pilot 扫描此页面吗？

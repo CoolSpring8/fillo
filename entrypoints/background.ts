@@ -55,6 +55,7 @@ const contentPorts = new Map<number, Map<number, RuntimePort>>();
 const sidePanelPorts = new Set<RuntimePort>();
 const pendingScans = new Map<string, PendingScan>();
 const pendingFills = new Map<string, PendingFill>();
+const popupOverlayTabs = new Set<number>();
 
 async function openSidePanelForTab(tabId: number): Promise<void> {
   try {
@@ -118,6 +119,28 @@ export default defineBackground(() => {
       return undefined;
     }
     const message = raw as Record<string, unknown>;
+    if (message.kind === 'POPUP_PROMPT_OVERLAY_GET') {
+      const tabId = typeof message.tabId === 'number' ? message.tabId : null;
+      const enabled = tabId !== null && popupOverlayTabs.has(tabId);
+      sendResponse({ status: 'ok', enabled });
+      return false;
+    }
+    if (message.kind === 'POPUP_PROMPT_OVERLAY_SET') {
+      const tabId = typeof message.tabId === 'number' ? message.tabId : null;
+      const enabled = Boolean(message.enabled);
+      if (tabId === null) {
+        sendResponse({ status: 'error', error: 'missing-tab' });
+        return false;
+      }
+      if (enabled) {
+        popupOverlayTabs.add(tabId);
+      } else {
+        popupOverlayTabs.delete(tabId);
+        clearOverlayForTab(tabId);
+      }
+      sendResponse({ status: 'ok', enabled: popupOverlayTabs.has(tabId) });
+      return false;
+    }
     if (message.kind === 'PROMPT_AI_SUGGEST') {
       handlePromptAiSuggestMessage(message)
         .then((result) => {
@@ -130,6 +153,12 @@ export default defineBackground(() => {
       return true;
     }
     return undefined;
+  });
+
+  browser.tabs.onRemoved.addListener((tabId) => {
+    if (popupOverlayTabs.delete(tabId)) {
+      clearOverlayForTab(tabId);
+    }
   });
 });
 
@@ -678,6 +707,7 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
     for (const panel of sidePanelPorts) {
       panel.postMessage({ kind: 'GUIDED_CANDIDATE', field: normalized, origin, frameId });
     }
+    maybeShowPopupPromptOverlay(tabId, frameId, normalized, origin);
   } else if (message.kind === 'GUIDED_INPUT_CAPTURE') {
     const frameUrl = typeof message.frameUrl === 'string' ? message.frameUrl : '';
     const value = typeof message.value === 'string' ? message.value : '';
@@ -691,6 +721,68 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
     for (const panel of sidePanelPorts) {
       panel.postMessage({ kind: 'GUIDED_INPUT_CAPTURE', field: normalized, value, frameId });
     }
+  }
+}
+
+function maybeShowPopupPromptOverlay(
+  tabId: number,
+  frameId: number,
+  field: ScannedField,
+  origin: 'focus' | 'step' | 'request',
+): void {
+  if (!popupOverlayTabs.has(tabId)) {
+    return;
+  }
+  if (origin !== 'focus') {
+    return;
+  }
+  if (field.kind === 'checkbox' || field.kind === 'radio' || field.kind === 'file') {
+    return;
+  }
+  const frames = contentPorts.get(tabId);
+  const framePort = frames?.get(frameId);
+  if (!framePort) {
+    return;
+  }
+
+  const previewId = typeof crypto?.randomUUID === 'function'
+    ? `popup:${crypto.randomUUID()}`
+    : `popup:${Math.random().toString(36).slice(2)}`;
+  const fallbackLabel = field.label?.trim()?.length
+    ? field.label
+    : field.attributes?.ariaLabel?.trim()?.length
+      ? field.attributes!.ariaLabel!
+      : field.attributes?.placeholder?.trim()?.length
+        ? field.attributes!.placeholder!
+        : '';
+
+  safePostMessage(framePort, {
+    kind: 'PROMPT_PREVIEW',
+    previewId,
+    fieldId: field.id,
+    frameId,
+    label: fallbackLabel,
+    defaultSlot: null,
+    profileId: null,
+    scrollIntoView: false,
+    field: {
+      id: field.id,
+      label: fallbackLabel,
+      kind: field.kind,
+      context: field.context,
+      autocomplete: field.autocomplete ?? null,
+      required: field.required,
+    },
+  });
+}
+
+function clearOverlayForTab(tabId: number): void {
+  const frames = contentPorts.get(tabId);
+  if (!frames) {
+    return;
+  }
+  for (const port of frames.values()) {
+    safePostMessage(port, { kind: 'CLEAR_OVERLAY' });
   }
 }
 
