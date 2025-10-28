@@ -3,7 +3,7 @@ import { ActionIcon, Card, Group, Paper, ScrollArea, Stack, Text, Tooltip } from
 import { Copy } from 'lucide-react';
 
 import type { ProfileRecord } from '../../../shared/types';
-import type { ManualValueNode } from '../manualValues';
+import type { ManualValueNode } from '../../../shared/apply/manualValues';
 import type { ViewState } from '../types';
 import { ModePanel, StateAlert } from './ModeLayout';
 import { ManualTreeView } from './ManualTreeView';

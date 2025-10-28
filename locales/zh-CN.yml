@@ -283,6 +283,10 @@ popup:
     toggleLabel: 在此标签页显示提示覆盖层
     toggleDescription: 允许 ApplyPilot 监听获得焦点的输入框并提供提示，直到关闭该标签页。
     toggleUnavailable: 当前页面暂不支持提示覆盖层。
+    profileSelectLabel: 选择用于提示的简历
+    profileSelectPlaceholder: 请选择简历
+    profileSelectDescription: 提示覆盖层将优先使用此简历的数据。
+    profileSelectEmpty: 请先在工作台导入简历以启用此处的建议。
 sidepanel:
   permission:
     title: 允许 Apply Pilot 扫描此页面吗？

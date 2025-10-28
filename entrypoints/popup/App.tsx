@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Container, Loader, ScrollArea, Stack, Switch, Text, Title } from '@mantine/core';
+import { Alert, Box, Button, Container, Loader, ScrollArea, Select, Stack, Switch, Text, Title } from '@mantine/core';
 import { deleteProfile, listProfiles } from '../../shared/storage/profiles';
 import { OPENAI_DEFAULT_BASE_URL } from '../../shared/storage/settings';
 import type { ProfileRecord } from '../../shared/types';
@@ -14,6 +14,8 @@ export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>({ loading: true });
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileUpdating, setProfileUpdating] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [overlayAvailable, setOverlayAvailable] = useState(true);
@@ -21,32 +23,90 @@ export default function App() {
   const { t } = i18n;
   const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
 
-  const refresh = async () => {
+  const syncActiveProfile = useCallback(async () => {
+    try {
+      const response = (await browser.runtime.sendMessage({
+        kind: 'POPUP_ACTIVE_PROFILE_GET',
+      })) as { status?: string; profileId?: string | null } | undefined;
+      if (response?.status === 'ok') {
+        setActiveProfileId(response.profileId ?? null);
+      } else {
+        setActiveProfileId(null);
+      }
+    } catch (error) {
+      console.warn('Unable to fetch active profile', error);
+      setActiveProfileId(null);
+    }
+  }, []);
+
+  const handleProfileSelect = useCallback(
+    async (profileId: string | null) => {
+      const normalized = profileId && profileId.trim().length > 0 ? profileId.trim() : null;
+      if (normalized === activeProfileId) {
+        return;
+      }
+      const previous = activeProfileId;
+      setActiveProfileId(normalized);
+      setProfileUpdating(true);
+      try {
+        const response = (await browser.runtime.sendMessage({
+          kind: 'POPUP_ACTIVE_PROFILE_SET',
+          profileId: normalized,
+        })) as { status?: string; profileId?: string | null; error?: string } | undefined;
+        if (!response || response.status !== 'ok') {
+          throw new Error(response?.error || 'profile-set-failed');
+        }
+        setActiveProfileId(response.profileId ?? normalized ?? null);
+      } catch (error) {
+        console.warn('Unable to set active profile', error);
+        setActiveProfileId(previous);
+      } finally {
+        setProfileUpdating(false);
+      }
+    },
+    [activeProfileId],
+  );
+
+  const refresh = useCallback(async () => {
     setViewState({ loading: true });
     try {
       const result = await listProfiles();
       setProfiles(result);
       setViewState({ loading: false });
-      if (result.length === 0) {
-        setExpandedId(null);
-      } else if (expandedId && !result.some((profile) => profile.id === expandedId)) {
-        setExpandedId(null);
-      }
+      setExpandedId((current) => {
+        if (result.length === 0) {
+          return null;
+        }
+        if (current && !result.some((profile) => profile.id === current)) {
+          return null;
+        }
+        return current;
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setViewState({ loading: false, error: message });
     }
-  };
+  }, []);
 
   useEffect(() => {
     void refresh();
+    void syncActiveProfile();
     const listener = () => {
       void refresh();
+      void syncActiveProfile();
     };
     browser.storage.onChanged.addListener(listener);
     return () => browser.storage.onChanged.removeListener(listener);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh, syncActiveProfile]);
+
+  useEffect(() => {
+    if (!activeProfileId) {
+      return;
+    }
+    if (!profiles.some((profile) => profile.id === activeProfileId)) {
+      void handleProfileSelect(null);
+    }
+  }, [activeProfileId, profiles, handleProfileSelect]);
 
   const handleDelete = async (id: string) => {
     await deleteProfile(id);
@@ -133,16 +193,7 @@ export default function App() {
   const profileItems = useMemo<ProfileAccordionItem[]>(() => {
     return profiles.map((profile) => {
       const createdAt = new Date(profile.createdAt).toLocaleString();
-      const basics = (profile.resume as Record<string, unknown> | undefined)?.basics;
-      const resolvedName =
-        basics && typeof basics === 'object' && basics !== null
-          ? (() => {
-              const name = (basics as Record<string, unknown>).name;
-              return typeof name === 'string' && name.trim().length > 0
-                ? name.trim()
-                : t('popup.profile.unnamed');
-            })()
-          : t('popup.profile.unnamed');
+      const resolvedName = resolveProfileName(profile, t('popup.profile.unnamed'));
       const parsedAt = profile.parsedAt ? new Date(profile.parsedAt).toLocaleString() : null;
       const providerLabel = profile.provider
         ? profile.provider.kind === 'openai'
@@ -189,6 +240,15 @@ export default function App() {
       } satisfies ProfileAccordionItem;
     });
   }, [profiles, t]);
+
+  const profileSelectOptions = useMemo(
+    () =>
+      profiles.map((profile) => ({
+        value: profile.id,
+        label: resolveProfileName(profile, t('popup.profile.unnamed')),
+      })),
+    [profiles, t],
+  );
 
   return (
     <Box
@@ -238,18 +298,36 @@ export default function App() {
               />
             )}
 
-            <Stack gap={4}>
-              <Switch
-                checked={overlayEnabled}
-                onChange={(event) => void handleOverlayToggle(event.currentTarget.checked)}
-                disabled={overlayLoading || !overlayAvailable || viewState.loading}
-                label={tLoose('popup.overlay.toggleLabel')}
+            <Stack gap="sm">
+              <Select
+                data={profileSelectOptions}
+                value={activeProfileId ?? null}
+                onChange={(value) => void handleProfileSelect(value)}
+                clearable
+                disabled={profiles.length === 0 || profileUpdating}
+                label={tLoose('popup.overlay.profileSelectLabel')}
+                placeholder={tLoose('popup.overlay.profileSelectPlaceholder')}
+                description={
+                  profiles.length > 0
+                    ? tLoose('popup.overlay.profileSelectDescription')
+                    : tLoose('popup.overlay.profileSelectEmpty')
+                }
+                size="sm"
               />
-              <Text fz="xs" c="dimmed">
-                {overlayAvailable
-                  ? tLoose('popup.overlay.toggleDescription')
-                  : tLoose('popup.overlay.toggleUnavailable')}
-              </Text>
+
+              <Stack gap={4}>
+                <Switch
+                  checked={overlayEnabled}
+                  onChange={(event) => void handleOverlayToggle(event.currentTarget.checked)}
+                  disabled={overlayLoading || !overlayAvailable || viewState.loading}
+                  label={tLoose('popup.overlay.toggleLabel')}
+                />
+                <Text fz="xs" c="dimmed">
+                  {overlayAvailable
+                    ? tLoose('popup.overlay.toggleDescription')
+                    : tLoose('popup.overlay.toggleUnavailable')}
+                </Text>
+              </Stack>
             </Stack>
 
             <Stack gap="xs">
@@ -276,4 +354,21 @@ function formatJson(value: unknown): string {
   } catch {
     return '{}';
   }
+}
+
+function resolveProfileName(profile: ProfileRecord, fallback: string): string {
+  const resume = profile.resume;
+  if (resume && typeof resume === 'object') {
+    const basics = (resume as Record<string, unknown>).basics;
+    if (basics && typeof basics === 'object' && basics !== null) {
+      const name = (basics as Record<string, unknown>).name;
+      if (typeof name === 'string') {
+        const trimmed = name.trim();
+        if (trimmed.length > 0) {
+          return trimmed;
+        }
+      }
+    }
+  }
+  return fallback;
 }

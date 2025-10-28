@@ -19,7 +19,7 @@ import {
 } from '@mantine/core';
 import { ChevronDown, ChevronRight, ChevronUp, Copy, Search } from 'lucide-react';
 
-import type { ManualValueNode } from '../manualValues';
+import type { ManualValueNode } from '../../../shared/apply/manualValues';
 
 interface ManualTreeViewProps {
   nodes: ManualValueNode[];
@@ -558,4 +558,3 @@ function buildManualBranchCopy(node: ManualValueNode): string | null {
   }
   return entries.map((entry) => entry.value).join('\n');
 }
-

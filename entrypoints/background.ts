@@ -12,6 +12,10 @@ import type {
   PromptPreviewRequest,
   ScannedField,
 } from '../shared/apply/types';
+import { buildProfilePromptOptions } from '../shared/apply/promptOptions';
+import { resolveFieldSlot } from '../shared/apply/fieldMapping';
+import { getAllAdapterIds } from '../shared/apply/slots';
+import { formatSlotLabel } from '../shared/apply/slotLabels';
 import { requestGuidedSuggestion } from '../shared/llm/guidedSuggestion';
 import {
   NoProviderConfiguredError,
@@ -56,6 +60,9 @@ const sidePanelPorts = new Set<RuntimePort>();
 const pendingScans = new Map<string, PendingScan>();
 const pendingFills = new Map<string, PendingFill>();
 const popupOverlayTabs = new Set<number>();
+const overlayAdapterIds = getAllAdapterIds();
+const ACTIVE_PROFILE_STORAGE_KEY = 'popupActiveProfileId';
+let activeProfileId: string | null = null;
 
 async function openSidePanelForTab(tabId: number): Promise<void> {
   try {
@@ -122,7 +129,7 @@ export default defineBackground(() => {
     if (message.kind === 'POPUP_PROMPT_OVERLAY_GET') {
       const tabId = typeof message.tabId === 'number' ? message.tabId : null;
       const enabled = tabId !== null && popupOverlayTabs.has(tabId);
-      sendResponse({ status: 'ok', enabled });
+      sendResponse({ status: 'ok', enabled, profileId: activeProfileId });
       return false;
     }
     if (message.kind === 'POPUP_PROMPT_OVERLAY_SET') {
@@ -138,8 +145,25 @@ export default defineBackground(() => {
         popupOverlayTabs.delete(tabId);
         clearOverlayForTab(tabId);
       }
-      sendResponse({ status: 'ok', enabled: popupOverlayTabs.has(tabId) });
+      sendResponse({ status: 'ok', enabled: popupOverlayTabs.has(tabId), profileId: activeProfileId });
       return false;
+    }
+    if (message.kind === 'POPUP_ACTIVE_PROFILE_GET') {
+      sendResponse({ status: 'ok', profileId: activeProfileId });
+      return false;
+    }
+    if (message.kind === 'POPUP_ACTIVE_PROFILE_SET') {
+      const raw = typeof message.profileId === 'string' ? message.profileId.trim() : '';
+      const next = raw.length > 0 ? raw : null;
+      setActiveProfilePreference(next)
+        .then(() => {
+          sendResponse({ status: 'ok', profileId: activeProfileId });
+        })
+        .catch((error) => {
+          const reason = error instanceof Error ? error.message : String(error ?? 'active-profile-error');
+          sendResponse({ status: 'error', error: reason });
+        });
+      return true;
     }
     if (message.kind === 'PROMPT_AI_SUGGEST') {
       handlePromptAiSuggestMessage(message)
@@ -153,6 +177,26 @@ export default defineBackground(() => {
       return true;
     }
     return undefined;
+  });
+
+  void loadActiveProfilePreference();
+
+  browser.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') {
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, ACTIVE_PROFILE_STORAGE_KEY)) {
+      const change = changes[ACTIVE_PROFILE_STORAGE_KEY];
+      const nextRaw = change?.newValue;
+      const next = typeof nextRaw === 'string' && nextRaw.trim().length > 0 ? nextRaw : null;
+      if (next === activeProfileId) {
+        return;
+      }
+      activeProfileId = next;
+      for (const tabId of popupOverlayTabs) {
+        clearOverlayForTab(tabId);
+      }
+    }
   });
 
   browser.tabs.onRemoved.addListener((tabId) => {
@@ -707,7 +751,7 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
     for (const panel of sidePanelPorts) {
       panel.postMessage({ kind: 'GUIDED_CANDIDATE', field: normalized, origin, frameId });
     }
-    maybeShowPopupPromptOverlay(tabId, frameId, normalized, origin);
+    void maybeShowPopupPromptOverlay(tabId, frameId, normalized, origin);
   } else if (message.kind === 'GUIDED_INPUT_CAPTURE') {
     const frameUrl = typeof message.frameUrl === 'string' ? message.frameUrl : '';
     const value = typeof message.value === 'string' ? message.value : '';
@@ -724,12 +768,12 @@ function handleContentMessage(tabId: number, frameId: number, raw: unknown): voi
   }
 }
 
-function maybeShowPopupPromptOverlay(
+async function maybeShowPopupPromptOverlay(
   tabId: number,
   frameId: number,
   field: ScannedField,
   origin: 'focus' | 'step' | 'request',
-): void {
+): Promise<void> {
   if (!popupOverlayTabs.has(tabId)) {
     return;
   }
@@ -745,25 +789,44 @@ function maybeShowPopupPromptOverlay(
     return;
   }
 
+  const fallbackLabel = resolveFieldLabel(field);
   const previewId = typeof crypto?.randomUUID === 'function'
     ? `popup:${crypto.randomUUID()}`
     : `popup:${Math.random().toString(36).slice(2)}`;
-  const fallbackLabel = field.label?.trim()?.length
-    ? field.label
-    : field.attributes?.ariaLabel?.trim()?.length
-      ? field.attributes!.ariaLabel!
-      : field.attributes?.placeholder?.trim()?.length
-        ? field.attributes!.placeholder!
-        : '';
 
-  safePostMessage(framePort, {
+  let profileOptions: PromptOption[] = [];
+  let profileId: string | null = null;
+  if (activeProfileId) {
+    try {
+      const profile = await getProfile(activeProfileId);
+      if (profile) {
+        profileOptions = buildProfilePromptOptions(profile, {
+          formatSlotLabel,
+          resumeLabel: i18n.t('sidepanel.manual.resumeRoot'),
+        });
+        profileId = profile.id;
+      }
+    } catch (error) {
+      console.warn('Unable to load profile for prompt overlay.', error);
+    }
+  }
+
+  const resolvedSlot = resolveFieldSlot(field, overlayAdapterIds);
+  const slotMatch = resolvedSlot
+    ? profileOptions.find((option) => option.slot === resolvedSlot)
+    : undefined;
+  const fallbackOption = slotMatch ?? profileOptions[0] ?? null;
+  const defaultSlot: PromptOptionSlot | null = fallbackOption
+    ? fallbackOption.slot
+    : resolvedSlot ?? null;
+  const defaultValue = fallbackOption ? fallbackOption.value : '';
+
+  const message: Record<string, unknown> = {
     kind: 'PROMPT_PREVIEW',
     previewId,
     fieldId: field.id,
     frameId,
     label: fallbackLabel,
-    defaultSlot: null,
-    profileId: null,
     scrollIntoView: false,
     field: {
       id: field.id,
@@ -773,7 +836,38 @@ function maybeShowPopupPromptOverlay(
       autocomplete: field.autocomplete ?? null,
       required: field.required,
     },
-  });
+  };
+  if (profileId) {
+    message.profileId = profileId;
+  }
+  if (profileOptions.length > 0) {
+    message.options = profileOptions;
+  }
+  if (defaultSlot !== null) {
+    message.defaultSlot = defaultSlot;
+  }
+  if (defaultValue) {
+    message.value = defaultValue;
+    message.preview = defaultValue;
+  }
+
+  safePostMessage(framePort, message);
+}
+
+function resolveFieldLabel(field: ScannedField): string {
+  const label = field.label?.trim?.();
+  if (label) {
+    return label;
+  }
+  const ariaLabel = field.attributes?.ariaLabel?.trim?.();
+  if (ariaLabel) {
+    return ariaLabel;
+  }
+  const placeholder = field.attributes?.placeholder?.trim?.();
+  if (placeholder) {
+    return placeholder;
+  }
+  return '';
 }
 
 function clearOverlayForTab(tabId: number): void {
@@ -783,6 +877,33 @@ function clearOverlayForTab(tabId: number): void {
   }
   for (const port of frames.values()) {
     safePostMessage(port, { kind: 'CLEAR_OVERLAY' });
+  }
+}
+
+async function loadActiveProfilePreference(): Promise<void> {
+  try {
+    const stored = await browser.storage.local.get(ACTIVE_PROFILE_STORAGE_KEY);
+    const raw = stored[ACTIVE_PROFILE_STORAGE_KEY];
+    activeProfileId = typeof raw === 'string' && raw.trim().length > 0 ? raw : null;
+  } catch (error) {
+    console.warn('Unable to load active profile preference.', error);
+    activeProfileId = null;
+  }
+}
+
+async function setActiveProfilePreference(profileId: string | null): Promise<void> {
+  const next = profileId && profileId.trim().length > 0 ? profileId : null;
+  if (next === activeProfileId) {
+    return;
+  }
+  if (next) {
+    await browser.storage.local.set({ [ACTIVE_PROFILE_STORAGE_KEY]: next });
+  } else {
+    await browser.storage.local.remove(ACTIVE_PROFILE_STORAGE_KEY);
+  }
+  activeProfileId = next;
+  for (const tabId of popupOverlayTabs) {
+    clearOverlayForTab(tabId);
   }
 }
 

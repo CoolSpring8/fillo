@@ -1,5 +1,5 @@
-import type { PromptOptionSlot } from '../../shared/apply/types';
-import type { ProfileRecord } from '../../shared/types';
+import type { PromptOptionSlot } from './types';
+import type { ProfileRecord } from '../types';
 
 export interface ManualValueNode {
   id: string;

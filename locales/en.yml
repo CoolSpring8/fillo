@@ -283,6 +283,10 @@ popup:
     toggleLabel: Show prompt overlay on this tab
     toggleDescription: Allow ApplyPilot to watch focused inputs and offer prompt overlays until you close the tab.
     toggleUnavailable: Prompt overlays are unavailable on this page.
+    profileSelectLabel: Active profile
+    profileSelectPlaceholder: Choose a profile
+    profileSelectDescription: Suggestions in the overlay come from this profile.
+    profileSelectEmpty: Import a profile in the workspace to enable suggestions here.
 sidepanel:
   permission:
     title: Allow Apply Pilot to scan this page?

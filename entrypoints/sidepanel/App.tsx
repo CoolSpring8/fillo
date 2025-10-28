@@ -33,13 +33,11 @@ import type {
   ScannedField,
 } from '../../shared/apply/types';
 import type { FieldSlot } from '../../shared/apply/slotTypes';
-import { buildManualValueTree, flattenManualLeaves, type ManualValueNode } from './manualValues';
-import {
-  getAllAdapterIds,
-  resolveSlotFromAutocomplete,
-  resolveSlotFromLabel,
-  resolveSlotFromText,
-} from '../../shared/apply/slots';
+import { buildManualValueTree, type ManualValueNode } from '../../shared/apply/manualValues';
+import { buildProfilePromptOptions } from '../../shared/apply/promptOptions';
+import { formatSlotLabel } from '../../shared/apply/slotLabels';
+import { getAllAdapterIds } from '../../shared/apply/slots';
+import { resolveFieldSlot } from '../../shared/apply/fieldMapping';
 import { buildSlotValues, type SlotValueMap } from '../../shared/apply/profile';
 import { classifyFieldDescriptors, type FieldClassification, type FieldDescriptor } from './classifySlots';
 import type { MemoryAssociation } from '../../shared/memory/types';
@@ -710,36 +708,13 @@ export default function App() {
     [selectedProfile, t],
   );
 
-  const manualLeaves = useMemo(() => flattenManualLeaves(manualTree), [manualTree]);
-
   const manualOptions = useMemo<PromptOption[]>(
-    () => {
-      const seen = new Set<string>();
-      const options: Array<{ slot: PromptOptionSlot; label: string; value: string }> = [];
-
-      const addOption = (slot: PromptOptionSlot, label: string, rawValue: string | undefined) => {
-        if (!rawValue) {
-          return;
-        }
-        const normalized = rawValue.trim();
-        if (!normalized || seen.has(slot)) {
-          return;
-        }
-        seen.add(slot);
-        options.push({ slot, label, value: normalized });
-      };
-
-      (Object.entries(slotValues) as Array<[FieldSlot, string | undefined]>).forEach(([slot, value]) => {
-        addOption(slot, formatSlotLabel(slot), value);
-      });
-
-      manualLeaves.forEach((leaf) => {
-        addOption(leaf.slotKey, leaf.displayPath, leaf.value);
-      });
-
-      return options;
-    },
-    [slotValues, manualLeaves],
+    () =>
+      buildProfilePromptOptions(selectedProfile, {
+        formatSlotLabel,
+        manualTree,
+      }),
+    [selectedProfile, manualTree],
   );
 
   const selectedEntry = useMemo(
@@ -1965,7 +1940,7 @@ export default function App() {
 
 function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters: string[]): FieldEntry[] {
   return fields.map((field) => {
-    const slot = resolveSlot(field);
+    const slot = resolveFieldSlot(field, adapters);
     const suggestion = slot ? slots[slot] : undefined;
     return {
       field,
@@ -1984,74 +1959,6 @@ function buildFieldEntries(fields: ScannedField[], slots: SlotValueMap, adapters
     };
   });
 
-  function resolveSlot(field: ScannedField): FieldSlot | null {
-    const context = (field.context ?? '').toLowerCase();
-    const label = field.label.toLowerCase();
-    const hasContext = (token: string | string[]) => {
-      const tokens = Array.isArray(token) ? token : [token];
-      return tokens.some((entry) => context.includes(entry));
-    };
-    const hasLabel = (token: string | string[]) => {
-      const tokens = Array.isArray(token) ? token : [token];
-      return tokens.some((entry) => label.includes(entry));
-    };
-    const contextIncludesAll = (tokens: string[]) => tokens.every((entry) => context.includes(entry));
-
-    const byAutocomplete = resolveSlotFromAutocomplete(field.autocomplete);
-    if (byAutocomplete) {
-      return byAutocomplete;
-    }
-    const byLabel = resolveSlotFromLabel(field.label, adapters);
-    if (byLabel) {
-      return byLabel;
-    }
-    const byAdaptersContext = resolveSlotFromText(field.context, adapters);
-    if (byAdaptersContext) {
-      return byAdaptersContext;
-    }
-    if (hasContext(['email', 'e-mail'])) return 'email';
-    if (hasContext(['phone', 'mobile', 'telephone'])) return 'phone';
-    if (hasContext(['address', 'street address'])) return 'address';
-    if (hasContext(['postal code', 'zip'])) return 'postalCode';
-    if (hasContext(['state', 'province', 'region'])) return 'state';
-    if (hasContext(['date of birth', 'birth date', 'dob', 'birthday'])) return 'birthDate';
-    if (hasContext(['gender', 'sex'])) return 'gender';
-    if (hasContext(['current company', 'employer']) || hasLabel(['current company', 'employer'])) return 'currentCompany';
-    if (hasContext(['current title', 'job title', 'position']) || hasLabel(['job title', 'position'])) return 'currentTitle';
-    if (hasContext(['current location', 'work location'])) return 'currentLocation';
-    if (contextIncludesAll(['employment', 'start']) || hasContext(['employment start', 'work start'])) return 'currentStartDate';
-    if (contextIncludesAll(['employment', 'end']) || hasContext(['employment end', 'work end', 'last day'])) return 'currentEndDate';
-    if (hasContext(['school', 'university', 'college', 'institution'])) return 'educationSchool';
-    if (hasContext(['degree', 'qualification', 'study type'])) return 'educationDegree';
-    if (hasContext(['major', 'field of study', 'discipline'])) return 'educationField';
-    if (hasContext(['enrollment', 'education start'])) return 'educationStartDate';
-    if (hasContext(['graduation', 'completion'])) return 'educationEndDate';
-    if (hasContext(['gpa', 'grade point', 'grade'])) return 'educationGpa';
-    if (hasContext(['expected salary', 'desired salary', 'salary expectation'])) return 'expectedSalary';
-    if (hasContext(['preferred location', 'desired location', 'target location'])) return 'preferredLocation';
-    if (hasContext(['availability', 'available from', 'available date'])) return 'availabilityDate';
-    if (hasContext(['employment type', 'job type'])) return 'jobType';
-    if (hasContext(['skill'])) return 'skills';
-
-    if (field.kind === 'email') return 'email';
-    if (field.kind === 'tel') return 'phone';
-    if (field.kind === 'textarea') return 'summary';
-    if (field.kind === 'text' && (hasLabel('linkedin') || hasContext('linkedin'))) return 'linkedin';
-    if (field.kind === 'text' && (hasLabel('github') || hasContext('github'))) return 'github';
-    if (field.kind === 'text' && (hasLabel(['website', 'portfolio']) || hasContext(['website', 'portfolio']))) return 'website';
-    if (hasContext(['linkedin'])) return 'linkedin';
-    if (hasContext(['github'])) return 'github';
-    if (hasContext(['website', 'portfolio'])) return 'website';
-    if (hasContext(['summary', 'about', 'bio'])) return 'summary';
-    if (hasContext(['headline', 'current role', 'title'])) return 'headline';
-    if (hasContext(['city', 'town'])) return 'city';
-    if (hasContext(['country'])) return 'country';
-    if (hasContext(['first name', 'given name'])) return 'firstName';
-    if (hasContext(['last name', 'family name', 'surname'])) return 'lastName';
-    if (hasContext(['full name', 'name'])) return 'name';
-
-    return null;
-  }
 }
 
 function deriveManualValue(entry: FieldEntry, nextSuggestion?: string | null): string {
@@ -2084,77 +1991,6 @@ function extractBasics(resume: unknown): Record<string, unknown> {
     }
   }
   return {};
-}
-
-function formatSlotLabel(slot: FieldSlot): string {
-  switch (slot) {
-    case 'firstName':
-      return i18n.t('slots.firstName');
-    case 'lastName':
-      return i18n.t('slots.lastName');
-    case 'email':
-      return i18n.t('slots.email');
-    case 'phone':
-      return i18n.t('slots.phone');
-    case 'address':
-      return i18n.t('slots.address');
-    case 'website':
-      return i18n.t('slots.website');
-    case 'linkedin':
-      return i18n.t('slots.linkedin');
-    case 'github':
-      return i18n.t('slots.github');
-    case 'city':
-      return i18n.t('slots.city');
-    case 'country':
-      return i18n.t('slots.country');
-    case 'state':
-      return i18n.t('slots.state');
-    case 'postalCode':
-      return i18n.t('slots.postalCode');
-    case 'birthDate':
-      return i18n.t('slots.birthDate');
-    case 'gender':
-      return i18n.t('slots.gender');
-    case 'currentCompany':
-      return i18n.t('slots.currentCompany');
-    case 'currentTitle':
-      return i18n.t('slots.currentTitle');
-    case 'currentLocation':
-      return i18n.t('slots.currentLocation');
-    case 'currentStartDate':
-      return i18n.t('slots.currentStartDate');
-    case 'currentEndDate':
-      return i18n.t('slots.currentEndDate');
-    case 'educationSchool':
-      return i18n.t('slots.educationSchool');
-    case 'educationDegree':
-      return i18n.t('slots.educationDegree');
-    case 'educationField':
-      return i18n.t('slots.educationField');
-    case 'educationStartDate':
-      return i18n.t('slots.educationStartDate');
-    case 'educationEndDate':
-      return i18n.t('slots.educationEndDate');
-    case 'educationGpa':
-      return i18n.t('slots.educationGpa');
-    case 'expectedSalary':
-      return i18n.t('slots.expectedSalary');
-    case 'preferredLocation':
-      return i18n.t('slots.preferredLocation');
-    case 'availabilityDate':
-      return i18n.t('slots.availabilityDate');
-    case 'jobType':
-      return i18n.t('slots.jobType');
-    case 'skills':
-      return i18n.t('slots.skills');
-    case 'summary':
-      return i18n.t('slots.summary');
-    case 'headline':
-      return i18n.t('slots.headline');
-    default:
-      return i18n.t('slots.name');
-  }
 }
 
 function truncate(value: string, limit = 120): string {
