@@ -1,8 +1,20 @@
 import { type ChangeEvent, type MouseEvent, useRef, useEffect } from 'react';
+import {
+  Alert,
+  Button,
+  Group,
+  MantineProvider,
+  Paper,
+  Select,
+  Stack,
+  Text,
+  Textarea,
+} from '@mantine/core';
 import type { HighlightRect, OverlayComponentState, PopoverPosition } from './types';
 import { PromptEditor } from '../../shared/components/PromptEditor';
 import type { PromptEditorState } from '../../shared/components/PromptEditor';
 import type { PromptOption, PromptOptionSlot } from '../../../shared/apply/types';
+import { applyTheme } from '../../shared/theme';
 
 interface OverlayAppProps {
   state: OverlayComponentState;
@@ -45,16 +57,26 @@ export function OverlayApp({ state, highlightRect, popoverPosition, onPopoverMou
       }
     : undefined;
 
+  const shouldRenderPopoverContent =
+    shouldShowPopover && (state.mode === 'prompt' || state.label.trim().length > 0);
+
   return (
-    <>
+    <MantineProvider theme={applyTheme} defaultColorScheme="light">
       <div className="highlight" style={highlightStyle} />
       <div className="popover" ref={popoverRef} hidden={!isPopoverVisible} style={popoverStyle}>
-        {state.mode === 'highlight' && state.label.trim().length > 0 ? (
-          <div className="overlay-label">{state.label}</div>
+        {shouldRenderPopoverContent ? (
+          <Paper shadow="lg" radius="md" withBorder p="md">
+            {state.mode === 'prompt' ? (
+              <PromptContent state={state} />
+            ) : (
+              <Text fw={600} size="sm">
+                {state.label}
+              </Text>
+            )}
+          </Paper>
         ) : null}
-        {state.mode === 'prompt' ? <PromptContent state={state} /> : null}
       </div>
-    </>
+    </MantineProvider>
   );
 }
 
@@ -89,16 +111,20 @@ function renderPromptContent(
   const normalizedOptions = editor.options;
   const disableFill = editor.value.trim().length === 0;
   const canRequestAi = typeof prompt.onRequestAi === 'function';
+  const selectOptions = normalizedOptions.map((option: PromptOption) => ({
+    value: option.slot,
+    label: `${option.label} · ${truncate(option.value)}`,
+  }));
 
-  const handleOptionChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as PromptOptionSlot | '';
-    if (!value) {
+  const handleOptionChange = (value: string | null) => {
+    const normalizedValue = (value ?? '') as PromptOptionSlot | '';
+    if (!normalizedValue) {
       editor.setSelectedSlot(null);
       editor.setValue('');
       editor.setAiError(null);
       return;
     }
-    const selected = normalizedOptions.find((option) => option.slot === value);
+    const selected = normalizedOptions.find((option) => option.slot === normalizedValue);
     editor.setSelectedSlot(selected?.slot ?? null);
     editor.setValue(selected?.value ?? '');
     editor.setAiError(null);
@@ -177,81 +203,92 @@ function renderPromptContent(
   };
 
   return (
-    <>
-      <div className="overlay-title">
+    <Stack gap="md">
+      <Text fw={600} size="sm">
         {prompt.label.length > 0 ? prompt.label : t('overlay.prompt.heading')}
-      </div>
+      </Text>
       {normalizedOptions.length > 0 ? (
-        <div className="overlay-controls">
-          <select
-            className="overlay-select"
-            value={editor.selectedSlot ?? ''}
+        <Stack gap="xs">
+          <Select
+            data={selectOptions}
+            value={editor.selectedSlot ?? null}
+            placeholder={t('overlay.prompt.placeholder')}
             onChange={handleOptionChange}
-          >
-            <option value="">{t('overlay.prompt.placeholder')}</option>
-            {normalizedOptions.map((option: PromptOption) => (
-              <option key={option.slot} value={option.slot} data-value={option.value}>
-                {`${option.label} · ${truncate(option.value)}`}
-              </option>
-            ))}
-          </select>
-          <div className="overlay-helper">{t('overlay.prompt.helper')}</div>
-        </div>
+            allowDeselect
+            clearable
+            comboboxProps={{ withinPortal: false }}
+          />
+          <Text size="xs" c="dimmed">
+            {t('overlay.prompt.helper')}
+          </Text>
+        </Stack>
       ) : null}
-      <div className="overlay-section">
-        <label className="overlay-field-label" htmlFor="apply-overlay-value">
+      <Stack gap="xs">
+        <Text fw={600} size="xs">
           {tLoose('overlay.prompt.inputLabel')}
-        </label>
-        <textarea
+        </Text>
+        <Textarea
           id="apply-overlay-value"
-          className="overlay-textarea"
-          rows={3}
+          minRows={3}
+          autosize
           value={editor.value}
           placeholder={tLoose('overlay.prompt.inputPlaceholder')}
           onChange={handleValueChange}
         />
-      </div>
+      </Stack>
       {canRequestAi ? (
-        <div className="overlay-section">
-          <label className="overlay-field-label" htmlFor="apply-overlay-instruction">
+        <Stack gap="xs">
+          <Text fw={600} size="xs">
             {tLoose('overlay.prompt.aiInstructionLabel')}
-          </label>
-          <textarea
+          </Text>
+          <Textarea
             id="apply-overlay-instruction"
-            className="overlay-textarea"
-            rows={2}
+            minRows={2}
+            autosize
             value={editor.instruction}
             placeholder={tLoose('overlay.prompt.aiInstructionPlaceholder')}
             onChange={handleInstructionChange}
           />
-          <div className="overlay-ai-footer">
-            <div className="overlay-helper">{tLoose('overlay.prompt.aiInstructionHint')}</div>
-            <button
+          <Group justify="space-between" align="center" gap="xs">
+            <Text size="xs" c="dimmed">
+              {tLoose('overlay.prompt.aiInstructionHint')}
+            </Text>
+            <Button
               type="button"
-              className="overlay-btn secondary"
+              variant="light"
+              color="brand"
+              size="xs"
               disabled={editor.aiLoading || editor.instruction.trim().length === 0}
+              loading={editor.aiLoading}
               onClick={handleAskAi}
             >
-              {editor.aiLoading ? tLoose('overlay.prompt.aiLoading') : tLoose('overlay.prompt.aiButton')}
-            </button>
-          </div>
-          {editor.aiError ? <div className="overlay-error">{editor.aiError}</div> : null}
-        </div>
+              {editor.aiLoading
+                ? tLoose('overlay.prompt.aiLoading')
+                : tLoose('overlay.prompt.aiButton')}
+            </Button>
+          </Group>
+          {editor.aiError ? (
+            <Alert variant="light" color="red" radius="sm">
+              {editor.aiError}
+            </Alert>
+          ) : null}
+        </Stack>
       ) : null}
-      <div className="overlay-actions">
-        <button
+      <Group justify="flex-end" gap="xs">
+        <Button
           type="button"
-          className="overlay-btn primary"
+          variant="filled"
+          color="brand"
           disabled={disableFill}
           onClick={handleFill}
         >
           {t('overlay.prompt.fill')}
-        </button>
-        <button type="button" className="overlay-btn" onClick={handleSkip}>
+        </Button>
+        <Button type="button" variant="default" onClick={handleSkip}>
           {t('overlay.prompt.skip')}
-        </button>
-      </div>
-    </>
+        </Button>
+      </Group>
+    </Stack>
   );
 }
 
