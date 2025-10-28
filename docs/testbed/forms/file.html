@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Upload & Cover Letter · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .file-card {
+        background: #fff;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.1);
+      }
+
+      .file-drop {
+        border: 2px dashed rgba(59, 130, 246, 0.5);
+        border-radius: 0.75rem;
+        padding: 2rem;
+        text-align: center;
+        background: rgba(59, 130, 246, 0.05);
+        margin-bottom: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>File Upload & Narrative</h1>
+      <p class="testbed-banner">
+        Validate text-heavy fields, long-form cover letters, and file inputs. Extensions typically cannot autofill file
+        inputs, so ensure graceful handling.
+      </p>
+
+      <form id="file-form" class="file-card">
+        <section class="file-drop">
+          <p><strong>Upload your resume (PDF)</strong></p>
+          <p>Drag & drop or click the button below.</p>
+          <input type="file" accept=".pdf,.doc,.docx" />
+        </section>
+
+        <fieldset>
+          <legend>Cover letter</legend>
+          <label>
+            Paste your cover letter
+            <textarea data-autofill-key="work[0].summary" placeholder="Write a compelling summary..."></textarea>
+          </label>
+          <label>
+            Key accomplishment
+            <textarea data-autofill-key="work[0].highlights[0]" placeholder="Highlight a specific impact"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Additional details</legend>
+          <label>
+            Personal site
+            <input type="url" data-autofill-key="basics.website" />
+          </label>
+          <label>
+            Project link
+            <input type="url" data-autofill-key="projects[0].url" />
+          </label>
+          <label>
+            Project description
+            <textarea data-autofill-key="projects[0].description"></textarea>
+          </label>
+          <label>
+            Reference contact
+            <input type="text" data-autofill-key="references[0].name" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Editable preview</legend>
+          <div
+            id="cover-preview"
+            contenteditable="true"
+            data-autofill-key="basics.summary"
+            style="min-height: 200px; border: 1px solid rgba(0, 0, 0, 0.2); border-radius: 0.5rem; padding: 1rem"
+          >
+            Paste your final cover letter here to preview formatting.
+          </div>
+        </fieldset>
+
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem">
+          <button type="submit">Submit</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

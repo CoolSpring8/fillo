@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Baseline Form · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Simple Baseline Form</h1>
+      <p class="testbed-banner">
+        Exercise straightforward mappings from JSON Resume to native form controls. The harness (top-right) can randomize
+        DOM structure and rename attributes for resilience testing.
+      </p>
+
+      <form id="basics-form">
+        <fieldset>
+          <legend>Basics</legend>
+          <label>
+            Full name
+            <input type="text" autocomplete="name" data-autofill-key="basics.name.full" />
+          </label>
+          <label>
+            First name
+            <input type="text" autocomplete="given-name" data-autofill-key="basics.name.first" />
+          </label>
+          <label>
+            Last name
+            <input type="text" autocomplete="family-name" data-autofill-key="basics.name.last" />
+          </label>
+          <label>
+            Email
+            <input type="email" autocomplete="email" data-autofill-key="basics.email" />
+          </label>
+          <label>
+            Phone
+            <input type="tel" autocomplete="tel" data-autofill-key="basics.phone" />
+          </label>
+          <label>
+            Portfolio URL
+            <input type="url" autocomplete="url" data-autofill-key="basics.website" />
+          </label>
+          <label id="linkedin-label">
+            LinkedIn
+            <input type="url" aria-labelledby="linkedin-label" data-autofill-key="basics.profiles[0].url" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Employment (latest)</legend>
+          <label>
+            Job title
+            <input type="text" autocomplete="organization-title" data-autofill-key="work[0].position" />
+          </label>
+          <label>
+            Company
+            <input type="text" autocomplete="organization" data-autofill-key="work[0].name" />
+          </label>
+          <label>
+            Job location
+            <input type="text" data-autofill-key="work[0].location" />
+          </label>
+          <div>
+            <label>
+              Start date
+              <input type="month" data-autofill-key="work[0].startDate" />
+            </label>
+            <label>
+              End date
+              <input type="text" placeholder="YYYY-MM or Present" data-autofill-key="work[0].endDate" />
+            </label>
+          </div>
+          <label>
+            Highlights
+            <textarea data-autofill-key="work[0].summary"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Education</legend>
+          <label>
+            School
+            <input type="text" data-autofill-key="education[0].institution" />
+          </label>
+          <label>
+            Degree / Program
+            <input type="text" data-autofill-key="education[0].studyType" />
+          </label>
+          <label>
+            Area of study
+            <input type="text" data-autofill-key="education[0].area" />
+          </label>
+          <div>
+            <label>
+              Start year
+              <input type="text" inputmode="numeric" data-autofill-key="education[0].startDate" />
+            </label>
+            <label>
+              End year
+              <input type="text" inputmode="numeric" data-autofill-key="education[0].endDate" />
+            </label>
+          </div>
+        </fieldset>
+
+        <button type="submit">Submit</button>
+      </form>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

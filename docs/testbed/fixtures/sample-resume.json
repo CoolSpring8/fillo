@@ -1,0 +1,145 @@
+{
+  "basics": {
+    "name": {
+      "full": "John A. Doe",
+      "first": "John",
+      "middle": "Allen",
+      "last": "Doe"
+    },
+    "headline": "Product-minded engineer delivering reliable automations",
+    "summary": "Product engineer with a knack for simplifying complex workflows into dependable user experiences. Partners closely with stakeholders, writes maintainable systems, and documents learnings for the next iteration.",
+    "email": "john.doe@example.com",
+    "alternateEmail": "john@example.dev",
+    "phone": "+1 212-555-0199",
+    "phoneParts": {
+      "country": "+1",
+      "area": "212",
+      "prefix": "555",
+      "line": "0199",
+      "extension": "42"
+    },
+    "website": "https://johndoe.dev",
+    "location": {
+      "address": "123 Main Street",
+      "address2": "Unit 5B",
+      "city": "Metropolis",
+      "region": "New York",
+      "postalCode": "10001",
+      "country": "United States",
+      "countryCode": "US"
+    },
+    "profiles": [
+      {
+        "network": "LinkedIn",
+        "url": "https://www.linkedin.com/in/john-doe"
+      },
+      {
+        "network": "GitHub",
+        "url": "https://github.com/johndoe"
+      },
+      {
+        "network": "Portfolio",
+        "url": "https://johndoe.dev/portfolio"
+      }
+    ]
+  },
+  "work": [
+    {
+      "name": "Example Automation Co",
+      "position": "Lead Product Engineer",
+      "location": "Remote · North America",
+      "startDate": "2021-02",
+      "endDate": "Present",
+      "summary": "Guides a cross-functional squad building a no-code automation platform for operations teams.",
+      "highlights": [
+        "Reduced time-to-deploy workflows by 35% through reusable component libraries and better defaults.",
+        "Introduced metrics dashboards that surface adoption trends and unblock prioritization discussions.",
+        "Mentored engineers on experimentation practices, resulting in three successful product launches."
+      ]
+    },
+    {
+      "name": "Fictional Systems Collective",
+      "position": "Software Engineer",
+      "location": "Metropolis, NY",
+      "startDate": "2017-08",
+      "endDate": "2020-12",
+      "summary": "Built internal tooling that automated client onboarding and improved data accuracy.",
+      "highlights": [
+        "Automated contract generation, eliminating manual entry and saving 15 hours per week.",
+        "Established code review guidelines that raised average test coverage by 20 percentage points."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Example University",
+      "area": "Computer Science",
+      "studyType": "Bachelor of Science",
+      "startDate": "2013",
+      "endDate": "2017",
+      "gpa": "3.8"
+    },
+    {
+      "institution": "Metropolis Community College",
+      "area": "Information Technology",
+      "studyType": "Associate Degree",
+      "startDate": "2011",
+      "endDate": "2013",
+      "gpa": "3.9"
+    }
+  ],
+  "skills": [
+    {
+      "name": "Engineering",
+      "level": "Advanced",
+      "keywords": ["System design", "Automation", "APIs"]
+    },
+    {
+      "name": "Product",
+      "level": "Advanced",
+      "keywords": ["Discovery workshops", "Roadmapping", "Experimentation"]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Workflow Optimizer",
+      "url": "https://johndoe.dev/workflow-optimizer",
+      "description": "Open-source toolkit that maps business processes into configurable automation rules.",
+      "keywords": ["Automation", "Developer tools"]
+    }
+  ],
+  "languages": [
+    {
+      "language": "English",
+      "fluency": "Native speaker"
+    },
+    {
+      "language": "Spanish",
+      "fluency": "Professional working proficiency"
+    },
+    {
+      "language": "German",
+      "fluency": "Conversational"
+    }
+  ],
+  "references": [
+    {
+      "name": "Alex Smith",
+      "relationship": "Engineering Manager",
+      "email": "alex.smith@example.com",
+      "phone": "+1 646-555-0144"
+    }
+  ],
+  "certificates": [
+    {
+      "name": "Cloud Architecture Specialist",
+      "issuer": "Metropolis Professional Guild",
+      "date": "2020-11"
+    }
+  ],
+  "metadata": {
+    "updated": "2025-01-15",
+    "targetRole": "Staff Product Engineer",
+    "contactType": "mobile"
+  }
+}

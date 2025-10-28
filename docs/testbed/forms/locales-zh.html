@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中文表单 · ApplyPilot 测试环境</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      body {
+        font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>中文表单</h1>
+      <p class="testbed-banner">
+        用于验证中文标签、ARIA 属性与 data-autofill-key 匹配的解析能力。Harness 可以帮助比较预期与实际填充的值。
+      </p>
+
+      <form id="zh-form">
+        <fieldset>
+          <legend>基本信息</legend>
+          <label>
+            姓名
+            <input type="text" data-autofill-key="basics.name.full" />
+          </label>
+          <label>
+            名
+            <input type="text" data-autofill-key="basics.name.first" />
+          </label>
+          <label>
+            姓
+            <input type="text" data-autofill-key="basics.name.last" />
+          </label>
+          <label>
+            电子邮件
+            <input type="email" data-autofill-key="basics.email" />
+          </label>
+          <label>
+            电话
+            <input type="tel" data-autofill-key="basics.phone" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>所在地</legend>
+          <label>
+            国家
+            <input type="text" data-autofill-key="basics.location.country" />
+          </label>
+          <label>
+            城市
+            <input type="text" data-autofill-key="basics.location.city" />
+          </label>
+          <label>
+            省/州
+            <input type="text" data-autofill-key="basics.location.region" />
+          </label>
+          <label>
+            邮政编码
+            <input type="text" data-autofill-key="basics.location.postalCode" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>工作经历</legend>
+          <label>
+            公司
+            <input type="text" data-autofill-key="work[0].name" />
+          </label>
+          <label>
+            职位
+            <input type="text" data-autofill-key="work[0].position" />
+          </label>
+          <label aria-label="工作职责描述">
+            工作摘要
+            <textarea data-autofill-key="work[0].summary"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>社交账号</legend>
+          <label>
+            领英
+            <input type="url" aria-label="领英链接" data-autofill-key="basics.profiles[0].url" />
+          </label>
+          <label>
+            GitHub
+            <input type="url" data-autofill-key="basics.profiles[1].url" />
+          </label>
+        </fieldset>
+
+        <button type="submit">提交</button>
+      </form>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

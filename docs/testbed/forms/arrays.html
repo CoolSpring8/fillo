@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Array Inputs · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .repeater {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .repeater-item {
+        border: 1px solid rgba(15, 23, 42, 0.15);
+        border-radius: 0.65rem;
+        padding: 1rem;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+      }
+
+      .repeater-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+
+      .repeater-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+
+      .repeater-controls {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Array Inputs</h1>
+      <p class="testbed-banner">
+        Mimics forms with repeatable work history and education sections. Harness diffing validates array indexing.
+      </p>
+
+      <form id="arrays-form">
+        <section>
+          <div class="repeater-controls">
+            <h2 style="margin: 0">Work history</h2>
+            <button type="button" id="add-work">Add another role</button>
+          </div>
+          <div id="work-repeater" class="repeater"></div>
+        </section>
+
+        <section style="margin-top: 2rem">
+          <div class="repeater-controls">
+            <h2 style="margin: 0">Education</h2>
+            <button type="button" id="add-education">Add education</button>
+          </div>
+          <div id="education-repeater" class="repeater"></div>
+        </section>
+
+        <button type="submit" style="margin-top: 2rem">Submit</button>
+      </form>
+    </main>
+
+    <template id="work-template">
+      <article class="repeater-item" data-type="work">
+        <div class="repeater-header">
+          <h3>Role <span data-field="index"></span></h3>
+          <button type="button" data-action="remove">Remove</button>
+        </div>
+        <label>
+          Title
+          <input type="text" data-field="work.position" />
+        </label>
+        <label>
+          Company
+          <input type="text" data-field="work.name" />
+        </label>
+        <label>
+          Location
+          <input type="text" data-field="work.location" />
+        </label>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap">
+          <label style="flex: 1 1 160px">
+            Start
+            <input type="month" data-field="work.startDate" />
+          </label>
+          <label style="flex: 1 1 160px">
+            End
+            <input type="text" placeholder="YYYY-MM or Present" data-field="work.endDate" />
+          </label>
+        </div>
+        <label>
+          Highlight
+          <textarea data-field="work.highlights[0]"></textarea>
+        </label>
+      </article>
+    </template>
+
+    <template id="education-template">
+      <article class="repeater-item" data-type="education">
+        <div class="repeater-header">
+          <h3>Education <span data-field="index"></span></h3>
+          <button type="button" data-action="remove">Remove</button>
+        </div>
+        <label>
+          Institution
+          <input type="text" data-field="education.institution" />
+        </label>
+        <label>
+          Study type
+          <input type="text" data-field="education.studyType" />
+        </label>
+        <label>
+          Area
+          <input type="text" data-field="education.area" />
+        </label>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap">
+          <label style="flex: 1 1 120px">
+            Start
+            <input type="text" inputmode="numeric" data-field="education.startDate" />
+          </label>
+          <label style="flex: 1 1 120px">
+            End
+            <input type="text" inputmode="numeric" data-field="education.endDate" />
+          </label>
+        </div>
+        <label>
+          GPA
+          <input type="text" data-field="education.gpa" />
+        </label>
+      </article>
+    </template>
+
+    <script>
+      (() => {
+        const workRoot = document.getElementById('work-repeater');
+        const educationRoot = document.getElementById('education-repeater');
+        const workTemplate = document.getElementById('work-template');
+        const educationTemplate = document.getElementById('education-template');
+        const addWorkBtn = document.getElementById('add-work');
+        const addEducationBtn = document.getElementById('add-education');
+
+        function createItem(root, template, index, type) {
+          const clone = document.importNode(template.content, true);
+          const article = clone.querySelector('article');
+          article.dataset.index = index;
+          article.querySelector('[data-field="index"]').textContent = `#${index + 1}`;
+          const inputs = article.querySelectorAll('[data-field]');
+          inputs.forEach((input) => {
+            if (input.dataset.field === 'index') return;
+            const path = input.dataset.field.replace(type, `${type}[${index}]`);
+            input.dataset.autofillKey = path;
+          });
+          article.querySelectorAll('button[data-action="remove"]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              article.remove();
+              reindex(root, type);
+            });
+          });
+          root.appendChild(clone);
+        }
+
+        function reindex(root, type) {
+          const items = root.querySelectorAll(`article[data-type="${type}"]`);
+          items.forEach((item, index) => {
+            item.dataset.index = index;
+            const label = item.querySelector('[data-field="index"]');
+            if (label) {
+              label.textContent = `#${index + 1}`;
+            }
+            item.querySelectorAll('[data-field]').forEach((field) => {
+              const base = field.dataset.field;
+              if (!base || base === 'index') return;
+              const path = base.replace(type, `${type}[${index}]`);
+              field.dataset.autofillKey = path;
+            });
+          });
+        }
+
+        addWorkBtn.addEventListener('click', () => {
+          const index = workRoot.querySelectorAll('article').length;
+          createItem(workRoot, workTemplate, index, 'work');
+        });
+
+        addEducationBtn.addEventListener('click', () => {
+          const index = educationRoot.querySelectorAll('article').length;
+          createItem(educationRoot, educationTemplate, index, 'education');
+        });
+
+        // Seed two default entries to align with sample resume.
+        createItem(workRoot, workTemplate, 0, 'work');
+        createItem(workRoot, workTemplate, 1, 'work');
+        createItem(educationRoot, educationTemplate, 0, 'education');
+        createItem(educationRoot, educationTemplate, 1, 'education');
+      })();
+    </script>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

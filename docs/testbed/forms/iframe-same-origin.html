@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Same-origin Iframe · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Same-origin Iframe</h1>
+      <p class="testbed-banner">
+        Content scripts should inject into all frames when <code>all_frames</code> is enabled. The iframe below loads the
+        simple baseline form from this domain.
+      </p>
+
+      <div class="testbed-frame-grid">
+        <iframe src="./simple.html" title="Simple form (same origin)"></iframe>
+        <iframe src="./messy.html" title="Messy form (same origin)"></iframe>
+      </div>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

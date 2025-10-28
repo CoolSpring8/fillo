@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shadow DOM Variants · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .shadow-toggle {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .shadow-toggle button[aria-pressed='true'] {
+        background: #1f2937;
+        color: #f8fafc;
+      }
+
+      .shadow-host {
+        display: block;
+        background: #fff;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 10px 34px rgba(15, 23, 42, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Shadow DOM Variants</h1>
+      <p class="testbed-banner">
+        Switch between light DOM, open shadow root, and closed shadow root. Use the harness shadow toggle to move the
+        markup into actual Shadow DOM hosts.
+      </p>
+
+      <div class="shadow-toggle">
+        <button type="button" data-view="light" aria-pressed="true">Light DOM</button>
+        <button type="button" data-view="open" aria-pressed="false">Open shadow root</button>
+        <button type="button" data-view="closed" aria-pressed="false">Closed shadow root</button>
+      </div>
+
+      <section id="view-light" class="shadow-host" data-view="light"></section>
+      <section id="view-open" class="shadow-host" data-view="open" data-harness-shadow="open" hidden></section>
+      <section id="view-closed" class="shadow-host" data-view="closed" data-harness-shadow="closed" hidden></section>
+    </main>
+
+    <template id="shadow-form-template">
+      <form>
+        <fieldset>
+          <legend>Profile</legend>
+          <label>
+            Full name
+            <input type="text" data-autofill-key="basics.name.full" />
+          </label>
+          <label>
+            Email
+            <input type="email" data-autofill-key="basics.email" />
+          </label>
+          <label>
+            Headline
+            <input type="text" data-autofill-key="basics.headline" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Experience snippet</legend>
+          <label>
+            Company
+            <input type="text" data-autofill-key="work[0].name" />
+          </label>
+          <label>
+            Role
+            <input type="text" data-autofill-key="work[0].position" />
+          </label>
+          <label>
+            Summary
+            <textarea data-autofill-key="work[0].summary"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Metadata</legend>
+          <label>
+            Updated
+            <input type="date" data-autofill-key="metadata.updated" />
+          </label>
+          <label>
+            Target role
+            <input type="text" data-autofill-key="metadata.targetRole" />
+          </label>
+        </fieldset>
+      </form>
+    </template>
+
+    <script>
+      (() => {
+        const template = document.getElementById('shadow-form-template');
+        const views = Array.from(document.querySelectorAll('.shadow-host'));
+        const buttons = document.querySelectorAll('.shadow-toggle button');
+
+        function cloneInto(host) {
+          if (!host || host.dataset.populated) return;
+          const fragment = document.importNode(template.content, true);
+          host.appendChild(fragment);
+          host.dataset.populated = 'true';
+        }
+
+        function setView(view) {
+          views.forEach((host) => {
+            const isActive = host.dataset.view === view;
+            host.hidden = !isActive;
+          });
+          buttons.forEach((button) => {
+            button.setAttribute('aria-pressed', String(button.dataset.view === view));
+          });
+        }
+
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => {
+            setView(button.dataset.view);
+          });
+        });
+
+        views.forEach(cloneInto);
+        setView('light');
+      })();
+    </script>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

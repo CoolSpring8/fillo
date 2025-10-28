@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Address Scenarios · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .address-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .combo {
+        position: relative;
+      }
+
+      .combo button {
+        width: 100%;
+        text-align: left;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        color: #111;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.35rem;
+      }
+
+      .combo-list {
+        position: absolute;
+        inset: calc(100% + 0.25rem) 0 auto;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 0.35rem;
+        padding: 0.25rem 0;
+        list-style: none;
+        margin: 0;
+        display: none;
+        max-height: 200px;
+        overflow: auto;
+        z-index: 100;
+      }
+
+      .combo-list[aria-hidden='false'] {
+        display: block;
+      }
+
+      .combo-list li {
+        padding: 0.4rem 0.75rem;
+        cursor: pointer;
+      }
+
+      .combo-list li[aria-selected='true'] {
+        background: rgba(30, 64, 175, 0.12);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Address & Location Variants</h1>
+      <p class="testbed-banner">
+        Combines standard address fields, select boxes, and a custom ARIA combobox. Includes country codes and metadata
+        for region-specific logic.
+      </p>
+
+      <form id="address-form">
+        <fieldset>
+          <legend>Current residence</legend>
+          <div class="address-grid">
+            <label>
+              Street address
+              <input type="text" autocomplete="address-line1" data-autofill-key="basics.location.address" />
+            </label>
+            <label>
+              Apt / Suite
+              <input type="text" autocomplete="address-line2" data-autofill-key="basics.location.address2" />
+            </label>
+            <label>
+              City
+              <input type="text" autocomplete="address-level2" data-autofill-key="basics.location.city" />
+            </label>
+            <label>
+              State / Region
+              <input type="text" autocomplete="address-level1" data-autofill-key="basics.location.region" />
+            </label>
+            <label>
+              Postal code
+              <input type="text" autocomplete="postal-code" data-autofill-key="basics.location.postalCode" />
+            </label>
+            <label>
+              Country (ISO)
+              <input type="text" maxlength="2" data-autofill-key="basics.location.countryCode" />
+            </label>
+          </div>
+          <label>
+            Country
+            <select data-autofill-key="basics.location.country">
+              <option value="">Select a country</option>
+              <option value="United States">United States</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Canada">Canada</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Preferred work location</legend>
+          <label class="combo">
+            <span>Preferred metro (custom combobox)</span>
+            <button type="button" role="combobox" aria-expanded="false" aria-owns="metro-list" aria-haspopup="listbox">
+              <span data-combo-value data-autofill-key="work[0].location">London, UK</span>
+            </button>
+            <ul id="metro-list" class="combo-list" role="listbox" aria-hidden="true">
+              <li role="option" data-value="London, UK" aria-selected="true">London, UK</li>
+              <li role="option" data-value="San Francisco, CA">San Francisco, CA</li>
+              <li role="option" data-value="Remote - North America">Remote - North America</li>
+            </ul>
+          </label>
+          <label>
+            Target role
+            <input type="text" data-autofill-key="metadata.targetRole" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Reference contact</legend>
+          <div class="address-grid">
+            <label>
+              Name
+              <input type="text" data-autofill-key="references[0].name" />
+            </label>
+            <label>
+              Relationship
+              <input type="text" data-autofill-key="references[0].relationship" />
+            </label>
+            <label>
+              Email
+              <input type="email" data-autofill-key="references[0].email" />
+            </label>
+            <label>
+              Phone
+              <input type="tel" data-autofill-key="references[0].phone" />
+            </label>
+          </div>
+        </fieldset>
+
+        <button type="submit">Submit</button>
+      </form>
+    </main>
+
+    <script>
+      (() => {
+        const combo = document.querySelector('.combo');
+        if (!combo) return;
+        const button = combo.querySelector('button[role="combobox"]');
+        const list = combo.querySelector('.combo-list');
+        const display = combo.querySelector('[data-combo-value]');
+
+        function toggleList(show) {
+          const isOpen = show ?? list.getAttribute('aria-hidden') === 'true';
+          list.setAttribute('aria-hidden', String(!isOpen));
+          button.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        button.addEventListener('click', () => {
+          toggleList();
+        });
+
+        list.addEventListener('click', (event) => {
+          const option = event.target.closest('li[role="option"]');
+          if (!option) return;
+          list.querySelectorAll('li[role="option"]').forEach((item) => {
+            item.setAttribute('aria-selected', String(item === option));
+          });
+          display.textContent = option.dataset.value;
+          display.dataset.autofillKey = 'work[0].location';
+          toggleList(false);
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!combo.contains(event.target)) {
+            toggleList(false);
+          }
+        });
+
+        toggleList(false);
+      })();
+    </script>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

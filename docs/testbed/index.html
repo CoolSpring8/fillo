@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ApplyPilot Form Testbed</title>
+    <link rel="stylesheet" href="./lib/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ApplyPilot Form Testbed</h1>
+      <p>
+        Hosted fixtures that mimic real-world applicant tracking system forms. Use this testbed with the
+        ApplyPilot extension to validate field detection, autofill coverage, and instrumentation.
+      </p>
+    </header>
+
+    <main>
+      <section>
+        <h2>Scenarios</h2>
+        <ul class="scenario-list">
+          <li><a href="./forms/simple.html">Simple baseline form</a></li>
+          <li><a href="./forms/messy.html">Messy form (missing labels)</a></li>
+          <li><a href="./forms/wizard.html">Wizard (multi-step)</a></li>
+          <li><a href="./forms/arrays.html">Array inputs (repeaters)</a></li>
+          <li><a href="./forms/address.html">Address combinations</a></li>
+          <li><a href="./forms/tel.html">Segmented phone fields</a></li>
+          <li><a href="./forms/file.html">File upload + cover letter</a></li>
+          <li><a href="./forms/shadow.html">Shadow DOM variants</a></li>
+          <li><a href="./forms/iframe-same-origin.html">Same-origin iframe</a></li>
+          <li><a href="./forms/iframe-cross-origin.html">Cross-origin iframe</a></li>
+          <li><a href="./forms/locales-zh.html">Chinese labels</a></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Usage</h2>
+        <ol>
+          <li>Publish this folder via GitHub Pages (e.g., <code>docs/</code> on <code>main</code> or <code>gh-pages</code>).</li>
+          <li>Grant your extension host access to the published origin.</li>
+          <li>Load the ApplyPilot extension and open one of the fixtures above.</li>
+          <li>Use the Test Harness panel (top-right) to randomize DOM structure, load sample resume data, and diff expected vs. actual autofill values.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Resources</h2>
+        <ul>
+          <li><a href="/fixtures/sample-resume.json">Sample resume JSON</a></li>
+          <li><a href="https://jsonresume.org/schema/2020-07-01/">JSON Resume schema</a></li>
+          <li><a href="https://developer.mozilla.org/docs/Web/Web_Components/Using_shadow_DOM">Shadow DOM docs</a></li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Testing only. Do not submit personal data.</p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Segmented Phone · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .phone-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        align-items: end;
+      }
+
+      .phone-grid label {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .phone-preview {
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Segmented Phone Fields</h1>
+      <p class="testbed-banner">
+        Tests multi-input telephone capture (country code, area, prefix, line, extension) alongside standard tel inputs.
+      </p>
+
+      <form id="tel-form">
+        <fieldset>
+          <legend>Primary phone</legend>
+          <label>
+            Full number
+            <input type="tel" inputmode="tel" data-autofill-key="basics.phone" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Segmented entry</legend>
+          <div class="phone-grid">
+            <label>
+              Country
+              <input type="text" data-autofill-key="basics.phoneParts.country" />
+            </label>
+            <label>
+              Area
+              <input type="text" data-autofill-key="basics.phoneParts.area" />
+            </label>
+            <label>
+              Prefix
+              <input type="text" data-autofill-key="basics.phoneParts.prefix" />
+            </label>
+            <label>
+              Line
+              <input type="text" data-autofill-key="basics.phoneParts.line" />
+            </label>
+            <label>
+              Extension
+              <input type="text" data-autofill-key="basics.phoneParts.extension" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>International preferences</legend>
+          <label for="intl-code">Select country calling code</label>
+          <select id="intl-code" data-autofill-key="basics.phoneParts.country">
+            <option value="">Select country</option>
+            <option value="+1">United States (+1)</option>
+            <option value="+44">United Kingdom (+44)</option>
+            <option value="+33">France (+33)</option>
+          </select>
+
+          <label>
+            Contact type
+            <div role="radiogroup" aria-labelledby="contact-type-label">
+              <span id="contact-type-label" style="font-weight: 600">Preferred contact method</span>
+              <label style="display: inline-flex; gap: 0.5rem; align-items: center">
+                <input type="radio" name="contact-type" value="mobile" data-autofill-key="metadata.contactType" />
+                Mobile
+              </label>
+              <label style="display: inline-flex; gap: 0.5rem; align-items: center">
+                <input type="radio" name="contact-type" value="email" data-autofill-key="metadata.contactType" />
+                Email
+              </label>
+            </div>
+          </label>
+        </fieldset>
+
+        <section aria-live="polite" style="margin-top: 1.5rem">
+          <h2>Formatted preview</h2>
+          <div class="phone-preview" id="phone-preview">+1 (415) 555-0112 ext 123</div>
+        </section>
+
+        <button type="submit" style="margin-top: 1.5rem">Submit</button>
+      </form>
+    </main>
+
+    <script>
+      (() => {
+        const form = document.getElementById('tel-form');
+        const preview = document.getElementById('phone-preview');
+        const parts = [
+          'basics.phoneParts.country',
+          'basics.phoneParts.area',
+          'basics.phoneParts.prefix',
+          'basics.phoneParts.line',
+          'basics.phoneParts.extension'
+        ];
+
+        function updatePreview() {
+          const values = {};
+          parts.forEach((key) => {
+            const field = form.querySelector(`[data-autofill-key="${key}"]`);
+            values[key] = field ? field.value.trim() : '';
+          });
+          const country = values['basics.phoneParts.country'] || '+1';
+          const area = values['basics.phoneParts.area'] || '000';
+          const prefix = values['basics.phoneParts.prefix'] || '000';
+          const line = values['basics.phoneParts.line'] || '0000';
+          const ext = values['basics.phoneParts.extension'] ? ` ext ${values['basics.phoneParts.extension']}` : '';
+          preview.textContent = `${country} (${area}) ${prefix}-${line}${ext}`;
+        }
+
+        form.addEventListener('input', (event) => {
+          if (event.target.matches('[data-autofill-key^="basics.phoneParts"]')) {
+            updatePreview();
+          }
+        });
+
+        updatePreview();
+      })();
+    </script>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

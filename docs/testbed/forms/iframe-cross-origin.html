@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cross-origin Frames · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Cross-origin Frames</h1>
+      <p class="testbed-banner">
+        Test how the extension behaves when forms are hosted on other origins. Update the URLs here to match sites you
+        control (e.g., a secondary GitHub Pages domain) when validating injections.
+      </p>
+
+      <div class="testbed-frame-grid">
+        <iframe src="https://example.com" title="Example domain (public)" loading="lazy"></iframe>
+        <iframe
+          src="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe"
+          title="MDN documentation (public)"
+          loading="lazy"
+        ></iframe>
+        <iframe
+          srcdoc="
+            <!DOCTYPE html>
+            <html lang='en'>
+              <head>
+                <meta charset='utf-8'/>
+                <title>Sandboxed frame</title>
+              </head>
+              <body>
+                <h2>Sandboxed frame</h2>
+                <p>This frame is sandboxed with <code>allow-scripts</code> disabled.</p>
+                <form>
+                  <label>Name <input data-autofill-key='basics.name.full'></label>
+                </form>
+              </body>
+            </html>
+          "
+          sandbox="allow-same-origin"
+          title="Sandboxed srcdoc"
+        ></iframe>
+      </div>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>

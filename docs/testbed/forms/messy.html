@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Messy Form · ApplyPilot Testbed</title>
+    <link rel="stylesheet" href="../lib/styles.css" />
+    <style>
+      .messy-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      .messy-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .messy-field span {
+        font-weight: 600;
+      }
+
+      .messy-microcopy {
+        font-size: 0.8rem;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Messy Form</h1>
+      <p class="testbed-banner">
+        This page intentionally drops proper labels and duplicates IDs. Use the harness toggles to increase entropy and
+        verify fuzzy matching resilience.
+      </p>
+
+      <form id="messy-form">
+        <div class="messy-grid">
+          <div class="messy-field">
+            <span>Applicant</span>
+            <input
+              type="text"
+              id="name"
+              placeholder="Your full name"
+              autocomplete="off"
+              data-autofill-key="basics.name.full"
+            />
+          </div>
+          <div class="messy-field">
+            <span>Email address</span>
+            <input type="email" id="email" placeholder="name@example.com" data-autofill-key="basics.email" />
+            <small class="messy-microcopy">We will send confirmations here.</small>
+          </div>
+          <div class="messy-field">
+            <span>Phone</span>
+            <input type="text" id="phone" placeholder="+1 (___) ___-____" data-autofill-key="basics.phone" />
+          </div>
+          <div class="messy-field">
+            <span>Location</span>
+            <input type="text" id="city" placeholder="City, Region" data-autofill-key="basics.location.city" />
+          </div>
+          <div class="messy-field">
+            <span>Current employer</span>
+            <input type="text" id="company" placeholder="Company" data-autofill-key="work[0].name" />
+          </div>
+          <div class="messy-field">
+            <span>Job title</span>
+            <input type="text" id="title" placeholder="Title" data-autofill-key="work[0].position" />
+          </div>
+          <div class="messy-field">
+            <span>LinkedIn</span>
+            <div class="input-like">
+              <span class="messy-microcopy">https://</span>
+              <input
+                type="text"
+                aria-label="LinkedIn profile"
+                value="linkedin.com/in/"
+                data-autofill-key="basics.profiles[0].url"
+              />
+            </div>
+          </div>
+          <div class="messy-field">
+            <span>Resume summary</span>
+            <div
+              id="summary"
+              class="contenteditable"
+              contenteditable="true"
+              data-autofill-key="basics.summary"
+              style="min-height: 140px; border: 1px solid rgba(0, 0, 0, 0.2); padding: 0.5rem; border-radius: 0.35rem"
+            ></div>
+          </div>
+          <div class="messy-field">
+            <span>Start (Month)</span>
+            <input type="number" min="1" max="12" data-autofill-key="work[0].startDate" />
+          </div>
+          <div class="messy-field">
+            <span>End (raw text)</span>
+            <input type="text" placeholder="YYYY-MM or Present" data-autofill-key="work[0].endDate" />
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem">
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap">
+            <label style="display: inline-flex; gap: 0.5rem; align-items: center">
+              <input type="checkbox" value="Calculus" data-autofill-key="skills[0].keywords[0]" />
+              Calculus
+            </label>
+            <label style="display: inline-flex; gap: 0.5rem; align-items: center">
+              <input type="checkbox" value="Analytical engine" data-autofill-key="skills[1].keywords[1]" />
+              Analytical engine
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem; display: flex; gap: 1rem">
+          <button type="submit">Submit</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="../lib/harness.js"></script>
+  </body>
+</html>
