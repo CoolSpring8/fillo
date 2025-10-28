@@ -284,6 +284,8 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
       : undefined;
   const fieldRequired =
     typeof payload.fieldRequired === 'boolean' ? payload.fieldRequired : undefined;
+  const scrollIntoView =
+    typeof payload.scrollIntoView === 'boolean' ? payload.scrollIntoView : undefined;
   let mode: PromptFillRequest['mode'];
   if (payload.mode === 'click') {
     mode = 'click';
@@ -370,12 +372,18 @@ async function handlePromptFill(port: RuntimePort, payload: Record<string, unkno
   if (fieldRequired !== undefined) {
     message.fieldRequired = fieldRequired;
   }
-  framePort.postMessage({ kind: 'PROMPT_FILL', ...message });
+  const outbound: Record<string, unknown> = { kind: 'PROMPT_FILL', ...message };
+  if (typeof scrollIntoView === 'boolean') {
+    outbound.scrollIntoView = scrollIntoView;
+  }
+  framePort.postMessage(outbound);
 }
 
 async function handleFocusField(_: RuntimePort, payload: Record<string, unknown>): Promise<void> {
   const fieldId = typeof payload.fieldId === 'string' ? payload.fieldId : null;
   const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
+  const scrollIntoView =
+    typeof payload.scrollIntoView === 'boolean' ? payload.scrollIntoView : undefined;
   if (!fieldId) {
     return;
   }
@@ -384,13 +392,22 @@ async function handleFocusField(_: RuntimePort, payload: Record<string, unknown>
     return;
   }
   const framePort = contentPorts.get(tab.id)?.get(frameId);
-  framePort?.postMessage({ kind: 'FOCUS_FIELD', fieldId });
+  if (!framePort) {
+    return;
+  }
+  const message: Record<string, unknown> = { kind: 'FOCUS_FIELD', fieldId };
+  if (typeof scrollIntoView === 'boolean') {
+    message.scrollIntoView = scrollIntoView;
+  }
+  framePort.postMessage(message);
 }
 
 async function handleHighlight(port: RuntimePort, payload: Record<string, unknown>): Promise<void> {
   const fieldId = typeof payload.fieldId === 'string' ? payload.fieldId : null;
   const frameId = typeof payload.frameId === 'number' ? payload.frameId : 0;
   const label = typeof payload.label === 'string' ? payload.label : '';
+  const scrollIntoView =
+    typeof payload.scrollIntoView === 'boolean' ? payload.scrollIntoView : undefined;
   if (!fieldId) {
     return;
   }
@@ -399,7 +416,14 @@ async function handleHighlight(port: RuntimePort, payload: Record<string, unknow
     return;
   }
   const framePort = contentPorts.get(tab.id)?.get(frameId);
-  framePort?.postMessage({ kind: 'HIGHLIGHT_FIELD', fieldId, label });
+  if (!framePort) {
+    return;
+  }
+  const message: Record<string, unknown> = { kind: 'HIGHLIGHT_FIELD', fieldId, label };
+  if (typeof scrollIntoView === 'boolean') {
+    message.scrollIntoView = scrollIntoView;
+  }
+  framePort.postMessage(message);
 }
 
 async function handleClearOverlay(_: RuntimePort): Promise<void> {
@@ -465,6 +489,8 @@ async function handlePromptPreview(_: RuntimePort, payload: Record<string, unkno
   const profileId =
     typeof payload.profileId === 'string' && payload.profileId.trim().length > 0 ? payload.profileId : null;
   const previewId = typeof payload.previewId === 'string' ? payload.previewId : undefined;
+  const scrollIntoView =
+    typeof payload.scrollIntoView === 'boolean' ? payload.scrollIntoView : undefined;
   const options = Array.isArray(payload.options)
     ? (payload.options as Record<string, unknown>[]) // eslint-disable-line @typescript-eslint/consistent-type-assertions
         .map((entry) => {
@@ -504,7 +530,11 @@ async function handlePromptPreview(_: RuntimePort, payload: Record<string, unkno
     message.field = field;
   }
 
-  framePort.postMessage({ kind: 'PROMPT_PREVIEW', ...message });
+  const outbound: Record<string, unknown> = { kind: 'PROMPT_PREVIEW', ...message };
+  if (typeof scrollIntoView === 'boolean') {
+    outbound.scrollIntoView = scrollIntoView;
+  }
+  framePort.postMessage(outbound);
 }
 
 async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promise<PromptAiSuggestResponse> {

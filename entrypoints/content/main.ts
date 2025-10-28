@@ -22,12 +22,13 @@ type ContentInboundMessage =
       kind: 'SCAN_FIELDS';
       requestId: string;
     }
-  | ({ kind: 'PROMPT_FILL' } & PromptFillRequest)
-  | ({ kind: 'PROMPT_PREVIEW' } & PromptPreviewRequest)
+  | ({ kind: 'PROMPT_FILL'; scrollIntoView?: boolean } & PromptFillRequest)
+  | ({ kind: 'PROMPT_PREVIEW'; scrollIntoView?: boolean } & PromptPreviewRequest)
   | {
       kind: 'HIGHLIGHT_FIELD';
       fieldId: string;
       label: string;
+      scrollIntoView?: boolean;
     }
   | {
       kind: 'CLEAR_OVERLAY';
@@ -35,6 +36,7 @@ type ContentInboundMessage =
   | {
       kind: 'FOCUS_FIELD';
       fieldId: string;
+      scrollIntoView?: boolean;
     }
   | {
       kind: 'GUIDED_STEP';
@@ -162,13 +164,13 @@ export default defineContentScript({
           handlePromptPreview(message);
           break;
         case 'HIGHLIGHT_FIELD':
-          handleHighlight(message.fieldId, message.label);
+          handleHighlight(message.fieldId, message.label, message.scrollIntoView);
           break;
         case 'CLEAR_OVERLAY':
           clearOverlay();
           break;
         case 'FOCUS_FIELD':
-          handleFocus(message.fieldId);
+          handleFocus(message.fieldId, message.scrollIntoView);
           break;
         case 'GUIDED_STEP':
           handleGuidedStep(message.direction, message.wrap);
@@ -409,6 +411,7 @@ export default defineContentScript({
         defaultValue: message.value,
         field: promptField,
         profileId,
+        scrollIntoView: message.scrollIntoView,
         onFill: (selectedValue) => {
           const value = selectedValue && selectedValue.trim().length > 0 ? selectedValue : message.value ?? '';
           if (!value) {
@@ -517,6 +520,7 @@ export default defineContentScript({
         defaultValue: message.value ?? undefined,
         field: promptFieldSnapshot,
         profileId,
+        scrollIntoView: message.scrollIntoView,
         onFill: (selectedValue) => {
           const value = selectedValue && selectedValue.trim().length > 0 ? selectedValue : baseValue;
           if (!value.trim()) {
@@ -566,23 +570,25 @@ export default defineContentScript({
       });
     }
 
-    function handleHighlight(fieldId: string, label: string): void {
+    function handleHighlight(fieldId: string, label: string, scrollIntoView: boolean | undefined): void {
       const target = getElement(fieldId);
       if (!target) {
         clearOverlay();
         return;
       }
-      showHighlight(target, { label });
+      showHighlight(target, { label, scrollIntoView });
     }
 
-    function handleFocus(fieldId: string): void {
+    function handleFocus(fieldId: string, scrollIntoView: boolean | undefined): void {
       const target = getElement(fieldId);
       if (!target || !(target instanceof HTMLElement)) {
         return;
       }
       clearOverlay();
       try {
-        target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        if (scrollIntoView !== false) {
+          target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        }
       } catch (error) {
         console.warn('scrollIntoView failed', error);
       }
@@ -592,7 +598,7 @@ export default defineContentScript({
         } catch {
           // Element might not be focusable; ignore.
         }
-        showHighlight(target, { label: '', duration: 1000 });
+        showHighlight(target, { label: '', duration: 1000, scrollIntoView: false });
       });
     }
 

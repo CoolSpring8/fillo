@@ -15,6 +15,7 @@ export interface PromptOptions {
   defaultValue?: string;
   field?: PromptFieldState;
   profileId?: string | null;
+  scrollIntoView?: boolean;
   onFill: (value: string, slot: PromptOptionSlot | null) => void;
   onSkip: () => void;
   onRequestAi?: (input: PromptAiRequestInput) => Promise<PromptAiResult | null>;

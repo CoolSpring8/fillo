@@ -138,6 +138,7 @@ export default function App() {
   const providerRef = useRef<ProviderConfig | null>(null);
   const selectedFieldRef = useRef<string | null>(null);
   const lastFocusedFieldRef = useRef<string | null>(null);
+  const nextFocusScrollRef = useRef(true);
   const guidedEnhancedRef = useRef<Set<string>>(new Set());
   const guidedFrameIdRef = useRef<number>(0);
   const guidedProviderWarningRef = useRef(false);
@@ -164,14 +165,17 @@ export default function App() {
 
   useEffect(() => {
     if (fields.length === 0) {
+      nextFocusScrollRef.current = true;
       setSelectedFieldId(null);
       return;
     }
     if (mode === 'guided' && guidedActiveId) {
+      nextFocusScrollRef.current = true;
       setSelectedFieldId(guidedActiveId);
       return;
     }
     if (!selectedFieldRef.current || !fields.some((entry) => entry.field.id === selectedFieldRef.current)) {
+      nextFocusScrollRef.current = true;
       setSelectedFieldId(fields[0].field.id);
     }
   }, [fields, mode, guidedActiveId]);
@@ -549,6 +553,7 @@ export default function App() {
     scanRequestIdRef.current = requestId;
     setScanning(true);
     setFields([]);
+    nextFocusScrollRef.current = true;
     setSelectedFieldId(null);
     sendMessage({ kind: 'SCAN_FIELDS', requestId });
   }, [permissionGranted, sendMessage]);
@@ -617,6 +622,7 @@ export default function App() {
   };
 
   const handleSelectField = (entry: FieldEntry) => {
+    nextFocusScrollRef.current = true;
     setSelectedFieldId(entry.field.id);
   };
 
@@ -774,17 +780,19 @@ export default function App() {
   );
 
   const showPromptOverlay = useCallback(
-    (entry: FieldEntry | null) => {
+    (entry: FieldEntry | null, options?: { scrollIntoView?: boolean }) => {
       if (!entry) {
         sendMessage({ kind: 'CLEAR_OVERLAY' });
         return;
       }
+      const shouldScroll = options?.scrollIntoView ?? true;
 
       sendMessage({
         kind: 'HIGHLIGHT_FIELD',
         fieldId: entry.field.id,
         frameId: entry.field.frameId,
         label: entry.field.label,
+        scrollIntoView: shouldScroll,
       });
 
       if (entry.field.kind === 'file') {
@@ -807,6 +815,7 @@ export default function App() {
         defaultSlot,
         options: manualOptions,
         profileId: selectedProfileIdValue,
+        scrollIntoView: shouldScroll,
         field: {
           id: entry.field.id,
           label: entry.field.label,
@@ -821,17 +830,19 @@ export default function App() {
   );
 
   const focusField = useCallback(
-    (entry: FieldEntry | null) => {
+    (entry: FieldEntry | null, options?: { scrollIntoView?: boolean }) => {
       if (!entry) {
         showPromptOverlay(null);
         return;
       }
+      const shouldScroll = options?.scrollIntoView ?? true;
       sendMessage({
         kind: 'FOCUS_FIELD',
         fieldId: entry.field.id,
         frameId: entry.field.frameId,
+        scrollIntoView: shouldScroll,
       });
-      showPromptOverlay(entry);
+      showPromptOverlay(entry, { scrollIntoView: shouldScroll });
     },
     [sendMessage, showPromptOverlay],
   );
@@ -839,12 +850,16 @@ export default function App() {
   useEffect(() => {
     if (!selectedEntry) {
       lastFocusedFieldRef.current = null;
+      nextFocusScrollRef.current = true;
       return;
     }
     if (lastFocusedFieldRef.current === selectedEntry.field.id) {
+      nextFocusScrollRef.current = true;
       return;
     }
-    focusField(selectedEntry);
+    const shouldScroll = nextFocusScrollRef.current;
+    nextFocusScrollRef.current = true;
+    focusField(selectedEntry, { scrollIntoView: shouldScroll });
     lastFocusedFieldRef.current = selectedEntry.field.id;
   }, [focusField, selectedEntry]);
 
@@ -1422,8 +1437,10 @@ export default function App() {
     refreshMemory().catch(console.error);
   }
 
-  function highlightCurrent(entry: FieldEntry | null) {
-    showPromptOverlay(entry);
+  function highlightCurrent(entry: FieldEntry | null, options?: { scrollIntoView?: boolean }) {
+    const shouldScroll = options?.scrollIntoView ?? true;
+    nextFocusScrollRef.current = shouldScroll;
+    showPromptOverlay(entry, { scrollIntoView: shouldScroll });
   }
 
   function sendGuidedStep(direction: 1 | -1) {
@@ -1451,12 +1468,13 @@ export default function App() {
     }
     const entry = fieldsRef.current.find((item) => item.field.id === targetId);
     if (entry) {
+      const shouldScroll = true;
+      nextFocusScrollRef.current = shouldScroll;
       setGuidedActiveId(entry.field.id);
       setSelectedFieldId(entry.field.id);
       setGuidedFrameId(entry.field.frameId);
       setGuidedOrder((current) => (current.includes(entry.field.id) ? current : [...current, entry.field.id]));
-      sendMessage({ kind: 'FOCUS_FIELD', fieldId: entry.field.id, frameId: entry.field.frameId });
-      highlightCurrent(entry);
+      highlightCurrent(entry, { scrollIntoView: shouldScroll });
     }
   }
 
@@ -1538,12 +1556,14 @@ export default function App() {
 
   function handleGuidedCandidate(field: ScannedField, origin: 'focus' | 'step' | 'request', frameId: number) {
     const entry = ensureGuidedEntry(field);
+    const shouldScroll = origin !== 'focus';
+    nextFocusScrollRef.current = shouldScroll;
     setGuidedFrameId(frameId);
     setGuidedActiveId(field.id);
     setSelectedFieldId(field.id);
     setGuidedPrompt('');
     setGuidedOrder((current) => (current.includes(field.id) ? current : [...current, field.id]));
-    highlightCurrent(entry);
+    highlightCurrent(entry, { scrollIntoView: shouldScroll });
     scheduleGuidedEnhancement(field);
   }
 
@@ -1556,6 +1576,7 @@ export default function App() {
     const wasFilled = entry.status === 'filled';
     setGuidedFrameId(frameId);
     setGuidedActiveId(field.id);
+    nextFocusScrollRef.current = false;
     setSelectedFieldId(field.id);
     setGuidedOrder((current) => (current.includes(field.id) ? current : [...current, field.id]));
     setGuidedPrompt('');

@@ -16,6 +16,7 @@ import overlayStyles from './ui/overlay.css?inline';
 interface HighlightOptions {
   label: string;
   duration?: number;
+  scrollIntoView?: boolean;
 }
 
 interface OverlayGeometry {
@@ -155,7 +156,9 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     }
     clearOverlay();
     currentTarget = target;
-    target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    if (options.scrollIntoView !== false) {
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }
 
     const geometry = computeOverlayGeometry(target, window) ?? computeFallbackGeometry(target);
     currentReferenceRect = geometry.referenceRect;
@@ -198,7 +201,9 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     }
     clearOverlay();
     currentTarget = target;
-    target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    if (options.scrollIntoView !== false) {
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }
 
     const geometry = computeOverlayGeometry(target, window) ?? computeFallbackGeometry(target);
     currentReferenceRect = geometry.referenceRect;
