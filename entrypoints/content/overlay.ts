@@ -10,6 +10,8 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { OverlayApp } from './ui/OverlayApp';
 import type { HighlightRect, OverlayRenderState, PopoverPosition, PromptOptions } from './ui/types';
+import overlayMantineStyles from './ui/overlay.mantine.css?inline';
+import overlayStyles from './ui/overlay.css?inline';
 
 interface HighlightOptions {
   label: string;
@@ -34,6 +36,7 @@ interface OverlayController {
 }
 
 const OVERLAY_BRIDGE_KEY = '__apply_overlay_bridge__';
+const OVERLAY_ROOT_ELEMENT_ID = '__apply_overlay_root__';
 const isTopWindow = window === window.top;
 
 let clearOverlayImpl: () => void;
@@ -113,6 +116,10 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     popoverPosition: null,
   };
   let currentReferenceRect: DOMRectReadOnly | null = null;
+  let stylesInjected = false;
+  let constructableSheets: CSSStyleSheet[] | null = null;
+  const supportsConstructableStylesheets =
+    Array.isArray(document.adoptedStyleSheets) && 'replaceSync' in CSSStyleSheet.prototype;
 
   const virtualReference: VirtualElement = {
     getBoundingClientRect(): DOMRect {
@@ -291,6 +298,26 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     }
   };
 
+  const appendStylesToShadowRoot = (root: ShadowRoot, styles: string[]): void => {
+    if (supportsConstructableStylesheets) {
+      if (!constructableSheets) {
+        constructableSheets = styles.map((cssText) => {
+          const sheet = new CSSStyleSheet();
+          sheet.replaceSync(cssText);
+          return sheet;
+        });
+      }
+      root.adoptedStyleSheets = [...root.adoptedStyleSheets, ...constructableSheets];
+      return;
+    }
+
+    styles.forEach((cssText) => {
+      const style = document.createElement('style');
+      style.textContent = cssText;
+      root.append(style);
+    });
+  };
+
   const ensureReactRoot = (): void => {
     let host = document.getElementById('__apply_overlay_host__');
     if (!host) {
@@ -306,135 +333,16 @@ function createOverlayController(registerBridge: boolean): OverlayController {
 
     if (!overlayRoot) {
       overlayRoot = host.shadowRoot ?? host.attachShadow({ mode: 'closed' });
-      const style = document.createElement('style');
-      style.textContent = `
-        .highlight {
-          position: fixed;
-          border: 1px solid rgba(255, 255, 255, 0.65);
-          border-radius: 10px;
-          box-shadow: 0 0 0 20000px rgba(15, 23, 42, 0.45);
-          background: rgba(255, 255, 255, 0.03);
-          pointer-events: none;
-          transition: opacity 120ms ease;
-          opacity: 0;
-        }
-        .popover {
-          position: fixed;
-          min-width: 220px;
-          max-width: 320px;
-          background: #ffffff;
-          color: #1f2328;
-          border-radius: 8px;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-          padding: 12px;
-          pointer-events: auto;
-          font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }
-        .overlay-title {
-          font-weight: 600;
-          margin-bottom: 6px;
-        }
-        .overlay-body {
-          white-space: pre-wrap;
-          word-break: break-word;
-          margin-bottom: 12px;
-        }
-        .overlay-actions {
-          display: flex;
-          gap: 8px;
-          justify-content: flex-end;
-        }
-        .overlay-btn {
-          border: 1px solid rgba(137, 100, 89, 0.6);
-          border-radius: 6px;
-          padding: 6px 12px;
-          background: #ffffff;
-          color: #1f2328;
-          cursor: pointer;
-        }
-        .overlay-btn.primary {
-          background: #896459;
-          border-color: #896459;
-          color: #fff;
-        }
-        .overlay-btn:hover {
-          filter: brightness(0.95);
-        }
-        .overlay-label {
-          font-weight: 500;
-        }
-        .popover[data-apply-measuring='true'] {
-          visibility: hidden;
-          pointer-events: none;
-        }
-        .overlay-select {
-          width: 100%;
-          border: 1px solid rgba(15, 23, 42, 0.2);
-          border-radius: 6px;
-          padding: 6px 8px;
-          font: inherit;
-          background: #fff;
-        }
-        .overlay-controls {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          margin-bottom: 12px;
-        }
-        .overlay-helper {
-          font-size: 12px;
-          color: #475569;
-        }
-        .overlay-section {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          margin-bottom: 12px;
-        }
-        .overlay-field-label {
-          font-size: 12px;
-          font-weight: 600;
-          color: #1f2937;
-        }
-        .overlay-textarea {
-          width: 100%;
-          border: 1px solid rgba(15, 23, 42, 0.2);
-          border-radius: 6px;
-          padding: 6px 8px;
-          font: inherit;
-          resize: vertical;
-          min-height: 64px;
-        }
-        .overlay-textarea:focus {
-          outline: 2px solid rgba(137, 100, 89, 0.35);
-          outline-offset: 1px;
-        }
-        .overlay-ai-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 8px;
-        }
-        .overlay-error {
-          margin-top: 6px;
-          font-size: 12px;
-          color: #b91c1c;
-        }
-        .overlay-btn.secondary {
-          background: transparent;
-          border-color: rgba(137, 100, 89, 0.35);
-        }
-        .overlay-btn.secondary:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-        }
-      `;
-      overlayRoot.append(style);
+    }
+
+    if (overlayRoot && !stylesInjected) {
+      appendStylesToShadowRoot(overlayRoot, [overlayMantineStyles, overlayStyles]);
+      stylesInjected = true;
     }
 
     if (!hostContainer) {
       hostContainer = document.createElement('div');
+      hostContainer.id = OVERLAY_ROOT_ELEMENT_ID;
       overlayRoot!.append(hostContainer);
     }
 
@@ -462,6 +370,8 @@ function createOverlayController(registerBridge: boolean): OverlayController {
         highlightRect: overlayState.highlightRect,
         popoverPosition: overlayState.popoverPosition,
         onPopoverMount: handlePopoverMount,
+        portalTarget: hostContainer,
+        mantineRoot: hostContainer,
       }),
     );
   };
