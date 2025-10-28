@@ -3,18 +3,17 @@ import {
   ActionIcon,
   Alert,
   Box,
-  Card,
+  Button,
   Container,
   Group,
   Loader,
   ScrollArea,
   Select,
   Stack,
-  Switch,
   Text,
   Tooltip,
 } from '@mantine/core';
-import { FolderOpen, PanelRightOpen } from 'lucide-react';
+import { Eye, EyeOff, FolderOpen, PanelRightOpen } from 'lucide-react';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
 
@@ -209,28 +208,26 @@ export default function App() {
       <ScrollArea.Autosize mah={580} type="auto">
         <Container size="sm" px={0}>
           <Stack gap="lg">
-            <Card withBorder p="md" radius="md">
-              <Group gap="md" justify="space-between" align="flex-start" wrap="nowrap">
-                <Stack gap={4} style={{ flex: 1 }}>
-                  <Text fw={600} fz="sm">
-                    {tLoose('popup.overlay.toggleLabel')}
-                  </Text>
-                  <Text fz="xs" c="dimmed">
-                    {overlayAvailable
-                      ? tLoose('popup.overlay.toggleDescription')
-                      : tLoose('popup.overlay.toggleUnavailable')}
-                  </Text>
-                </Stack>
-                <Switch
-                  size="md"
-                  checked={overlayEnabled}
-                  onChange={(event) => void handleOverlayToggle(event.currentTarget.checked)}
-                  disabled={overlayLoading || !overlayAvailable || viewState.loading}
-                  aria-label={tLoose('popup.overlay.toggleLabel')}
-                  data-loading={overlayLoading ? true : undefined}
-                />
-              </Group>
-            </Card>
+            <Stack gap={4}>
+              <Button
+                fullWidth
+                leftSection={overlayEnabled ? <Eye size={18} /> : <EyeOff size={18} />}
+                variant={overlayEnabled ? 'filled' : 'light'}
+                color={overlayEnabled ? 'brand' : 'gray'}
+                onClick={() => void handleOverlayToggle(!overlayEnabled)}
+                disabled={!overlayAvailable || viewState.loading}
+                loading={overlayLoading}
+                aria-pressed={overlayEnabled}
+                aria-label={tLoose('popup.overlay.toggleLabel')}
+              >
+                {tLoose('popup.overlay.toggleLabel')}
+              </Button>
+              <Text fz="xs" c="dimmed">
+                {overlayAvailable
+                  ? tLoose('popup.overlay.toggleDescription')
+                  : tLoose('popup.overlay.toggleUnavailable')}
+              </Text>
+            </Stack>
 
             {viewState.error && (
               <Alert color="red" variant="light">
@@ -244,7 +241,13 @@ export default function App() {
               </Alert>
             )}
 
-            <Stack gap="sm">
+            <Stack
+              gap="sm"
+              style={{
+                opacity: overlayEnabled ? 1 : 0.6,
+                transition: 'opacity 120ms ease',
+              }}
+            >
               <Select
                 data={profileSelectOptions}
                 value={activeProfileId ?? null}
