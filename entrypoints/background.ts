@@ -508,14 +508,31 @@ async function handlePromptPreview(_: RuntimePort, payload: Record<string, unkno
 }
 
 async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promise<PromptAiSuggestResponse> {
-  const instruction = typeof raw.instruction === 'string' ? raw.instruction : '';
-  if (!instruction.trim()) {
-    return { status: 'error', error: 'Instruction required.' };
+  const query = typeof raw.query === 'string' ? raw.query : '';
+  if (!query.trim()) {
+    return { status: 'error', error: 'Query required.' };
   }
   const currentValue = typeof raw.currentValue === 'string' ? raw.currentValue : '';
   const suggestion = typeof raw.suggestion === 'string' ? raw.suggestion : '';
   const selectedSlot =
     typeof raw.selectedSlot === 'string' ? (raw.selectedSlot as PromptOptionSlot) : null;
+  const matches = Array.isArray(raw.matches)
+    ? (raw.matches
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return null;
+          }
+          const normalized = entry as Record<string, unknown>;
+          const slot = typeof normalized.slot === 'string' ? (normalized.slot as PromptOptionSlot) : null;
+          const label = typeof normalized.label === 'string' ? normalized.label : '';
+          const value = typeof normalized.value === 'string' ? normalized.value : '';
+          if (!slot || !label || !value) {
+            return null;
+          }
+          return { slot, label, value } as PromptOption;
+        })
+        .filter((entry): entry is PromptOption => Boolean(entry)))
+    : [];
   const profileId =
     typeof raw.profileId === 'string' && raw.profileId.trim().length > 0 ? raw.profileId : null;
   const field = parsePromptFieldState(raw.field, typeof raw.fieldId === 'string' ? raw.fieldId : undefined);
@@ -529,7 +546,7 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
     const profileRecord = profileId ? await getProfile(profileId) : undefined;
     const result = await requestGuidedSuggestion({
       provider,
-      instruction,
+      query,
       field: {
         label: field.label,
         kind: field.kind,
@@ -540,6 +557,7 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
       slot: selectedSlot ?? null,
       currentValue,
       suggestion,
+      matches,
       profile: profileRecord?.resume ?? null,
     });
     const normalized = result.value.trim();
@@ -549,7 +567,6 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
     return {
       status: 'ok',
       value: normalized,
-      reason: result.reason,
       slot: selectedSlot ?? null,
     };
   } catch (error) {

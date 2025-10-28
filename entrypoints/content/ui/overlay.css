@@ -22,3 +22,34 @@
   visibility: hidden;
   pointer-events: none;
 }
+
+.apply-overlay-input {
+  position: relative;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  background: var(--mantine-color-white, #ffffff);
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.apply-overlay-input:focus-within {
+  border-color: var(--mantine-color-brand-5, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.apply-overlay-input__control {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  resize: none;
+  font: inherit;
+  line-height: 1.45;
+  color: inherit;
+  min-height: 84px;
+  transition: color 120ms ease;
+}
+
+.apply-overlay-input__control:focus {
+  outline: none;
+}

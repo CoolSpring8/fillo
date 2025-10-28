@@ -62,15 +62,15 @@ export interface PromptFieldState {
 }
 
 export interface PromptAiRequestInput {
-  instruction: string;
+  query: string;
   currentValue: string;
   suggestion?: string;
   selectedSlot?: PromptOptionSlot | null;
+  matches: PromptOption[];
 }
 
 export interface PromptAiResult {
   value: string;
-  reason?: string;
   slot?: PromptOptionSlot | null;
 }
 
@@ -93,15 +93,16 @@ export interface PromptAiSuggestMessage {
   fieldId: string;
   frameId: number;
   field: PromptFieldState;
-  instruction: string;
+  query: string;
   currentValue: string;
   suggestion?: string;
   selectedSlot?: PromptOptionSlot | null;
+  matches: PromptOption[];
   profileId?: string | null;
 }
 
 export type PromptAiSuggestResponse =
-  | { status: 'ok'; value: string; reason?: string; slot?: PromptOptionSlot | null }
+  | { status: 'ok'; value: string; slot?: PromptOptionSlot | null }
   | { status: 'error'; error: string };
 
 export interface PromptFillRequest {

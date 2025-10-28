@@ -449,10 +449,11 @@ export default defineContentScript({
             fieldId: message.fieldId,
             frameId: message.frameId,
             field: promptField,
-            instruction: input.instruction,
+            query: input.query,
             currentValue: input.currentValue,
             suggestion: input.suggestion,
             selectedSlot: input.selectedSlot ?? null,
+            matches: input.matches,
             profileId,
           };
           const response = (await browser.runtime.sendMessage(messagePayload)) as PromptAiSuggestResponse | undefined;
@@ -463,7 +464,6 @@ export default defineContentScript({
             return {
               value: response.value,
               slot: response.slot ?? null,
-              reason: response.reason,
             };
           }
           throw new Error(response.error || 'AI request failed');
@@ -544,10 +544,11 @@ export default defineContentScript({
             fieldId: message.fieldId,
             frameId: message.frameId,
             field: promptFieldSnapshot,
-            instruction: input.instruction,
+            query: input.query,
             currentValue: input.currentValue,
             suggestion: input.suggestion,
             selectedSlot: input.selectedSlot ?? null,
+            matches: input.matches,
             profileId,
           };
           const response = (await browser.runtime.sendMessage(payload)) as PromptAiSuggestResponse | undefined;
@@ -558,7 +559,6 @@ export default defineContentScript({
             return {
               value: response.value,
               slot: response.slot ?? null,
-              reason: response.reason,
             };
           }
           throw new Error(response.error || 'AI request failed');

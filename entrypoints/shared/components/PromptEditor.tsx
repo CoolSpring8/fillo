@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   PromptAiRequestInput,
   PromptAiResult,
@@ -106,52 +106,65 @@ export function PromptEditor({
   const selectedSlot = slotIsControlled ? controlledSlot ?? null : internalSlot;
   const instructionValue = instructionIsControlled ? controlledInstruction ?? '' : internalInstruction;
 
-  const setValue = (next: string) => {
-    if (!valueIsControlled) {
-      setInternalValue(next);
-    }
-    onValueChange?.(next);
-  };
+  const setValue = useCallback(
+    (next: string) => {
+      if (!valueIsControlled) {
+        setInternalValue(next);
+      }
+      onValueChange?.(next);
+    },
+    [valueIsControlled, onValueChange],
+  );
 
-  const setSelectedSlot = (slot: PromptOptionSlot | null) => {
-    if (!slotIsControlled) {
-      setInternalSlot(slot);
-    }
-    onSlotChange?.(slot);
-  };
+  const setSelectedSlot = useCallback(
+    (slot: PromptOptionSlot | null) => {
+      if (!slotIsControlled) {
+        setInternalSlot(slot);
+      }
+      onSlotChange?.(slot);
+    },
+    [slotIsControlled, onSlotChange],
+  );
 
-  const setInstructionValue = (next: string) => {
-    if (!instructionIsControlled) {
-      setInternalInstruction(next);
-    }
-    onInstructionChange?.(next);
-  };
+  const setInstructionValue = useCallback(
+    (next: string) => {
+      if (!instructionIsControlled) {
+        setInternalInstruction(next);
+      }
+      onInstructionChange?.(next);
+    },
+    [instructionIsControlled, onInstructionChange],
+  );
 
-  const requestAi = async (): Promise<PromptAiResult | null> => {
+  const requestAi = useCallback(async (): Promise<PromptAiResult | null> => {
     if (!onRequestAi) {
       return null;
     }
     const trimmedInstruction = instructionValue.trim();
-    if (!trimmedInstruction) {
-      throw new Error('instruction-missing');
+    const fallbackQuery = value.trim();
+    const trimmedQuery = trimmedInstruction || fallbackQuery;
+    if (!trimmedQuery) {
+      throw new Error('query-missing');
     }
     setAiError(null);
     setAiLoading(true);
     try {
       const selected = selectedSlot ? normalizedOptions.find((option) => option.slot === selectedSlot) : undefined;
       const suggestion = selected?.value ?? preview ?? '';
+      const matches = matchPromptOptions(normalizedOptions, trimmedQuery);
       return await onRequestAi({
-        instruction: trimmedInstruction,
+        query: trimmedQuery,
         currentValue: value,
         suggestion,
         selectedSlot,
+        matches,
       });
     } finally {
       setAiLoading(false);
     }
-  };
+  }, [instructionValue, value, onRequestAi, selectedSlot, normalizedOptions, preview]);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     if (!instructionIsControlled) {
       setInternalInstruction('');
     } else {
@@ -159,7 +172,7 @@ export function PromptEditor({
     }
     setAiError(null);
     setAiLoading(false);
-  };
+  }, [instructionIsControlled, onInstructionChange]);
 
   return (
     <>
@@ -182,4 +195,30 @@ export function PromptEditor({
       })}
     </>
   );
+}
+
+function matchPromptOptions(options: PromptOption[], query: string, limit = 5): PromptOption[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const scored = options
+    .map((option) => {
+      const label = option.label.toLowerCase();
+      const value = option.value.toLowerCase();
+      const labelIndex = label.indexOf(normalizedQuery);
+      const valueIndex = value.indexOf(normalizedQuery);
+      const hasMatch = labelIndex >= 0 || valueIndex >= 0;
+      const score = hasMatch ? Math.min(labelIndex >= 0 ? labelIndex : Infinity, valueIndex >= 0 ? valueIndex + 100 : Infinity) : Infinity;
+      return {
+        option,
+        score,
+      };
+    })
+    .filter(({ score }) => Number.isFinite(score));
+
+  scored.sort((a, b) => a.score - b.score);
+
+  return scored.slice(0, limit).map(({ option }) => option);
 }

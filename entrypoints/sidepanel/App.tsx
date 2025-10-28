@@ -1215,7 +1215,7 @@ export default function App() {
       }
       return await requestGuidedSuggestion({
         provider,
-        instruction: input.instruction,
+        query: input.query,
         field: {
           label: entry.field.label,
           kind: entry.field.kind,
@@ -1226,6 +1226,7 @@ export default function App() {
         slot: input.selectedSlot ?? currentSlot ?? entry.slot ?? null,
         currentValue: input.currentValue ?? manualValue ?? '',
         suggestion: input.suggestion ?? entry.suggestion ?? '',
+        matches: input.matches,
         profile: selectedProfile?.resume ?? null,
       });
     };
@@ -1301,7 +1302,7 @@ export default function App() {
                     editor.setAiError(error.message);
                   } else if (error instanceof Error) {
                     const message =
-                      error.message === 'AI returned an empty response.' || error.message === 'instruction-missing'
+                      error.message === 'AI returned an empty response.' || error.message === 'query-missing'
                         ? tLoose('sidepanel.guided.aiPromptEmpty')
                         : tLoose('sidepanel.guided.aiPromptError');
                     notify(message, 'error');

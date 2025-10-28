@@ -461,17 +461,12 @@ slots:
 overlay:
   prompt:
     heading: 推荐值
-    awaitingSelection: 请选择一个值继续。
-    placeholder: 请选择…
-    helper: 请选择要填入此字段的数据。
-    inputLabel: 编辑填充值
-    inputPlaceholder: 请输入或粘贴要填写的内容。
-    aiInstructionLabel: 告诉 AI 需要怎么调整
-    aiInstructionPlaceholder: 例如：“请更精简”
-    aiInstructionHint: 清楚描述你的需求；只有点击应用后才会填写表单。
-    aiInstructionRequired: 请先输入指令再让 AI 处理。
-    aiButton: 请求 AI
-    aiLoading: 正在请求…
+    inputPlaceholder: 输入或描述要填写的内容…
+    tabHint: 接受建议
+    source:
+      ai: AI 建议
+      local: '档案匹配：$1'
+      preview: 推荐值
     aiError: 暂时无法生成建议。
     aiEmpty: AI 返回了空结果。
     fill: 填写

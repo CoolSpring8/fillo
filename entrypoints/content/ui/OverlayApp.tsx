@@ -1,14 +1,26 @@
-import { type ChangeEvent, type MouseEvent, useRef, useEffect, useMemo, useCallback } from 'react';
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
+  Badge,
   Button,
   Group,
+  Kbd,
+  Loader,
   MantineProvider,
   Paper,
-  Select,
   Stack,
   Text,
-  Textarea,
 } from '@mantine/core';
 import type { MantineTheme } from '@mantine/core';
 import type { HighlightRect, OverlayComponentState, PopoverPosition } from './types';
@@ -138,191 +150,314 @@ function PromptContent({ state }: PromptContentProps) {
       preview={prompt.preview}
       onRequestAi={prompt.onRequestAi}
     >
-      {(editor) => renderPromptContent(t, tLoose, prompt, editor)}
+      {(editor) => (
+        <PromptForm t={t} tLoose={tLoose} prompt={prompt} editor={editor} />
+      )}
     </PromptEditor>
   );
 }
 
-function renderPromptContent(
-  t: typeof i18n.t,
-  tLoose: (key: string, params?: unknown[]) => string,
-  prompt: PromptContentProps['state']['prompt'],
-  editor: PromptEditorState,
-) {
-  const normalizedOptions = editor.options;
-  const disableFill = editor.value.trim().length === 0;
+interface PromptFormProps {
+  t: typeof i18n.t;
+  tLoose: (key: string, params?: unknown[]) => string;
+  prompt: PromptContentProps['state']['prompt'];
+  editor: PromptEditorState;
+}
+
+interface SuggestionCandidate {
+  value: string;
+  slot: PromptOptionSlot | null;
+  source: 'ai' | 'local' | 'preview';
+  label?: string;
+}
+
+const AI_DEBOUNCE_MS = 350;
+
+function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  const [aiSlot, setAiSlot] = useState<PromptOptionSlot | null>(null);
+  const requestTokenRef = useRef(0);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   const canRequestAi = typeof prompt.onRequestAi === 'function';
-  const selectOptions = normalizedOptions.map((option: PromptOption) => ({
-    value: option.slot,
-    label: `${option.label} · ${truncate(option.value)}`,
-  }));
 
-  const handleOptionChange = (value: string | null) => {
-    const normalizedValue = (value ?? '') as PromptOptionSlot | '';
-    if (!normalizedValue) {
-      editor.setSelectedSlot(null);
-      editor.setValue('');
-      editor.setAiError(null);
-      return;
-    }
-    const selected = normalizedOptions.find((option) => option.slot === normalizedValue);
-    editor.setSelectedSlot(selected?.slot ?? null);
-    editor.setValue(selected?.value ?? '');
-    editor.setAiError(null);
-  };
+  const localMatches = useMemo(
+    () => rankLocalOptions(editor.options, editor.value, 3),
+    [editor.options, editor.value],
+  );
 
-  const handleValueChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    editor.setValue(event.target.value);
-    editor.setAiError(null);
-  };
+  useEffect(() => {
+    textareaRef.current?.focus({ preventScroll: true });
+    setAiSuggestion(null);
+    setAiSlot(null);
+    requestTokenRef.current = 0;
+  }, [prompt.requestId]);
 
-  const handleInstructionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    editor.setInstruction(event.target.value);
-    if (editor.aiError) {
-      editor.setAiError(null);
-    }
-  };
-
-  const handleAskAi = async (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
+  useEffect(() => {
     if (!canRequestAi) {
+      setAiSuggestion(null);
+      setAiSlot(null);
       return;
     }
-    const trimmed = editor.instruction.trim();
-    if (!trimmed) {
-      editor.setAiError(tLoose('overlay.prompt.aiInstructionRequired'));
+    const trimmedValue = editor.value.trim();
+    if (!trimmedValue) {
+      setAiSuggestion(null);
+      setAiSlot(null);
       return;
     }
-    try {
-      const result = await editor.requestAi();
-      if (!result) {
-        editor.setAiError(tLoose('overlay.prompt.aiError'));
-        return;
-      }
-      const normalized = result.value?.trim?.() ?? '';
-      if (!normalized) {
-        editor.setAiError(tLoose('overlay.prompt.aiEmpty'));
-        return;
-      }
-      editor.setValue(normalized);
-      if (Object.prototype.hasOwnProperty.call(result, 'slot')) {
-        editor.setSelectedSlot(result.slot ?? null);
-      }
-      editor.setInstruction('');
+
+    const timeoutId = window.setTimeout(() => {
+      const token = ++requestTokenRef.current;
       editor.setAiError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      switch (message) {
-        case 'instruction-missing':
-        case 'Instruction required.':
-          editor.setAiError(tLoose('overlay.prompt.aiInstructionRequired'));
-          break;
-        case 'Missing field context.':
-          editor.setAiError(tLoose('overlay.prompt.aiError'));
-          break;
-        case 'AI returned an empty response.':
-          editor.setAiError(tLoose('overlay.prompt.aiEmpty'));
-          break;
-        default:
+      editor
+        .requestAi()
+        .then((result) => {
+          if (requestTokenRef.current !== token) {
+            return;
+          }
+          if (!result) {
+            setAiSuggestion(null);
+            setAiSlot(null);
+            return;
+          }
+          const normalized = result.value?.trim?.() ?? '';
+          if (!normalized) {
+            setAiSuggestion(null);
+            setAiSlot(null);
+            editor.setAiError(tLoose('overlay.prompt.aiEmpty'));
+            return;
+          }
+          setAiSuggestion(normalized);
+          setAiSlot(Object.prototype.hasOwnProperty.call(result, 'slot') ? result.slot ?? null : null);
+        })
+        .catch((error) => {
+          if (requestTokenRef.current !== token) {
+            return;
+          }
+          if (error instanceof Error && error.message === 'query-missing') {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
           editor.setAiError(message || tLoose('overlay.prompt.aiError'));
-          break;
+          setAiSuggestion(null);
+          setAiSlot(null);
+        });
+    }, AI_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      requestTokenRef.current += 1;
+    };
+  }, [canRequestAi, editor.value, editor.requestAi, editor.setAiError, tLoose]);
+
+  const suggestionCandidate = useMemo<SuggestionCandidate | null>(() => {
+    const trimmedValue = editor.value.trim().toLowerCase();
+    const aiValue = aiSuggestion?.trim() ?? '';
+    if (aiValue && aiValue.toLowerCase() !== trimmedValue) {
+      return { value: aiValue, slot: aiSlot, source: 'ai' };
+    }
+    const fallbackMatch = localMatches.find((option) => {
+      const normalized = option.value.trim();
+      return normalized && normalized.toLowerCase() !== trimmedValue;
+    });
+    if (fallbackMatch) {
+      return {
+        value: fallbackMatch.value,
+        slot: fallbackMatch.slot ?? null,
+        source: 'local',
+        label: fallbackMatch.label,
+      };
+    }
+    const previewValue = prompt.preview?.trim() ?? '';
+    if (previewValue && previewValue.toLowerCase() !== trimmedValue) {
+      return {
+        value: previewValue,
+        slot: prompt.defaultSlot ?? null,
+        source: 'preview',
+      };
+    }
+    return null;
+  }, [aiSuggestion, aiSlot, editor.value, localMatches, prompt.preview, prompt.defaultSlot]);
+
+  const hasUserInput = editor.value.trim().length > 0;
+  const canFill = hasUserInput || Boolean(suggestionCandidate?.value.trim().length);
+
+  const handleValueChange = useCallback(
+    (next: string) => {
+      editor.setValue(next);
+      setAiSuggestion(null);
+      setAiSlot(null);
+      if (editor.aiError) {
+        editor.setAiError(null);
       }
-    }
-  };
+    },
+    [editor],
+  );
 
-  const handleFill = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (disableFill) {
-      return;
-    }
-    prompt.onFill(editor.value, editor.selectedSlot);
-  };
+  type FillCandidate = { value: string; slot: PromptOptionSlot | null };
 
-  const handleSkip = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    prompt.onSkip();
-  };
+  const resolveFillCandidate = useCallback(
+    (preferSuggestion: boolean): FillCandidate | null => {
+      if (preferSuggestion) {
+        if (suggestionCandidate) {
+          return {
+            value: suggestionCandidate.value,
+            slot: suggestionCandidate.slot ?? editor.selectedSlot ?? null,
+          };
+        }
+        const fallback = localMatches[0];
+        if (fallback) {
+          return { value: fallback.value, slot: fallback.slot ?? editor.selectedSlot ?? null };
+        }
+      }
+      const trimmedValue = editor.value.trim();
+      if (trimmedValue.length > 0) {
+        return { value: editor.value, slot: editor.selectedSlot ?? null };
+      }
+      if (suggestionCandidate) {
+        return {
+          value: suggestionCandidate.value,
+          slot: suggestionCandidate.slot ?? editor.selectedSlot ?? null,
+        };
+      }
+      const fallback = localMatches[0];
+      if (fallback) {
+        return { value: fallback.value, slot: fallback.slot ?? editor.selectedSlot ?? null };
+      }
+      return null;
+    },
+    [editor.value, editor.selectedSlot, suggestionCandidate, localMatches],
+  );
+
+  const commitFill = useCallback(
+    (candidate: FillCandidate) => {
+      const normalized = candidate.value.trim();
+      if (!normalized) {
+        return;
+      }
+      editor.setValue(candidate.value);
+      editor.setSelectedSlot(candidate.slot);
+      setAiSuggestion(null);
+      setAiSlot(null);
+      prompt.onFill(candidate.value, candidate.slot);
+    },
+    [editor, prompt],
+  );
+
+  const handleFill = useCallback(
+    (event?: MouseEvent<HTMLButtonElement>) => {
+      event?.preventDefault();
+      const candidate = resolveFillCandidate(false);
+      if (!candidate) {
+        return;
+      }
+      commitFill(candidate);
+    },
+    [commitFill, resolveFillCandidate],
+  );
+
+  const handleSkip = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      prompt.onSkip();
+    },
+    [prompt],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Tab' && !event.shiftKey) {
+        const candidate = resolveFillCandidate(true);
+        if (!candidate) {
+          return;
+        }
+        event.preventDefault();
+        commitFill(candidate);
+        return;
+      }
+      if ((event.key === 'Enter' && (event.metaKey || event.ctrlKey)) || (event.key === 'Enter' && event.altKey)) {
+        const candidate = resolveFillCandidate(false);
+        if (!candidate) {
+          return;
+        }
+        event.preventDefault();
+        commitFill(candidate);
+      }
+    },
+    [commitFill, resolveFillCandidate],
+  );
+
+  const handleMatchFill = useCallback(
+    (option: PromptOption) => {
+      const normalized = option.value.trim();
+      if (!normalized) {
+        return;
+      }
+      commitFill({ value: option.value, slot: option.slot });
+    },
+    [commitFill],
+  );
+
+  const suggestionSourceLabel = useMemo(() => {
+    if (!suggestionCandidate) {
+      return null;
+    }
+    return formatSuggestionSource(tLoose, suggestionCandidate);
+  }, [suggestionCandidate, tLoose]);
 
   return (
     <Stack gap="md">
       <Text fw={600} size="sm">
         {prompt.label.length > 0 ? prompt.label : t('overlay.prompt.heading')}
       </Text>
-      {normalizedOptions.length > 0 ? (
-        <Stack gap="xs">
-          <Select
-            data={selectOptions}
-            value={editor.selectedSlot ?? null}
-            placeholder={t('overlay.prompt.placeholder')}
-            onChange={handleOptionChange}
-            allowDeselect
-            clearable
-            comboboxProps={{ withinPortal: false }}
-          />
-          <Text size="xs" c="dimmed">
-            {t('overlay.prompt.helper')}
-          </Text>
-        </Stack>
-      ) : null}
       <Stack gap="xs">
-        <Text fw={600} size="xs">
-          {tLoose('overlay.prompt.inputLabel')}
-        </Text>
-        <Textarea
-          id="apply-overlay-value"
-          minRows={3}
-          autosize
+        <PredictiveTextarea
+          ref={textareaRef}
           value={editor.value}
           placeholder={tLoose('overlay.prompt.inputPlaceholder')}
           onChange={handleValueChange}
+          onKeyDown={handleKeyDown}
         />
-      </Stack>
-      {canRequestAi ? (
-        <Stack gap="xs">
-          <Text fw={600} size="xs">
-            {tLoose('overlay.prompt.aiInstructionLabel')}
-          </Text>
-          <Textarea
-            id="apply-overlay-instruction"
-            minRows={2}
-            autosize
-            value={editor.instruction}
-            placeholder={tLoose('overlay.prompt.aiInstructionPlaceholder')}
-            onChange={handleInstructionChange}
-          />
-          <Group justify="space-between" align="center" gap="xs">
+        <Group justify="space-between" align="center" gap="xs">
+          <Group gap={6} align="center">
+            {editor.aiLoading ? <Loader size="xs" color="brand" /> : null}
             <Text size="xs" c="dimmed">
-              {tLoose('overlay.prompt.aiInstructionHint')}
+              <Kbd>Tab</Kbd> {tLoose('overlay.prompt.tabHint')}
             </Text>
-            <Button
-              type="button"
-              variant="light"
-              color="brand"
-              size="xs"
-              disabled={editor.aiLoading || editor.instruction.trim().length === 0}
-              loading={editor.aiLoading}
-              onClick={handleAskAi}
-            >
-              {editor.aiLoading
-                ? tLoose('overlay.prompt.aiLoading')
-                : tLoose('overlay.prompt.aiButton')}
-            </Button>
           </Group>
-          {editor.aiError ? (
-            <Alert variant="light" color="red" radius="sm">
-              {editor.aiError}
-            </Alert>
+          {suggestionSourceLabel ? (
+            <Badge size="xs" variant="light" color={suggestionCandidate?.source === 'ai' ? 'brand' : 'gray'}>
+              {suggestionSourceLabel}
+            </Badge>
           ) : null}
-        </Stack>
-      ) : null}
+        </Group>
+        {suggestionCandidate ? (
+          <Text size="sm" c="dimmed">
+            {formatSuggestionPreview(suggestionCandidate.value)}
+          </Text>
+        ) : null}
+        {localMatches.length > 0 ? (
+          <Group gap="xs">
+            {localMatches.map((option) => (
+              <Button
+                key={`${option.slot}:${option.label}`}
+                size="compact-sm"
+                variant="light"
+                onClick={() => handleMatchFill(option)}
+              >
+                {`${option.label} · ${truncate(option.value)}`}
+              </Button>
+            ))}
+          </Group>
+        ) : null}
+        {editor.aiError ? (
+          <Alert variant="light" color="red" radius="sm">
+            {editor.aiError}
+          </Alert>
+        ) : null}
+      </Stack>
       <Group justify="flex-end" gap="xs">
-        <Button
-          type="button"
-          variant="filled"
-          color="brand"
-          disabled={disableFill}
-          onClick={handleFill}
-        >
+        <Button type="button" variant="filled" color="brand" disabled={!canFill} onClick={handleFill}>
           {t('overlay.prompt.fill')}
         </Button>
         <Button type="button" variant="default" onClick={handleSkip}>
@@ -333,9 +468,103 @@ function renderPromptContent(
   );
 }
 
+interface PredictiveTextareaProps {
+  value: string;
+  placeholder: string;
+  onChange: (next: string) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+}
+
+const PredictiveTextarea = forwardRef<HTMLTextAreaElement, PredictiveTextareaProps>(
+  ({ value, placeholder, onChange, onKeyDown }, ref) => {
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+    useImperativeHandle(ref, () => textareaRef.current as HTMLTextAreaElement);
+
+    const adjustHeight = useCallback(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        return;
+      }
+      textarea.style.height = 'auto';
+      const next = Math.min(220, Math.max(84, textarea.scrollHeight));
+      textarea.style.height = `${next}px`;
+    }, []);
+
+    useEffect(() => {
+      adjustHeight();
+    }, [value, adjustHeight]);
+
+    const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+      onChange(event.target.value);
+    };
+
+    return (
+      <div className="apply-overlay-input">
+        <textarea
+          ref={textareaRef}
+          className="apply-overlay-input__control"
+          value={value}
+          placeholder={placeholder}
+          spellCheck
+          onChange={handleChange}
+          onKeyDown={onKeyDown}
+        />
+      </div>
+    );
+  },
+);
+PredictiveTextarea.displayName = 'PredictiveTextarea';
+
+function rankLocalOptions(options: PromptOption[], value: string, limit: number): PromptOption[] {
+  if (options.length === 0) {
+    return [];
+  }
+  const normalizedQuery = value.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return options.slice(0, limit);
+  }
+  const scored = options
+    .map((option) => {
+      const label = option.label.toLowerCase();
+      const optionValue = option.value.toLowerCase();
+      const labelIndex = label.indexOf(normalizedQuery);
+      const valueIndex = optionValue.indexOf(normalizedQuery);
+      const hasMatch = labelIndex >= 0 || valueIndex >= 0;
+      const score = hasMatch
+        ? Math.min(labelIndex >= 0 ? labelIndex : Number.POSITIVE_INFINITY, valueIndex >= 0 ? valueIndex + 100 : Number.POSITIVE_INFINITY)
+        : Number.POSITIVE_INFINITY;
+      return { option, score };
+    })
+    .filter(({ score }) => Number.isFinite(score));
+  scored.sort((a, b) => a.score - b.score);
+  return scored.slice(0, limit).map(({ option }) => option);
+}
+
+function formatSuggestionSource(tLoose: (key: string, params?: unknown[]) => string, candidate: SuggestionCandidate): string {
+  switch (candidate.source) {
+    case 'ai':
+      return tLoose('overlay.prompt.source.ai');
+    case 'local':
+      return tLoose('overlay.prompt.source.local', [candidate.label ?? candidate.value]);
+    case 'preview':
+      return tLoose('overlay.prompt.source.preview');
+    default:
+      return '';
+  }
+}
+
 function truncate(value: string, limit = 80): string {
   if (value.length <= limit) {
     return value;
   }
   return `${value.slice(0, limit - 1)}…`;
+}
+
+function formatSuggestionPreview(suggestion: string): string {
+  const normalized = suggestion.trim();
+  if (!normalized) {
+    return '';
+  }
+  return truncate(normalized, 160);
 }

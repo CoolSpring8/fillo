@@ -1,4 +1,4 @@
-import type { FieldKind, PromptOptionSlot } from '../apply/types';
+import type { FieldKind, PromptOption, PromptOptionSlot } from '../apply/types';
 import { GUIDED_AI_SUGGESTION_SCHEMA, type GuidedAiSuggestion } from '../schema/guidedAiSuggestion';
 import type { ProviderConfig } from '../types';
 import { invokeWithProvider, type LlmInvocationOptions } from './runtime';
@@ -13,33 +13,34 @@ export interface GuidedSuggestionField {
 
 export interface GuidedSuggestionRequest {
   provider: ProviderConfig | null | undefined;
-  instruction: string;
+  query: string;
   field: GuidedSuggestionField;
   slot: PromptOptionSlot | null;
   currentValue: string;
   suggestion: string;
+  matches: PromptOption[];
   profile: unknown;
   signal?: LlmInvocationOptions['signal'];
 }
 
 export interface GuidedSuggestionResult {
   value: string;
-  reason?: string;
 }
 
 export async function requestGuidedSuggestion({
   provider,
-  instruction,
+  query,
   field,
   slot,
   currentValue,
   suggestion,
+  matches,
   profile,
   signal,
 }: GuidedSuggestionRequest): Promise<GuidedSuggestionResult> {
-  const trimmedInstruction = instruction.trim();
-  if (!trimmedInstruction) {
-    throw new Error('Missing instruction');
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    throw new Error('Missing query');
   }
 
   const payload = {
@@ -53,8 +54,9 @@ export async function requestGuidedSuggestion({
     slot,
     currentValue,
     suggestion,
-    instruction: trimmedInstruction,
+    query: trimmedQuery,
     profile: profile ?? null,
+    matches,
   };
 
   const messages = [
@@ -62,8 +64,8 @@ export async function requestGuidedSuggestion({
       role: 'system' as const,
       content:
         'You help job applicants fill out form fields using their resume data. ' +
-        'Return a JSON object with keys "value" (string) and optional "reason" explaining your choice. ' +
-        'Respect the provided instruction and prefer precise, professional values.',
+        'Return a JSON object with a single key "value" (string) representing the completed field value. ' +
+        'Read the user query and provided matches, prefer precise professional wording, and avoid explanations.',
     },
     {
       role: 'user' as const,
@@ -79,15 +81,11 @@ export async function requestGuidedSuggestion({
 
   const trimmed = raw.trim();
   let proposed = trimmed;
-  let reason: string | undefined;
 
   try {
     const parsed = JSON.parse(trimmed) as GuidedAiSuggestion;
     if (parsed && typeof parsed.value === 'string') {
       proposed = parsed.value;
-      if (parsed.reason && typeof parsed.reason === 'string') {
-        reason = parsed.reason;
-      }
     }
   } catch {
     // Non-JSON response; fall back to raw text.
@@ -95,6 +93,5 @@ export async function requestGuidedSuggestion({
 
   return {
     value: proposed,
-    reason,
   };
 }
