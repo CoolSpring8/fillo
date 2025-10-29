@@ -26,7 +26,8 @@
             "city": { "type": "string" },
             "countryCode": { "type": "string" },
             "region": { "type": "string" }
-          }
+          },
+          "additionalProperties": false
         },
         "profiles": {
           "type": "array",
@@ -36,10 +37,12 @@
               "network": { "type": "string" },
               "username": { "type": "string" },
               "url": { "type": "string", "format": "uri" }
-            }
+            },
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "additionalProperties": false
     },
     "work": {
       "type": "array",
@@ -55,7 +58,8 @@
           "endDate": { "$ref": "#/definitions/iso8601" },
           "summary": { "type": "string" },
           "highlights": { "type": "array", "items": { "type": "string" } }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "volunteer": {
@@ -70,7 +74,8 @@
           "endDate": { "$ref": "#/definitions/iso8601" },
           "summary": { "type": "string" },
           "highlights": { "type": "array", "items": { "type": "string" } }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "education": {
@@ -86,7 +91,8 @@
           "endDate": { "$ref": "#/definitions/iso8601" },
           "score": { "type": "string" },
           "courses": { "type": "array", "items": { "type": "string" } }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "awards": {
@@ -98,7 +104,8 @@
           "date": { "$ref": "#/definitions/iso8601" },
           "awarder": { "type": "string" },
           "summary": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "certificates": {
@@ -110,7 +117,8 @@
           "date": { "$ref": "#/definitions/iso8601" },
           "url": { "type": "string", "format": "uri" },
           "issuer": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "publications": {
@@ -123,7 +131,8 @@
           "releaseDate": { "$ref": "#/definitions/iso8601" },
           "url": { "type": "string", "format": "uri" },
           "summary": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "skills": {
@@ -134,7 +143,8 @@
           "name": { "type": "string" },
           "level": { "type": "string" },
           "keywords": { "type": "array", "items": { "type": "string" } }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "languages": {
@@ -144,7 +154,8 @@
         "properties": {
           "language": { "type": "string" },
           "fluency": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "interests": {
@@ -154,7 +165,8 @@
         "properties": {
           "name": { "type": "string" },
           "keywords": { "type": "array", "items": { "type": "string" } }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "references": {
@@ -164,7 +176,8 @@
         "properties": {
           "name": { "type": "string" },
           "reference": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "projects": {
@@ -182,7 +195,8 @@
           "roles": { "type": "array", "items": { "type": "string" } },
           "entity": { "type": "string" },
           "type": { "type": "string" }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "meta": {
@@ -191,7 +205,9 @@
         "canonical": { "type": "string", "format": "uri" },
         "version": { "type": "string" },
         "lastModified": { "type": "string" }
-      }
+      },
+      "additionalProperties": false
     }
-  }
+  },
+  "additionalProperties": false
 }
