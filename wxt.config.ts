@@ -15,12 +15,12 @@ export default defineConfig({
   }),
   manifest: {
     default_locale: 'en',
-    name: 'ApplyPilot',
-    description: 'Turn your resume into effortless job applications. ApplyPilot keeps your experience at your fingertips and lands applications in just a few clicks.',
+    name: 'Fillo',
+    description: 'Turn your resume into effortless job applications. Fillo keeps your experience at your fingertips and lands applications in just a few clicks.',
     version: '0.1.0',
     manifest_version: 3,
     action: {
-      default_title: 'ApplyPilot',
+      default_title: 'Fillo',
     },
     options_page: 'options.html',
     permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus', 'tabs'],

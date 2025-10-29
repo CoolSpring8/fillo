@@ -1,11 +1,11 @@
 app:
-  name: ApplyPilot
+  name: Fillo
 contextMenu:
-  fill: Fill with ApplyPilot…
+  fill: Fill with Fillo…
 options:
   loading: Loading settings…
-  title: ApplyPilot Settings
-  description: ApplyPilot keeps your experience ready to go wherever you apply. Manage your data and adapters here.
+  title: Fillo Settings
+  description: Fillo keeps your experience ready to go wherever you apply. Manage your data and adapters here.
   provider:
     heading: Provider
     onDevice: Chrome on-device (Prompt API)
@@ -17,7 +17,7 @@ options:
     apiBaseUrl: API base URL
   adapters:
     heading: Field adapters
-    description: Choose which label adapters ApplyPilot should use when matching fields. All matching runs locally.
+    description: Choose which label adapters Fillo should use when matching fields. All matching runs locally.
     items:
       en_default:
         name: English (default)
@@ -32,12 +32,12 @@ options:
     saved: Settings saved.
   autofill:
     heading: Auto fill behavior
-    description: Decide how ApplyPilot handles fields that need attention during auto fill.
+    description: Decide how Fillo handles fields that need attention during auto fill.
     skip: Skip issues and continue automatically
     pause: Pause for manual review
   overlay:
     heading: Highlight overlay
-    description: Choose whether ApplyPilot dims the page and highlights fields during guidance.
+    description: Choose whether Fillo dims the page and highlights fields during guidance.
     toggle: Show focused field highlight
     enabled: The highlight overlay will surround fields while prompts are shown.
     disabled: Only the prompt bubble will appear without dimming the rest of the page.
@@ -62,7 +62,7 @@ options:
       currentFile: 'File: $1 ($2 bytes)'
       rawSummary: 'Extracted text: $1 characters'
       modalTitle: Import PDF
-      modalDescription: Choose how ApplyPilot should handle the selected PDF.
+      modalDescription: Choose how Fillo should handle the selected PDF.
       parseAction: Parse automatically
       storeAction: Store file only
       parseAgain: Re-run AI parsing
@@ -268,8 +268,8 @@ options:
       description: Select a profile from the list or create a new one to start editing.
       create: Create profile
 popup:
-  title: ApplyPilot Profiles
-  description: Import once in ApplyPilot and reuse it wherever you apply.
+  title: Fillo Profiles
+  description: Import once in Fillo and reuse it wherever you apply.
   loading: Loading profiles…
   error: Unable to load profiles ($1)
   empty: No profiles stored yet. Import a PDF via the workspace to get started.
@@ -299,7 +299,7 @@ popup:
     noStructured: No structured resume stored yet. Run AI parsing from the workspace to populate this section.
   overlay:
     toggleLabel: Show prompt overlay on this tab
-    toggleDescription: Allow ApplyPilot to watch focused inputs and offer prompt overlays until you close the tab.
+    toggleDescription: Allow Fillo to watch focused inputs and offer prompt overlays until you close the tab.
     toggleUnavailable: Prompt overlays are unavailable on this page.
     profileSelectLabel: Active profile
     profileSelectPlaceholder: Choose a profile
@@ -307,8 +307,8 @@ popup:
     profileSelectEmpty: Import a profile in the workspace to enable suggestions here.
 sidepanel:
   permission:
-    title: Allow Apply Pilot to scan this page?
-    body: Apply Pilot scans the current page to detect application fields and map them to your profile before suggesting anything.
+    title: Allow Fillo to scan this page?
+    body: Fillo scans the current page to detect application fields and map them to your profile before suggesting anything.
     note: We only inspect the page after you approve. Close the side panel if you prefer not to proceed.
     allow: Allow scanning
   toolbar:
@@ -497,10 +497,10 @@ overlay:
     fill: Fill
     skip: Skip
     close: Close prompt
-    disableHint: Toggle prompt overlays from the ApplyPilot popup to hide these suggestions.
+    disableHint: Toggle prompt overlays from the Fillo popup to hide these suggestions.
     disableHintAria: Learn how to disable prompt overlays
 onboarding:
-  title: ApplyPilot workspace
+  title: Fillo workspace
   description: Import resumes, configure AI providers, and fine-tune autofill settings in one place.
   tabs:
     profiles: Profile management

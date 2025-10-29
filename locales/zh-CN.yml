@@ -1,11 +1,11 @@
 app:
-  name: ApplyPilot
+  name: Fillo
 contextMenu:
-  fill: 使用 ApplyPilot 自动填写…
+  fill: 使用 Fillo 自动填写…
 options:
   loading: 正在加载设置…
-  title: ApplyPilot 设置
-  description: ApplyPilot 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
+  title: Fillo 设置
+  description: Fillo 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
   provider:
     heading: 服务提供方
     onDevice: Chrome 本地模型（Prompt API）
@@ -17,7 +17,7 @@ options:
     apiBaseUrl: API 基础地址
   adapters:
     heading: 字段匹配适配器
-    description: 选择 ApplyPilot 需要启用的字段标签适配器。所有匹配均在本地完成。
+    description: 选择 Fillo 需要启用的字段标签适配器。所有匹配均在本地完成。
     items:
       en_default:
         name: 英文（默认）
@@ -62,7 +62,7 @@ options:
       currentFile: '文件：$1（$2 字节）'
       rawSummary: '提取文本：$1 个字符'
       modalTitle: 导入 PDF
-      modalDescription: 请选择 ApplyPilot 应如何处理所选 PDF。
+      modalDescription: 请选择 Fillo 应如何处理所选 PDF。
       parseAction: 自动解析
       storeAction: 仅保存文件
       parseAgain: 重新运行 AI 解析
@@ -268,8 +268,8 @@ options:
       description: 请选择列表中的简历，或新建一份开始编辑。
       create: 新建简历
 popup:
-  title: ApplyPilot 简历
-  description: 在 ApplyPilot 中导入一次，之后可在任何应用流程中重复使用。
+  title: Fillo 简历
+  description: 在 Fillo 中导入一次，之后可在任何应用流程中重复使用。
   loading: 正在加载简历…
   error: 加载简历失败（$1）
   empty: 尚未保存任何简历，请先在工作台导入 PDF。
@@ -299,7 +299,7 @@ popup:
     noStructured: 尚未保存结构化简历，请先在工作台运行 AI 解析。
   overlay:
     toggleLabel: 在此标签页显示提示覆盖层
-    toggleDescription: 允许 ApplyPilot 监听获得焦点的输入框并提供提示，直到关闭该标签页。
+    toggleDescription: 允许 Fillo 监听获得焦点的输入框并提供提示，直到关闭该标签页。
     toggleUnavailable: 当前页面暂不支持提示覆盖层。
     profileSelectLabel: 选择用于提示的简历
     profileSelectPlaceholder: 请选择简历
@@ -307,8 +307,8 @@ popup:
     profileSelectEmpty: 请先在工作台导入简历以启用此处的建议。
 sidepanel:
   permission:
-    title: 允许 Apply Pilot 扫描此页面吗？
-    body: Apply Pilot 会扫描当前页面以识别申请表单字段，并在提供建议前将其匹配到你的简历信息。
+    title: 允许 Fillo 扫描此页面吗？
+    body: Fillo 会扫描当前页面以识别申请表单字段，并在提供建议前将其匹配到你的简历信息。
     note: 只有在你批准后我们才会读取页面内容；若暂时不想授权，请关闭侧边栏。
     allow: 允许扫描
   toolbar:
@@ -498,10 +498,10 @@ overlay:
     fill: 填写
     skip: 跳过
     close: 关闭提示
-    disableHint: 如需关闭提示浮层，请在 ApplyPilot 弹窗中切换开关。
+    disableHint: 如需关闭提示浮层，请在 Fillo 弹窗中切换开关。
     disableHintAria: 了解如何关闭提示浮层
 onboarding:
-  title: ApplyPilot 工作台
+  title: Fillo 工作台
   description: 在同一位置导入简历、配置 AI 服务并优化自动填充。
   tabs:
     profiles: 档案管理

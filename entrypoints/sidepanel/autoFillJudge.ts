@@ -95,7 +95,7 @@ function buildUserContent(payload: AutoFillPromptPayload): string {
   };
 
   const result = {
-    schema: 'apply-pilot.autofill/v1',
+    schema: 'fillo.autofill/v1',
     round: payload.round,
     field: fieldSummary,
     availableKeys: payload.keys.map((key) => ({
@@ -201,4 +201,3 @@ function clampConfidence(raw: number): number {
   }
   return raw;
 }
-

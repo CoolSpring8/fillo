@@ -1,8 +1,8 @@
-# Apply Pilot
+# Fillo
 
 Tab-complete any job form. Built for the Google Chrome Built-in AI Challenge 2025.
 
-Apply Pilot is a browser extension that pulls structured data from your resume, maps it to application forms, and partners with AI to finish repetitive fields for you. It ships with a side panel workflow, inline prompt overlay, and options workspace so you can review every fill before it lands in the page.
+Fillo is a browser extension that pulls structured data from your resume, maps it to application forms, and partners with AI to finish repetitive fields for you. It ships with a side panel workflow, inline prompt overlay, and options workspace so you can review every fill before it lands in the page.
 
 ## Highlights
 - Resume workspace that parses PDFs into a JSON Resume-compatible profile and lets you edit every field before saving.
@@ -29,7 +29,7 @@ The postinstall hook bootstraps localization typings and prepares the WXT extens
 ```bash
 pnpm dev
 ```
-This launches the WXT runner and opens an isolated Chrome profile with Apply Pilot loaded.
+This launches the WXT runner and opens an isolated Chrome profile with Fillo loaded.
 
 ### Build artifacts
 ```bash
@@ -43,16 +43,16 @@ pnpm test -- --run   # Single-pass Vitest run
 pnpm compile         # TypeScript with no emit
 ```
 
-## Using Apply Pilot
-1. Open the options workspace (`options.html`) to upload or paste your resume. Apply Pilot extracts text from PDFs, validates against the JSON Resume schema, and stores multiple profiles locally.
+## Using Fillo
+1. Open the options workspace (`options.html`) to upload or paste your resume. Fillo extracts text from PDFs, validates against the JSON Resume schema, and stores multiple profiles locally.
 2. Choose an AI provider. Gemini Nano runs on-device when Chrome makes it available; OpenAI requires an API key, model, and optional custom base URL.
 3. Pick which field-label adapters are active and configure autofill fallback behavior (skip or pause when confidence is low).
 4. Navigate to a job application form. Activate the side panel from the toolbar icon or the editable-field context menu, then start a scan to classify fields.
-5. Accept fills individually, trigger AI suggestions for tricky questions, or switch to manual copy mode. Apply Pilot logs accepted values so future scans suggest them first.
+5. Accept fills individually, trigger AI suggestions for tricky questions, or switch to manual copy mode. Fillo logs accepted values so future scans suggest them first.
 6. Toggle the inline overlay from the popup to "tab complete" directly in the page when you already know the right match.
 
 ## Localization
-Apply Pilot localizes UI through `@wxt-dev/i18n`. Whenever you add visible strings, create a key in both `locales/en.yml` and `locales/zh-CN.yml`, then re-run `pnpm install` or `node scripts/bootstrap-i18n.mjs` to refresh typings.
+Fillo localizes UI through `@wxt-dev/i18n`. Whenever you add visible strings, create a key in both `locales/en.yml` and `locales/zh-CN.yml`, then re-run `pnpm install` or `node scripts/bootstrap-i18n.mjs` to refresh typings.
 
 ## License
 MIT

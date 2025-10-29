@@ -256,14 +256,14 @@ export default function App() {
   }, [defaultAdapterIds]);
 
   useEffect(() => {
-    const styleId = 'apply-pilot-permission-gradient';
+    const styleId = 'fillo-permission-gradient';
     if (document.getElementById(styleId)) {
       return;
     }
     const styleElement = document.createElement('style');
     styleElement.id = styleId;
     styleElement.textContent = `
-      @keyframes apply-pilot-permission-gradient {
+      @keyframes fillo-permission-gradient {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
@@ -1051,7 +1051,7 @@ export default function App() {
           pointerEvents: 'none',
           background: overlayGradient,
           backgroundSize: '280% 280%',
-          animation: 'apply-pilot-permission-gradient 24s ease infinite',
+          animation: 'fillo-permission-gradient 24s ease infinite',
           backdropFilter: `blur(${colorScheme === 'dark' ? 16 : 20}px)`,
         }}
       />
