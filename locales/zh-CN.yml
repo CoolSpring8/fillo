@@ -12,6 +12,7 @@ options:
     availability: 可用性：$1
     refresh: 刷新
     openai: OpenAI
+    gemini: Gemini
     apiKey: API 密钥
     model: 模型
     apiBaseUrl: API 基础地址
@@ -522,6 +523,8 @@ onboarding:
     notParsed: 尚未解析
     parsedOpenAI: 已使用 $1 解析
     parsedOpenAIAt: 已使用 $1 解析 · $2
+    parsedGemini: 已使用 $1 解析
+    parsedGeminiAt: 已使用 $1 解析 · $2
     parsedOnDevice: 已使用本地模型解析
     parsedOnDeviceAt: 已使用本地模型解析 · $1
   upload:
@@ -531,13 +534,14 @@ onboarding:
     current: 当前档案 "$1" 包含 $2 个字符的原始文本。
   parse:
     heading: 使用 AI 解析（可选）
-    helper: 可随时调整本地模型或 OpenAI 设置并重新解析，以完善结构化数据。
+    helper: 可随时调整本地模型、Gemini 或 OpenAI 设置并重新解析，以完善结构化数据。
     button: 解析简历
     needProfile: 请选择或创建一个档案以启用解析。
     needsSave: 解析前请先保存修改。
     summary: 解析结果会将 JSON 简历数据写入 "$1"，便于自动填写。
     providerSummaryOnDevice: 当前使用 Chrome 本地模型进行解析。
     providerSummaryOpenAI: 当前使用 OpenAI 模型“$1”进行解析。
+    providerSummaryGemini: 当前使用 Gemini 模型“$1”进行解析。
     adjustSettings: 调整 AI 设置
   openai:
     apiKey: API 密钥
@@ -546,6 +550,11 @@ onboarding:
     baseUrl: API 基础地址
     baseUrlPlaceholder: https://api.openai.com
     helper: 请求会直接从浏览器发送至 OpenAI。请妥善保管密钥；我们仅在本地保存。
+  gemini:
+    apiKey: API 密钥
+    apiKeyPlaceholder: AIza...
+    model: 模型
+    helper: 请求会直接从浏览器发送至 Gemini。请妥善保管密钥；我们仅在本地保存。
   provider:
     onDevice:
       downloadable: 下载模型后可用（需要用户手动触发）。
@@ -566,7 +575,7 @@ onboarding:
     savingExtraction: 正在本地保存提取结果…
     extractionComplete: 提取完成！已保存原始文本，可在下方继续执行 AI 解析。
     extractionFailed: 提取失败。
-    requireApiKey: 解析前请先填写 OpenAI API 密钥。
+    requireApiKey: 解析前请先填写 API 密钥。
     saveBeforeParse: 解析前请先保存修改。
     parsing: 正在使用 AI 解析简历…
     savingParsing: 正在保存结构化简历数据…

@@ -3,23 +3,35 @@ import { Paper, PasswordInput, Radio, Stack, Text, TextInput } from '@mantine/co
 interface ProviderCardProps {
   title: string;
   helper: string;
-  providerLabels: Record<'on-device' | 'openai', string>;
-  selectedProvider: 'on-device' | 'openai';
+  providerLabels: Record<'on-device' | 'openai' | 'gemini', string>;
+  selectedProvider: 'on-device' | 'openai' | 'gemini';
   canUseOnDevice: boolean;
   onDeviceNote?: string | null;
-  apiKeyLabel: string;
-  apiKeyPlaceholder: string;
-  modelLabel: string;
-  baseUrlLabel: string;
-  baseUrlPlaceholder: string;
-  openAiHelper: string;
-  apiKey: string;
-  model: string;
-  apiBaseUrl: string;
-  onProviderChange: (value: 'on-device' | 'openai') => void | Promise<void>;
-  onApiKeyChange: (value: string) => void;
-  onModelChange: (value: string) => void;
-  onApiBaseUrlChange: (value: string) => void;
+  openAi: {
+    apiKeyLabel: string;
+    apiKeyPlaceholder: string;
+    modelLabel: string;
+    baseUrlLabel: string;
+    baseUrlPlaceholder: string;
+    helper: string;
+    apiKey: string;
+    model: string;
+    apiBaseUrl: string;
+    onApiKeyChange: (value: string) => void;
+    onModelChange: (value: string) => void;
+    onApiBaseUrlChange: (value: string) => void;
+  };
+  gemini: {
+    apiKeyLabel: string;
+    apiKeyPlaceholder: string;
+    modelLabel: string;
+    helper: string;
+    apiKey: string;
+    model: string;
+    onApiKeyChange: (value: string) => void;
+    onModelChange: (value: string) => void;
+  };
+  onProviderChange: (value: 'on-device' | 'openai' | 'gemini') => void | Promise<void>;
 }
 
 export function ProviderCard({
@@ -29,19 +41,9 @@ export function ProviderCard({
   selectedProvider,
   canUseOnDevice,
   onDeviceNote,
-  apiKeyLabel,
-  apiKeyPlaceholder,
-  modelLabel,
-  baseUrlLabel,
-  baseUrlPlaceholder,
-  openAiHelper,
-  apiKey,
-  model,
-  apiBaseUrl,
+  openAi,
+  gemini,
   onProviderChange,
-  onApiKeyChange,
-  onModelChange,
-  onApiBaseUrlChange,
 }: ProviderCardProps) {
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
@@ -57,7 +59,7 @@ export function ProviderCard({
 
         <Radio.Group
           value={selectedProvider}
-          onChange={(value) => onProviderChange(value as 'on-device' | 'openai')}
+          onChange={(value) => onProviderChange(value as 'on-device' | 'openai' | 'gemini')}
         >
           <Stack gap={6}>
             <Radio
@@ -71,31 +73,52 @@ export function ProviderCard({
               </Text>
             )}
             <Radio value="openai" label={providerLabels.openai} />
+            <Radio value="gemini" label={providerLabels.gemini} />
           </Stack>
         </Radio.Group>
 
         {selectedProvider === 'openai' && (
           <Stack gap="sm">
             <PasswordInput
-              label={apiKeyLabel}
-              placeholder={apiKeyPlaceholder}
-              value={apiKey}
-              onChange={(event) => onApiKeyChange(event.currentTarget.value)}
+              label={openAi.apiKeyLabel}
+              placeholder={openAi.apiKeyPlaceholder}
+              value={openAi.apiKey}
+              onChange={(event) => openAi.onApiKeyChange(event.currentTarget.value)}
               autoComplete="off"
             />
             <TextInput
-              label={modelLabel}
-              value={model}
-              onChange={(event) => onModelChange(event.currentTarget.value)}
+              label={openAi.modelLabel}
+              value={openAi.model}
+              onChange={(event) => openAi.onModelChange(event.currentTarget.value)}
             />
             <TextInput
-              label={baseUrlLabel}
-              placeholder={baseUrlPlaceholder}
-              value={apiBaseUrl}
-              onChange={(event) => onApiBaseUrlChange(event.currentTarget.value)}
+              label={openAi.baseUrlLabel}
+              placeholder={openAi.baseUrlPlaceholder}
+              value={openAi.apiBaseUrl}
+              onChange={(event) => openAi.onApiBaseUrlChange(event.currentTarget.value)}
             />
             <Text fz="sm" c="dimmed">
-              {openAiHelper}
+              {openAi.helper}
+            </Text>
+          </Stack>
+        )}
+
+        {selectedProvider === 'gemini' && (
+          <Stack gap="sm">
+            <PasswordInput
+              label={gemini.apiKeyLabel}
+              placeholder={gemini.apiKeyPlaceholder}
+              value={gemini.apiKey}
+              onChange={(event) => gemini.onApiKeyChange(event.currentTarget.value)}
+              autoComplete="off"
+            />
+            <TextInput
+              label={gemini.modelLabel}
+              value={gemini.model}
+              onChange={(event) => gemini.onModelChange(event.currentTarget.value)}
+            />
+            <Text fz="sm" c="dimmed">
+              {gemini.helper}
             </Text>
           </Stack>
         )}

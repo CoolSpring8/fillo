@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
+    "@google/genai": "^1.27.0",
     "@mantine/core": "^8.3.5",
     "@mantine/hooks": "^8.3.5",
     "@mantine/notifications": "^8.3.5",

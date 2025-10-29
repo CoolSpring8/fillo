@@ -35,6 +35,9 @@ export function hasAutoFillModel(provider: ProviderConfig | null | undefined): b
   if (provider.kind === 'openai') {
     return Boolean(provider.apiKey?.trim() && provider.model?.trim());
   }
+  if (provider.kind === 'gemini') {
+    return Boolean(provider.apiKey?.trim() && provider.model?.trim());
+  }
   return true;
 }
 

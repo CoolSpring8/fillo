@@ -31,9 +31,11 @@ import { deleteProfile, listProfiles, saveProfile, storeFile } from '../../share
 import {
   createOnDeviceProvider,
   createOpenAIProvider,
+  createGeminiProvider,
   getSettings,
   saveSettings,
   OPENAI_DEFAULT_BASE_URL,
+  GEMINI_DEFAULT_MODEL,
 } from '../../shared/storage/settings';
 import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.json';
@@ -79,18 +81,29 @@ function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string):
   return createOpenAIProvider(apiKey, model, apiBaseUrl);
 }
 
+function buildGeminiProvider(apiKey: string, model: string): ProviderConfig {
+  return createGeminiProvider(apiKey, model);
+}
+
 function buildSettings(
-  kind: 'on-device' | 'openai',
-  apiKey: string,
-  model: string,
-  apiBaseUrl: string,
+  kind: 'on-device' | 'openai' | 'gemini',
+  openAi: { apiKey: string; model: string; apiBaseUrl: string },
+  gemini: { apiKey: string; model: string },
   adapters: string[],
   autoFallback: AppSettings['autoFallback'],
   highlightOverlay: boolean,
 ): AppSettings {
   if (kind === 'openai') {
     return {
-      provider: buildOpenAIProvider(apiKey, model, apiBaseUrl),
+      provider: buildOpenAIProvider(openAi.apiKey, openAi.model, openAi.apiBaseUrl),
+      adapters,
+      autoFallback,
+      highlightOverlay,
+    };
+  }
+  if (kind === 'gemini') {
+    return {
+      provider: buildGeminiProvider(gemini.apiKey, gemini.model),
       adapters,
       autoFallback,
       highlightOverlay,
@@ -104,11 +117,17 @@ export default function App() {
     defaultValues: createEmptyResumeFormValues(),
   });
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai'>('on-device');
+  const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai' | 'gemini'>('on-device');
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState(OPENAI_DEFAULT_MODEL);
-  const [apiBaseUrl, setApiBaseUrl] = useState(OPENAI_DEFAULT_BASE_URL);
+  const [openAiConfig, setOpenAiConfig] = useState({
+    apiKey: '',
+    model: OPENAI_DEFAULT_MODEL,
+    apiBaseUrl: OPENAI_DEFAULT_BASE_URL,
+  });
+  const [geminiConfig, setGeminiConfig] = useState({
+    apiKey: '',
+    model: GEMINI_DEFAULT_MODEL,
+  });
   const adapters = useMemo(() => listAvailableAdapters(), []);
   const defaultAdapterIds = useMemo(() => adapters.map((adapter) => adapter.id), [adapters]);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(defaultAdapterIds);
@@ -132,9 +151,10 @@ export default function App() {
   const [memoryState, setMemoryState] = useState<MemoryState>({ loading: true });
   const { t } = i18n;
   const translate = t as unknown as (key: string, substitutions?: unknown) => string;
-  const providerLabels: Record<'on-device' | 'openai', string> = {
+  const providerLabels: Record<'on-device' | 'openai' | 'gemini', string> = {
     'on-device': t('options.provider.onDevice'),
     openai: t('options.provider.openai'),
+    gemini: t('options.provider.gemini'),
   };
 
   const refreshProfiles = useCallback(
@@ -242,12 +262,19 @@ export default function App() {
       setSettings(loaded);
       if (loaded.provider.kind === 'openai') {
         setSelectedProvider('openai');
-        setApiKey(loaded.provider.apiKey);
-        setModel(loaded.provider.model);
-        setApiBaseUrl(loaded.provider.apiBaseUrl);
+        setOpenAiConfig({
+          apiKey: loaded.provider.apiKey ?? '',
+          model: loaded.provider.model?.trim().length ? loaded.provider.model : OPENAI_DEFAULT_MODEL,
+          apiBaseUrl: loaded.provider.apiBaseUrl?.trim().length ? loaded.provider.apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
+        });
+      } else if (loaded.provider.kind === 'gemini') {
+        setSelectedProvider('gemini');
+        setGeminiConfig({
+          apiKey: loaded.provider.apiKey ?? '',
+          model: loaded.provider.model?.trim().length ? loaded.provider.model : GEMINI_DEFAULT_MODEL,
+        });
       } else {
         setSelectedProvider('on-device');
-        setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
       }
       setActiveAdapters(loaded.adapters.length > 0 ? loaded.adapters : defaultAdapterIds);
       setAutoFallback(loaded.autoFallback ?? 'skip');
@@ -277,90 +304,91 @@ export default function App() {
     return () => browser.storage.onChanged.removeListener(listener);
   }, [refreshMemoryItems]);
 
-  const handleProviderChange = async (value: 'on-device' | 'openai') => {
+  const handleProviderChange = async (value: 'on-device' | 'openai' | 'gemini') => {
     setSelectedProvider(value);
     const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-    if (value === 'on-device') {
-      setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-      const next = buildSettings(
-        'on-device',
-        '',
-        OPENAI_DEFAULT_MODEL,
-        OPENAI_DEFAULT_BASE_URL,
-        adaptersToUse,
-        autoFallback,
-        highlightOverlay,
-      );
+    if (value === 'openai') {
+      const nextOpenAi =
+        openAiConfig.apiBaseUrl.trim().length > 0
+          ? openAiConfig
+          : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
+      if (nextOpenAi !== openAiConfig) {
+        setOpenAiConfig(nextOpenAi);
+      }
+      const next = buildSettings('openai', nextOpenAi, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
       setSettings(next);
       await saveSettings(next);
-    } else {
-      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      setApiBaseUrl(nextBase);
-      const next = buildSettings(
-        'openai',
-        apiKey,
-        model,
-        nextBase,
-        adaptersToUse,
-        autoFallback,
-        highlightOverlay,
-      );
-      setSettings(next);
-      await saveSettings(next);
+      return;
     }
+    if (value === 'gemini') {
+      const next = buildSettings('gemini', openAiConfig, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
+      setSettings(next);
+      await saveSettings(next);
+      return;
+    }
+    const next = buildSettings('on-device', openAiConfig, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
+    setSettings(next);
+    await saveSettings(next);
   };
 
-  const handleApiKeyChange = (value: string) => {
-    setApiKey(value);
+  const handleOpenAiApiKeyChange = (value: string) => {
+    const updated = { ...openAiConfig, apiKey: value };
+    setOpenAiConfig(updated);
     if (selectedProvider === 'openai') {
-      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings(
-        'openai',
-        value,
-        model,
-        nextBase,
-        adaptersToUse,
-        autoFallback,
-        highlightOverlay,
-      );
+      const baseUrl = updated.apiBaseUrl.trim().length ? updated.apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const configured =
+        baseUrl === updated.apiBaseUrl ? updated : { ...updated, apiBaseUrl: baseUrl };
+      const next = buildSettings('openai', configured, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
       setSettings(next);
       void saveSettings(next);
     }
   };
 
-  const handleModelChange = (value: string) => {
-    setModel(value);
+  const handleOpenAiModelChange = (value: string) => {
+    const updated = { ...openAiConfig, model: value };
+    setOpenAiConfig(updated);
     if (selectedProvider === 'openai') {
-      const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings(
-        'openai',
-        apiKey,
-        value,
-        nextBase,
-        adaptersToUse,
-        autoFallback,
-        highlightOverlay,
-      );
+      const baseUrl = updated.apiBaseUrl.trim().length ? updated.apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+      const configured =
+        baseUrl === updated.apiBaseUrl ? updated : { ...updated, apiBaseUrl: baseUrl };
+      const next = buildSettings('openai', configured, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
       setSettings(next);
       void saveSettings(next);
     }
   };
 
-  const handleApiBaseUrlChange = (value: string) => {
-    setApiBaseUrl(value);
+  const handleOpenAiApiBaseUrlChange = (value: string) => {
+    const updated = { ...openAiConfig, apiBaseUrl: value };
+    setOpenAiConfig(updated);
     if (selectedProvider === 'openai') {
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings(
-        'openai',
-        apiKey,
-        model,
-        value,
-        adaptersToUse,
-        autoFallback,
-        highlightOverlay,
-      );
+      const baseUrl = value.trim().length ? value : OPENAI_DEFAULT_BASE_URL;
+      const configured = baseUrl === value ? updated : { ...updated, apiBaseUrl: baseUrl };
+      const next = buildSettings('openai', configured, geminiConfig, adaptersToUse, autoFallback, highlightOverlay);
+      setSettings(next);
+      void saveSettings(next);
+    }
+  };
+
+  const handleGeminiApiKeyChange = (value: string) => {
+    const updated = { ...geminiConfig, apiKey: value };
+    setGeminiConfig(updated);
+    if (selectedProvider === 'gemini') {
+      const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
+      const next = buildSettings('gemini', openAiConfig, updated, adaptersToUse, autoFallback, highlightOverlay);
+      setSettings(next);
+      void saveSettings(next);
+    }
+  };
+
+  const handleGeminiModelChange = (value: string) => {
+    const updated = { ...geminiConfig, model: value };
+    setGeminiConfig(updated);
+    if (selectedProvider === 'gemini') {
+      const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
+      const next = buildSettings('gemini', openAiConfig, updated, adaptersToUse, autoFallback, highlightOverlay);
       setSettings(next);
       void saveSettings(next);
     }
@@ -381,27 +409,18 @@ export default function App() {
     setActiveAdapters((current) => {
       const next = checked ? Array.from(new Set([...current, id])) : current.filter((item) => item !== id);
       const resolved = next.length > 0 ? next : defaultAdapterIds;
-      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-      const nextSettings =
-        selectedProvider === 'openai'
-          ? buildSettings(
-              'openai',
-              apiKey,
-              model,
-              baseUrl,
-              resolved,
-              autoFallback,
-              highlightOverlay,
-            )
-          : buildSettings(
-              'on-device',
-              '',
-              OPENAI_DEFAULT_MODEL,
-              OPENAI_DEFAULT_BASE_URL,
-              resolved,
-              autoFallback,
-              highlightOverlay,
-            );
+      const openAiForSettings =
+        openAiConfig.apiBaseUrl.trim().length > 0
+          ? openAiConfig
+          : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
+      const nextSettings = buildSettings(
+        selectedProvider,
+        openAiForSettings,
+        geminiConfig,
+        resolved,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(nextSettings);
       void saveSettings(nextSettings);
       return resolved;
@@ -411,27 +430,18 @@ export default function App() {
   const handleAutoFallbackChange = (value: AppSettings['autoFallback']) => {
     setAutoFallback(value);
     const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-    const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-    const nextSettings =
-      selectedProvider === 'openai'
-        ? buildSettings(
-            'openai',
-            apiKey,
-            model,
-            baseUrl,
-            adaptersToUse,
-            value,
-            highlightOverlay,
-          )
-        : buildSettings(
-            'on-device',
-            '',
-            OPENAI_DEFAULT_MODEL,
-            OPENAI_DEFAULT_BASE_URL,
-            adaptersToUse,
-            value,
-            highlightOverlay,
-          );
+    const openAiForSettings =
+      openAiConfig.apiBaseUrl.trim().length > 0
+        ? openAiConfig
+        : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
+    const nextSettings = buildSettings(
+      selectedProvider,
+      openAiForSettings,
+      geminiConfig,
+      adaptersToUse,
+      value,
+      highlightOverlay,
+    );
     setSettings(nextSettings);
     void saveSettings(nextSettings);
   };
@@ -439,11 +449,18 @@ export default function App() {
   const handleHighlightOverlayChange = (value: boolean) => {
     setHighlightOverlay(value);
     const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-    const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
-    const nextSettings =
-      selectedProvider === 'openai'
-        ? buildSettings('openai', apiKey, model, baseUrl, adaptersToUse, autoFallback, value)
-        : buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adaptersToUse, autoFallback, value);
+    const openAiForSettings =
+      openAiConfig.apiBaseUrl.trim().length > 0
+        ? openAiConfig
+        : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
+    const nextSettings = buildSettings(
+      selectedProvider,
+      openAiForSettings,
+      geminiConfig,
+      adaptersToUse,
+      autoFallback,
+      value,
+    );
     setSettings(nextSettings);
     void saveSettings(nextSettings);
   };
@@ -509,19 +526,22 @@ export default function App() {
       if (parseRequested) {
         const canParse =
           selectedProvider === 'openai'
-            ? apiKey.trim().length > 0
-            : availability !== 'unavailable';
+            ? openAiConfig.apiKey.trim().length > 0 && openAiConfig.model.trim().length > 0
+            : selectedProvider === 'gemini'
+              ? geminiConfig.apiKey.trim().length > 0 && geminiConfig.model.trim().length > 0
+              : availability !== 'unavailable';
         if (!canParse) {
           parseErrorMessage = t('options.profileForm.status.parseUnavailable');
         } else {
           setStatus({ phase: 'parsing', message: t('options.profileForm.status.parsing') });
           try {
             const messages = buildResumePrompt(text);
-            const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
             const providerConfig: ProviderConfig =
               selectedProvider === 'openai'
-                ? createOpenAIProvider(apiKey, model, baseUrl)
-                : createOnDeviceProvider();
+                ? createOpenAIProvider(openAiConfig.apiKey, openAiConfig.model, openAiConfig.apiBaseUrl)
+                : selectedProvider === 'gemini'
+                  ? createGeminiProvider(geminiConfig.apiKey, geminiConfig.model)
+                  : createOnDeviceProvider();
 
             const raw = await invokeWithProvider(providerConfig, messages, {
               responseSchema: resumeSchema,
@@ -541,7 +561,12 @@ export default function App() {
                     model: providerConfig.model,
                     apiBaseUrl: providerConfig.apiBaseUrl,
                   }
-                : { kind: 'on-device' };
+                : providerConfig.kind === 'gemini'
+                  ? {
+                      kind: 'gemini',
+                      model: providerConfig.model,
+                    }
+                  : { kind: 'on-device' };
 
             const formValues = resumeToFormValues(resume);
             const mergedValues = mergeResumeFormValues(form.getValues(), formValues);
@@ -632,8 +657,10 @@ export default function App() {
 
     const canParse =
       selectedProvider === 'openai'
-        ? apiKey.trim().length > 0
-        : availability !== 'unavailable';
+        ? openAiConfig.apiKey.trim().length > 0 && openAiConfig.model.trim().length > 0
+        : selectedProvider === 'gemini'
+          ? geminiConfig.apiKey.trim().length > 0 && geminiConfig.model.trim().length > 0
+          : availability !== 'unavailable';
 
     if (!canParse) {
       setStatus({ phase: 'error', message: t('options.profileForm.status.parseUnavailable') });
@@ -648,11 +675,12 @@ export default function App() {
 
     try {
       const messages = buildResumePrompt(text);
-      const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const providerConfig: ProviderConfig =
         selectedProvider === 'openai'
-          ? createOpenAIProvider(apiKey, model, baseUrl)
-          : createOnDeviceProvider();
+          ? createOpenAIProvider(openAiConfig.apiKey, openAiConfig.model, openAiConfig.apiBaseUrl)
+          : selectedProvider === 'gemini'
+            ? createGeminiProvider(geminiConfig.apiKey, geminiConfig.model)
+            : createOnDeviceProvider();
 
       const raw = await invokeWithProvider(providerConfig, messages, {
         responseSchema: resumeSchema,
@@ -672,7 +700,12 @@ export default function App() {
               model: providerConfig.model,
               apiBaseUrl: providerConfig.apiBaseUrl,
             }
-          : { kind: 'on-device' };
+          : providerConfig.kind === 'gemini'
+            ? {
+                kind: 'gemini',
+                model: providerConfig.model,
+              }
+            : { kind: 'on-device' };
 
       const parsedValues = resumeToFormValues(resume);
       const mergedValues = mergeResumeFormValues(form.getValues(), parsedValues);
@@ -849,6 +882,11 @@ export default function App() {
         ? t('onboarding.manage.parsedOpenAIAt', [profile.provider.model, parsedAt])
         : t('onboarding.manage.parsedOpenAI', [profile.provider.model]);
     }
+    if (profile.provider.kind === 'gemini') {
+      return parsedAt
+        ? t('onboarding.manage.parsedGeminiAt', [profile.provider.model, parsedAt])
+        : t('onboarding.manage.parsedGemini', [profile.provider.model]);
+    }
     return parsedAt
       ? t('onboarding.manage.parsedOnDeviceAt', [parsedAt])
       : t('onboarding.manage.parsedOnDevice');
@@ -880,12 +918,12 @@ export default function App() {
 
   const canParseAgain = Boolean(selectedProfile && rawText.trim().length > 0);
 
-  const canParseWithCurrentSettings =
-    selectedProvider === 'openai'
-      ? apiKey.trim().length > 0
-      : availability !== 'unavailable';
-
-  const showCopyHelper = Boolean(selectedProfile && rawText.trim().length > 0 && !canParseWithCurrentSettings);
+  const showCopyHelper = Boolean(
+    selectedProfile &&
+    rawText.trim().length > 0 &&
+    selectedProvider === 'on-device' &&
+    availability === 'unavailable',
+  );
 
   const profilesErrorLabel = profilesState.error
     ? t('onboarding.manage.error', [profilesState.error])
@@ -1000,19 +1038,31 @@ export default function App() {
                 selectedProvider={selectedProvider}
                 canUseOnDevice={canUseOnDevice}
                 onDeviceNote={onDeviceNote}
-                apiKeyLabel={t('onboarding.openai.apiKey')}
-                apiKeyPlaceholder={t('onboarding.openai.apiKeyPlaceholder')}
-                modelLabel={t('onboarding.openai.model')}
-                baseUrlLabel={t('onboarding.openai.baseUrl')}
-                baseUrlPlaceholder={t('onboarding.openai.baseUrlPlaceholder')}
-                openAiHelper={t('onboarding.openai.helper')}
-                apiKey={apiKey}
-                model={model}
-                apiBaseUrl={apiBaseUrl}
+                openAi={{
+                  apiKeyLabel: t('onboarding.openai.apiKey'),
+                  apiKeyPlaceholder: t('onboarding.openai.apiKeyPlaceholder'),
+                  modelLabel: t('onboarding.openai.model'),
+                  baseUrlLabel: t('onboarding.openai.baseUrl'),
+                  baseUrlPlaceholder: t('onboarding.openai.baseUrlPlaceholder'),
+                  helper: t('onboarding.openai.helper'),
+                  apiKey: openAiConfig.apiKey,
+                  model: openAiConfig.model,
+                  apiBaseUrl: openAiConfig.apiBaseUrl,
+                  onApiKeyChange: handleOpenAiApiKeyChange,
+                  onModelChange: handleOpenAiModelChange,
+                  onApiBaseUrlChange: handleOpenAiApiBaseUrlChange,
+                }}
+                gemini={{
+                  apiKeyLabel: t('onboarding.gemini.apiKey'),
+                  apiKeyPlaceholder: t('onboarding.gemini.apiKeyPlaceholder'),
+                  modelLabel: t('onboarding.gemini.model'),
+                  helper: t('onboarding.gemini.helper'),
+                  apiKey: geminiConfig.apiKey,
+                  model: geminiConfig.model,
+                  onApiKeyChange: handleGeminiApiKeyChange,
+                  onModelChange: handleGeminiModelChange,
+                }}
                 onProviderChange={handleProviderChange}
-                onApiKeyChange={handleApiKeyChange}
-                onModelChange={handleModelChange}
-                onApiBaseUrlChange={handleApiBaseUrlChange}
               />
 
               <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">

@@ -1,8 +1,9 @@
-import type { AppSettings, OpenAIProviderConfig, ProviderConfig } from '../types';
+import type { AppSettings, GeminiProviderConfig, OpenAIProviderConfig, ProviderConfig } from '../types';
 import { getAllAdapterIds } from '../apply/slots';
 
 const SETTINGS_KEY = 'settings:app';
 export const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com';
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const DEFAULT_SETTINGS: AppSettings = {
   provider: {
@@ -30,6 +31,14 @@ export async function getSettings(): Promise<AppSettings> {
       highlightOverlay,
     };
   }
+  if (settings.provider.kind === 'gemini') {
+    return {
+      provider: normalizeGeminiProvider(settings.provider),
+      adapters,
+      autoFallback,
+      highlightOverlay,
+    };
+  }
   return {
     provider: settings.provider,
     adapters,
@@ -41,20 +50,12 @@ export async function getSettings(): Promise<AppSettings> {
 export async function saveSettings(settings: AppSettings): Promise<void> {
   const adapters = settings.adapters && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
   const highlightOverlay = settings.highlightOverlay === false ? false : true;
-  const normalized: AppSettings =
-    settings.provider.kind === 'openai'
-      ? {
-          provider: normalizeOpenAIProvider(settings.provider),
-          adapters,
-          autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip',
-          highlightOverlay,
-        }
-      : {
-          provider: settings.provider,
-          adapters,
-          autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip',
-          highlightOverlay,
-        };
+  const normalized: AppSettings = {
+    provider: normalizeProvider(settings.provider),
+    adapters,
+    autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip',
+    highlightOverlay,
+  };
   await browser.storage.local.set({ [SETTINGS_KEY]: normalized });
 }
 
@@ -70,9 +71,31 @@ export function createOpenAIProvider(
   return normalizeOpenAIProvider({ kind: 'openai', apiKey, model, apiBaseUrl });
 }
 
+export function createGeminiProvider(apiKey: string, model: string = GEMINI_DEFAULT_MODEL): ProviderConfig {
+  return normalizeGeminiProvider({ kind: 'gemini', apiKey, model });
+}
+
 function normalizeOpenAIProvider(provider: OpenAIProviderConfig): OpenAIProviderConfig {
   return {
     ...provider,
     apiBaseUrl: provider.apiBaseUrl?.trim().length ? provider.apiBaseUrl : OPENAI_DEFAULT_BASE_URL,
   };
+}
+
+function normalizeGeminiProvider(provider: GeminiProviderConfig): GeminiProviderConfig {
+  return {
+    kind: 'gemini',
+    apiKey: provider.apiKey?.trim() ?? '',
+    model: provider.model?.trim() ?? '',
+  };
+}
+
+function normalizeProvider(provider: ProviderConfig): ProviderConfig {
+  if (provider.kind === 'openai') {
+    return normalizeOpenAIProvider(provider);
+  }
+  if (provider.kind === 'gemini') {
+    return normalizeGeminiProvider(provider);
+  }
+  return provider;
 }

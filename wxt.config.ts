@@ -26,6 +26,7 @@ export default defineConfig({
     permissions: ['storage', 'unlimitedStorage', 'activeTab', 'sidePanel', 'contextMenus', 'tabs'],
     host_permissions: [
       'https://api.openai.com/*',
+      'https://generativelanguage.googleapis.com/*',
       'https://*.greenhouse.io/*',
       'https://*.lever.co/*',
       'https://*.myworkdayjobs.com/*',

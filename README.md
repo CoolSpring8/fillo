@@ -7,7 +7,7 @@ Fillo is a browser extension that pulls structured data from your resume, maps i
 ## Highlights
 - Resume workspace that parses PDFs into a JSON Resume-compatible profile and lets you edit every field before saving.
 - Side panel scanner that classifies inputs on any job form, shows live context, and lets you accept, tweak, or reject fills from your profile.
-- Guided AI suggestions powered by Chrome's on-device Gemini Nano (when available) or your own OpenAI API key for harder prompts.
+- Guided AI suggestions powered by Chrome's on-device Gemini Nano (when available) or your own OpenAI or Gemini Developer API key for harder prompts.
 - Inline "tab complete" overlay that surfaces the best slot match, AI suggestion, and recent manual values without leaving the form.
 - Field-label adapters for English and Simplified Chinese plus autocomplete/ID heuristics so international sites still resolve the right slot.
 - Lightweight memory system that remembers the values you approved or corrected most often and offers them first next time.
@@ -45,7 +45,7 @@ pnpm compile         # TypeScript with no emit
 
 ## Using Fillo
 1. Open the options workspace (`options.html`) to upload or paste your resume. Fillo extracts text from PDFs, validates against the JSON Resume schema, and stores multiple profiles locally.
-2. Choose an AI provider. Gemini Nano runs on-device when Chrome makes it available; OpenAI requires an API key, model, and optional custom base URL.
+2. Choose an AI provider. Gemini Nano runs on-device when Chrome makes it available; OpenAI and Gemini require an API key and model (OpenAI also supports an optional custom base URL).
 3. Pick which field-label adapters are active and configure autofill fallback behavior (skip or pause when confidence is low).
 4. Navigate to a job application form. Activate the side panel from the toolbar icon or the editable-field context menu, then start a scan to classify fields.
 5. Accept fills individually, trigger AI suggestions for tricky questions, or switch to manual copy mode. Fillo logs accepted values so future scans suggest them first.

@@ -1,4 +1,4 @@
-export type ProviderKind = 'on-device' | 'openai';
+export type ProviderKind = 'on-device' | 'openai' | 'gemini';
 
 export interface OnDeviceProviderConfig {
   kind: 'on-device';
@@ -11,7 +11,13 @@ export interface OpenAIProviderConfig {
   apiBaseUrl: string;
 }
 
-export type ProviderConfig = OnDeviceProviderConfig | OpenAIProviderConfig;
+export interface GeminiProviderConfig {
+  kind: 'gemini';
+  apiKey: string;
+  model: string;
+}
+
+export type ProviderConfig = OnDeviceProviderConfig | OpenAIProviderConfig | GeminiProviderConfig;
 
 export type ProviderSnapshot =
   | OnDeviceProviderConfig
@@ -19,6 +25,10 @@ export type ProviderSnapshot =
       kind: 'openai';
       model: string;
       apiBaseUrl: string;
+    }
+  | {
+      kind: 'gemini';
+      model: string;
     };
 
 export interface StoredFileReference {

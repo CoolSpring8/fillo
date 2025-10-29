@@ -1,6 +1,7 @@
 import type { ChatMessage, ProviderConfig } from '../types';
 import { promptOnDevice } from './chromePrompt';
 import { promptOpenAI } from './openai';
+import { promptGemini } from './gemini';
 import {
   NoProviderConfiguredError,
   ProviderConfigurationError,
@@ -30,6 +31,15 @@ export async function invokeWithProvider(
           apiKey: provider.apiKey,
           model: provider.model,
           apiBaseUrl: provider.apiBaseUrl,
+        },
+        messages,
+        options,
+      );
+    case 'gemini':
+      return promptGemini(
+        {
+          apiKey: provider.apiKey,
+          model: provider.model,
         },
         messages,
         options,

@@ -12,6 +12,7 @@ options:
     availability: 'Availability: $1'
     refresh: Refresh
     openai: OpenAI
+    gemini: Gemini
     apiKey: API key
     model: Model
     apiBaseUrl: API base URL
@@ -521,6 +522,8 @@ onboarding:
     notParsed: Not parsed yet
     parsedOpenAI: Parsed with $1
     parsedOpenAIAt: Parsed with $1 · $2
+    parsedGemini: Parsed with $1
+    parsedGeminiAt: Parsed with $1 · $2
     parsedOnDevice: Parsed on-device
     parsedOnDeviceAt: Parsed on-device · $1
   upload:
@@ -530,13 +533,14 @@ onboarding:
     current: Active profile "$1" has $2 characters of raw text.
   parse:
     heading: Parse with AI (optional)
-    helper: Improve structured data using on-device or OpenAI providers. Adjust settings and rerun whenever you like.
+    helper: Improve structured data using on-device, Gemini, or OpenAI providers. Adjust settings and rerun whenever you like.
     button: Parse resume
     needProfile: Select or create a profile to enable parsing.
     needsSave: Save your edits before parsing.
     summary: Parsing updates "$1" with JSON Resume data for autofill workflows.
     providerSummaryOnDevice: Using Chrome on-device (Prompt API) for parsing.
     providerSummaryOpenAI: Using OpenAI model "$1" for parsing.
+    providerSummaryGemini: Using Gemini model "$1" for parsing.
     adjustSettings: Adjust AI settings
   openai:
     apiKey: API key
@@ -545,6 +549,11 @@ onboarding:
     baseUrl: API base URL
     baseUrlPlaceholder: https://api.openai.com
     helper: We send requests directly to OpenAI from your browser. Keep API keys private; they are stored locally.
+  gemini:
+    apiKey: API key
+    apiKeyPlaceholder: AIza...
+    model: Model
+    helper: We send requests directly to Gemini from your browser. Keep API keys private; they are stored locally.
   provider:
     onDevice:
       downloadable: Available after model download (requires a user gesture).
@@ -565,7 +574,7 @@ onboarding:
     savingExtraction: Saving extracted text locally…
     extractionComplete: Extraction complete! Profile saved with raw text. You can optionally parse it below.
     extractionFailed: Extraction failed.
-    requireApiKey: Please provide an OpenAI API key before parsing.
+    requireApiKey: Please provide an API key before parsing.
     saveBeforeParse: Save your edits before parsing.
     parsing: Parsing resume text with AI…
     savingParsing: Saving structured resume data…
