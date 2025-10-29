@@ -30,6 +30,7 @@ export interface OverlayRenderState {
   component: OverlayComponentState;
   highlightRect: HighlightRect | null;
   popoverPosition: PopoverPosition | null;
+  showHighlight: boolean;
 }
 
 export interface HighlightRect {

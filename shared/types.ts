@@ -48,6 +48,7 @@ export interface AppSettings {
   provider: ProviderConfig;
   adapters: string[];
   autoFallback: 'skip' | 'pause';
+  highlightOverlay: boolean;
 }
 
 export type ChatMessageRole = 'system' | 'user' | 'assistant';

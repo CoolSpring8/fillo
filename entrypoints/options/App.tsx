@@ -50,6 +50,7 @@ import { ProfilesCard, type ProfilesCardProfile } from './components/ProfilesCar
 import { ProviderCard } from './components/ProviderCard';
 import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
 import { AutofillCard } from './components/AutofillCard';
+import { OverlayCard } from './components/OverlayCard';
 import { MemoryCard, type MemoryEntry } from './components/MemoryCard';
 import {
   ProfileForm,
@@ -85,11 +86,17 @@ function buildSettings(
   apiBaseUrl: string,
   adapters: string[],
   autoFallback: AppSettings['autoFallback'],
+  highlightOverlay: boolean,
 ): AppSettings {
   if (kind === 'openai') {
-    return { provider: buildOpenAIProvider(apiKey, model, apiBaseUrl), adapters, autoFallback };
+    return {
+      provider: buildOpenAIProvider(apiKey, model, apiBaseUrl),
+      adapters,
+      autoFallback,
+      highlightOverlay,
+    };
   }
-  return { provider: { kind: 'on-device' }, adapters, autoFallback };
+  return { provider: { kind: 'on-device' }, adapters, autoFallback, highlightOverlay };
 }
 
 export default function App() {
@@ -106,6 +113,7 @@ export default function App() {
   const defaultAdapterIds = useMemo(() => adapters.map((adapter) => adapter.id), [adapters]);
   const [activeAdapters, setActiveAdapters] = useState<string[]>(defaultAdapterIds);
   const [autoFallback, setAutoFallback] = useState<AppSettings['autoFallback']>('skip');
+  const [highlightOverlay, setHighlightOverlay] = useState(true);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [filePromptOpen, setFilePromptOpen] = useState(false);
   const [parseAgainConfirmOpen, setParseAgainConfirmOpen] = useState(false);
@@ -243,6 +251,7 @@ export default function App() {
       }
       setActiveAdapters(loaded.adapters.length > 0 ? loaded.adapters : defaultAdapterIds);
       setAutoFallback(loaded.autoFallback ?? 'skip');
+      setHighlightOverlay(loaded.highlightOverlay !== false);
     });
     ensureOnDeviceAvailability().then(setAvailability);
     void refreshProfiles();
@@ -273,13 +282,29 @@ export default function App() {
     const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
     if (value === 'on-device') {
       setApiBaseUrl(OPENAI_DEFAULT_BASE_URL);
-      const next = buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adaptersToUse, autoFallback);
+      const next = buildSettings(
+        'on-device',
+        '',
+        OPENAI_DEFAULT_MODEL,
+        OPENAI_DEFAULT_BASE_URL,
+        adaptersToUse,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(next);
       await saveSettings(next);
     } else {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       setApiBaseUrl(nextBase);
-      const next = buildSettings('openai', apiKey, model, nextBase, adaptersToUse, autoFallback);
+      const next = buildSettings(
+        'openai',
+        apiKey,
+        model,
+        nextBase,
+        adaptersToUse,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(next);
       await saveSettings(next);
     }
@@ -290,7 +315,15 @@ export default function App() {
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings('openai', value, model, nextBase, adaptersToUse, autoFallback);
+      const next = buildSettings(
+        'openai',
+        value,
+        model,
+        nextBase,
+        adaptersToUse,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(next);
       void saveSettings(next);
     }
@@ -301,7 +334,15 @@ export default function App() {
     if (selectedProvider === 'openai') {
       const nextBase = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings('openai', apiKey, value, nextBase, adaptersToUse, autoFallback);
+      const next = buildSettings(
+        'openai',
+        apiKey,
+        value,
+        nextBase,
+        adaptersToUse,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(next);
       void saveSettings(next);
     }
@@ -311,7 +352,15 @@ export default function App() {
     setApiBaseUrl(value);
     if (selectedProvider === 'openai') {
       const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
-      const next = buildSettings('openai', apiKey, model, value, adaptersToUse, autoFallback);
+      const next = buildSettings(
+        'openai',
+        apiKey,
+        model,
+        value,
+        adaptersToUse,
+        autoFallback,
+        highlightOverlay,
+      );
       setSettings(next);
       void saveSettings(next);
     }
@@ -335,8 +384,24 @@ export default function App() {
       const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
       const nextSettings =
         selectedProvider === 'openai'
-          ? buildSettings('openai', apiKey, model, baseUrl, resolved, autoFallback)
-          : buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, resolved, autoFallback);
+          ? buildSettings(
+              'openai',
+              apiKey,
+              model,
+              baseUrl,
+              resolved,
+              autoFallback,
+              highlightOverlay,
+            )
+          : buildSettings(
+              'on-device',
+              '',
+              OPENAI_DEFAULT_MODEL,
+              OPENAI_DEFAULT_BASE_URL,
+              resolved,
+              autoFallback,
+              highlightOverlay,
+            );
       setSettings(nextSettings);
       void saveSettings(nextSettings);
       return resolved;
@@ -349,8 +414,36 @@ export default function App() {
     const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
     const nextSettings =
       selectedProvider === 'openai'
-        ? buildSettings('openai', apiKey, model, baseUrl, adaptersToUse, value)
-        : buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adaptersToUse, value);
+        ? buildSettings(
+            'openai',
+            apiKey,
+            model,
+            baseUrl,
+            adaptersToUse,
+            value,
+            highlightOverlay,
+          )
+        : buildSettings(
+            'on-device',
+            '',
+            OPENAI_DEFAULT_MODEL,
+            OPENAI_DEFAULT_BASE_URL,
+            adaptersToUse,
+            value,
+            highlightOverlay,
+          );
+    setSettings(nextSettings);
+    void saveSettings(nextSettings);
+  };
+
+  const handleHighlightOverlayChange = (value: boolean) => {
+    setHighlightOverlay(value);
+    const adaptersToUse = activeAdapters.length > 0 ? activeAdapters : defaultAdapterIds;
+    const baseUrl = apiBaseUrl.trim().length ? apiBaseUrl : OPENAI_DEFAULT_BASE_URL;
+    const nextSettings =
+      selectedProvider === 'openai'
+        ? buildSettings('openai', apiKey, model, baseUrl, adaptersToUse, autoFallback, value)
+        : buildSettings('on-device', '', OPENAI_DEFAULT_MODEL, OPENAI_DEFAULT_BASE_URL, adaptersToUse, autoFallback, value);
     setSettings(nextSettings);
     void saveSettings(nextSettings);
   };
@@ -937,6 +1030,16 @@ export default function App() {
                   skipLabel={t('options.autofill.skip')}
                   pauseLabel={t('options.autofill.pause')}
                   onChange={handleAutoFallbackChange}
+                />
+
+                <OverlayCard
+                  title={translate('options.overlay.heading')}
+                  description={translate('options.overlay.description')}
+                  toggleLabel={translate('options.overlay.toggle')}
+                  enabledHint={translate('options.overlay.enabled')}
+                  disabledHint={translate('options.overlay.disabled')}
+                  value={highlightOverlay}
+                  onChange={handleHighlightOverlayChange}
                 />
               </SimpleGrid>
 

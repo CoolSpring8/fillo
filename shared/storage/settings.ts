@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   adapters: getAllAdapterIds(),
   autoFallback: 'skip',
+  highlightOverlay: true,
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -20,26 +21,40 @@ export async function getSettings(): Promise<AppSettings> {
   }
   const adapters = Array.isArray(settings.adapters) && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
   const autoFallback: AppSettings['autoFallback'] = settings.autoFallback === 'pause' ? 'pause' : 'skip';
+  const highlightOverlay = settings.highlightOverlay === false ? false : true;
   if (settings.provider.kind === 'openai') {
     return {
       provider: normalizeOpenAIProvider(settings.provider),
       adapters,
       autoFallback,
+      highlightOverlay,
     };
   }
   return {
     provider: settings.provider,
     adapters,
     autoFallback,
+    highlightOverlay,
   };
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
   const adapters = settings.adapters && settings.adapters.length > 0 ? settings.adapters : getAllAdapterIds();
+  const highlightOverlay = settings.highlightOverlay === false ? false : true;
   const normalized: AppSettings =
     settings.provider.kind === 'openai'
-      ? { provider: normalizeOpenAIProvider(settings.provider), adapters, autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip' }
-      : { provider: settings.provider, adapters, autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip' };
+      ? {
+          provider: normalizeOpenAIProvider(settings.provider),
+          adapters,
+          autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip',
+          highlightOverlay,
+        }
+      : {
+          provider: settings.provider,
+          adapters,
+          autoFallback: settings.autoFallback === 'pause' ? 'pause' : 'skip',
+          highlightOverlay,
+        };
   await browser.storage.local.set({ [SETTINGS_KEY]: normalized });
 }
 

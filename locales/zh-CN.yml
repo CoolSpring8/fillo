@@ -35,6 +35,12 @@ options:
     description: 选择自动填充遇到问题时的处理方式。
     skip: 跳过问题并继续
     pause: 暂停，等待手动处理
+  overlay:
+    heading: 高亮覆盖层
+    description: 选择在引导时是否需要将页面变暗并突出显示字段。
+    toggle: 显示戏剧化的高亮效果
+    enabled: 显示提示时会在字段周围加上高亮遮罩。
+    disabled: 仅显示提示气泡，不会变暗页面。
   memory:
     heading: 字段记忆
     description: 管理填表时学习到的字段关联，可在此刷新或清除。

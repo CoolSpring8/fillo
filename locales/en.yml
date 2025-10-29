@@ -35,6 +35,12 @@ options:
     description: Decide how ApplyPilot handles fields that need attention during auto fill.
     skip: Skip issues and continue automatically
     pause: Pause for manual review
+  overlay:
+    heading: Highlight overlay
+    description: Choose whether ApplyPilot dims the page and highlights fields during guidance.
+    toggle: Show focused field highlight
+    enabled: The highlight overlay will surround fields while prompts are shown.
+    disabled: Only the prompt bubble will appear without dimming the rest of the page.
   memory:
     heading: Field memory
     description: Review and clear learned field associations used for suggestions.

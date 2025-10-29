@@ -10,6 +10,8 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { OverlayApp } from './ui/OverlayApp';
 import type { HighlightRect, OverlayRenderState, PopoverPosition, PromptOptions } from './ui/types';
+import { getSettings } from '../../shared/storage/settings';
+import type { AppSettings } from '../../shared/types';
 import overlayMantineStyles from './ui/overlay.mantine.css?inline';
 import overlayStyles from './ui/overlay.css?inline';
 
@@ -39,6 +41,60 @@ interface OverlayController {
 const OVERLAY_BRIDGE_KEY = '__apply_overlay_bridge__';
 const OVERLAY_ROOT_ELEMENT_ID = '__apply_overlay_root__';
 const isTopWindow = window === window.top;
+
+type HighlightPreferenceListener = (enabled: boolean) => void;
+
+const highlightPreferenceListeners = new Set<HighlightPreferenceListener>();
+let highlightOverlayEnabled = true;
+
+function subscribeHighlightPreference(listener: HighlightPreferenceListener): () => void {
+  highlightPreferenceListeners.add(listener);
+  try {
+    listener(highlightOverlayEnabled);
+  } catch (error) {
+    console.error('Highlight preference listener failed', error);
+  }
+  return () => {
+    highlightPreferenceListeners.delete(listener);
+  };
+}
+
+function setHighlightOverlayEnabled(enabled: boolean): void {
+  if (highlightOverlayEnabled === enabled) {
+    return;
+  }
+  highlightOverlayEnabled = enabled;
+  highlightPreferenceListeners.forEach((listener) => {
+    try {
+      listener(enabled);
+    } catch (error) {
+      console.error('Highlight preference listener failed', error);
+    }
+  });
+}
+
+void getSettings()
+  .then((settings) => {
+    setHighlightOverlayEnabled(settings.highlightOverlay !== false);
+  })
+  .catch((error) => {
+    console.warn('Failed to load highlight overlay preference', error);
+  });
+
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') {
+    return;
+  }
+  if ('settings:app' in changes) {
+    const entry = changes['settings:app'];
+    const next = (entry?.newValue as AppSettings | undefined) ?? null;
+    if (!next) {
+      setHighlightOverlayEnabled(true);
+      return;
+    }
+    setHighlightOverlayEnabled(next.highlightOverlay !== false);
+  }
+});
 
 let clearOverlayImpl: () => void;
 let showHighlightImpl: (target: Element, options: HighlightOptions) => void;
@@ -115,12 +171,14 @@ function createOverlayController(registerBridge: boolean): OverlayController {
     component: { mode: 'hidden' },
     highlightRect: null,
     popoverPosition: null,
+    showHighlight: false,
   };
   let currentReferenceRect: DOMRectReadOnly | null = null;
   let stylesInjected = false;
   let constructableSheets: CSSStyleSheet[] | null = null;
   const supportsConstructableStylesheets =
     Array.isArray(document.adoptedStyleSheets) && 'replaceSync' in CSSStyleSheet.prototype;
+  let highlightEnabled = highlightOverlayEnabled;
 
   const virtualReference: VirtualElement = {
     getBoundingClientRect(): DOMRect {
@@ -146,6 +204,7 @@ function createOverlayController(registerBridge: boolean): OverlayController {
       component: { mode: 'hidden' },
       highlightRect: null,
       popoverPosition: null,
+      showHighlight: false,
     });
   };
 
@@ -166,6 +225,7 @@ function createOverlayController(registerBridge: boolean): OverlayController {
       component: { mode: 'highlight', label: options.label },
       highlightRect: geometry.highlightRect,
       popoverPosition: null,
+      showHighlight: highlightEnabled,
     });
 
     const hasPopover = options.label.trim().length > 0;
@@ -211,6 +271,7 @@ function createOverlayController(registerBridge: boolean): OverlayController {
       component: { mode: 'prompt', prompt: clonePromptOptions(options) },
       highlightRect: geometry.highlightRect,
       popoverPosition: null,
+      showHighlight: highlightEnabled,
     });
     void updatePopoverPosition();
     attachRepositionListeners(target, true);
@@ -373,6 +434,7 @@ function createOverlayController(registerBridge: boolean): OverlayController {
       createElement(OverlayApp, {
         state: overlayState.component,
         highlightRect: overlayState.highlightRect,
+        showHighlight: overlayState.showHighlight,
         popoverPosition: overlayState.popoverPosition,
         onPopoverMount: handlePopoverMount,
         portalTarget: hostContainer,
@@ -425,8 +487,18 @@ function createOverlayController(registerBridge: boolean): OverlayController {
 
   const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
+  const withHighlightPreference = (state: OverlayRenderState): OverlayRenderState => {
+    const shouldShow =
+      highlightEnabled && state.highlightRect !== null && state.component.mode !== 'hidden';
+    if (state.showHighlight === shouldShow) {
+      return state;
+    }
+    return { ...state, showHighlight: shouldShow };
+  };
+
   const setOverlayState = (nextState: OverlayRenderState): void => {
-    overlayState = nextState;
+    const adjusted = withHighlightPreference(nextState);
+    overlayState = adjusted;
     renderOverlay();
   };
 
@@ -435,10 +507,30 @@ function createOverlayController(registerBridge: boolean): OverlayController {
   ): void => {
     const nextState = updater(overlayState);
     if (nextState === overlayState) {
+      const adjusted = withHighlightPreference(nextState);
+      if (adjusted === overlayState) {
+        return;
+      }
+      overlayState = adjusted;
+      renderOverlay();
       return;
     }
     setOverlayState(nextState);
   };
+
+  const refreshHighlightVisibility = (): void => {
+    const adjusted = withHighlightPreference(overlayState);
+    if (adjusted === overlayState) {
+      return;
+    }
+    overlayState = adjusted;
+    renderOverlay();
+  };
+
+  subscribeHighlightPreference((enabled) => {
+    highlightEnabled = enabled;
+    refreshHighlightVisibility();
+  });
 
   if (registerBridge) {
     const bridge: OverlayBridge = {
