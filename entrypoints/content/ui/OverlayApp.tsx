@@ -35,6 +35,7 @@ import { applyTheme } from '../../shared/theme';
 interface OverlayAppProps {
   state: OverlayComponentState;
   highlightRect: HighlightRect | null;
+  showHighlight: boolean;
   popoverPosition: PopoverPosition | null;
   onPopoverMount: (element: HTMLDivElement | null) => void;
   portalTarget: HTMLElement | null;
@@ -44,6 +45,7 @@ interface OverlayAppProps {
 export function OverlayApp({
   state,
   highlightRect,
+  showHighlight,
   popoverPosition,
   onPopoverMount,
   portalTarget,
@@ -84,7 +86,7 @@ export function OverlayApp({
   const cssVariablesSelector = mantineRoot?.id ? `#${mantineRoot.id}` : ':host';
   const rootElementGetter = useCallback(() => mantineRoot ?? undefined, [mantineRoot]);
 
-  const highlightStyle = highlightRect
+  const highlightStyle = showHighlight && highlightRect
     ? {
         display: 'block',
         opacity: 1,
