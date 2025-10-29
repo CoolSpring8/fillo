@@ -17,7 +17,11 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from 'react-hook-form';
-import { ensureOnDeviceAvailability, type LanguageModelAvailability } from '../../shared/llm/chromePrompt';
+import {
+  downloadOnDeviceModel,
+  ensureOnDeviceAvailability,
+  type LanguageModelAvailability,
+} from '../../shared/llm/chromePrompt';
 import { invokeWithProvider } from '../../shared/llm/runtime';
 import {
   NoProviderConfiguredError,
@@ -77,6 +81,14 @@ interface MemoryState {
   error?: string;
 }
 
+type OnDeviceDownloadPhase = 'idle' | 'downloading' | 'complete' | 'error';
+
+interface OnDeviceDownloadState {
+  phase: OnDeviceDownloadPhase;
+  progress: number;
+  error?: string;
+}
+
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
   return createOpenAIProvider(apiKey, model, apiBaseUrl);
 }
@@ -119,6 +131,10 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'on-device' | 'openai' | 'gemini'>('on-device');
   const [availability, setAvailability] = useState<LanguageModelAvailability>('unavailable');
+  const [onDeviceDownloadState, setOnDeviceDownloadState] = useState<OnDeviceDownloadState>({
+    phase: 'idle',
+    progress: 0,
+  });
   const [openAiConfig, setOpenAiConfig] = useState({
     apiKey: '',
     model: OPENAI_DEFAULT_MODEL,
@@ -215,6 +231,48 @@ export default function App() {
     }
   }, [refreshMemoryItems]);
 
+  const handleDownloadOnDevice = useCallback(async () => {
+    if (onDeviceDownloadState.phase === 'downloading') {
+      return;
+    }
+    setOnDeviceDownloadState({ phase: 'downloading', progress: 0 });
+    setAvailability('downloading');
+    let downloadFailed = false;
+    try {
+      await downloadOnDeviceModel({
+        onProgress: (value) => {
+          setOnDeviceDownloadState((current) => {
+            if (current.phase !== 'downloading') {
+              return current;
+            }
+            return { ...current, progress: value };
+          });
+        },
+      });
+    } catch (error) {
+      downloadFailed = true;
+      const message = error instanceof Error ? error.message : String(error);
+      setOnDeviceDownloadState({ phase: 'error', progress: 0, error: message });
+    } finally {
+      const latest = await ensureOnDeviceAvailability();
+      setAvailability(latest);
+      if (downloadFailed) {
+        return;
+      }
+      if (latest === 'available') {
+        setOnDeviceDownloadState({ phase: 'complete', progress: 1 });
+        return;
+      }
+      if (latest === 'downloading') {
+        setOnDeviceDownloadState((current) =>
+          current.phase === 'downloading' ? current : { phase: 'downloading', progress: 0 },
+        );
+        return;
+      }
+      setOnDeviceDownloadState({ phase: 'idle', progress: 0 });
+    }
+  }, [onDeviceDownloadState.phase]);
+
   const formatMemoryEntry = useCallback(
     ({ key, association }: MemoryEntry) => {
       const parts: string[] = [key];
@@ -280,7 +338,24 @@ export default function App() {
       setAutoFallback(loaded.autoFallback ?? 'skip');
       setHighlightOverlay(loaded.highlightOverlay !== false);
     });
-    ensureOnDeviceAvailability().then(setAvailability);
+    ensureOnDeviceAvailability().then((value) => {
+      setAvailability(value);
+      if (value === 'available') {
+        setOnDeviceDownloadState((current) =>
+          current.phase === 'complete' ? current : { phase: 'complete', progress: 1 },
+        );
+        return;
+      }
+      if (value === 'downloading') {
+        setOnDeviceDownloadState((current) =>
+          current.phase === 'downloading' ? current : { phase: 'downloading', progress: 0 },
+        );
+        return;
+      }
+      setOnDeviceDownloadState((current) =>
+        current.phase === 'error' ? current : { phase: 'idle', progress: 0 },
+      );
+    });
     void refreshProfiles();
   }, [defaultAdapterIds, refreshProfiles]);
 
@@ -836,14 +911,50 @@ export default function App() {
   };
 
   const canUseOnDevice = availability !== 'unavailable';
-  const onDeviceNote =
-    availability === 'downloadable'
-      ? t('onboarding.provider.onDevice.downloadable')
-      : availability === 'downloading'
-        ? t('onboarding.provider.onDevice.downloading')
-        : availability === 'unavailable'
-          ? t('onboarding.provider.onDevice.unavailable')
-          : null;
+  const onDeviceSupport = useMemo(() => {
+    if (availability === 'unavailable') {
+      return {
+        note: t('onboarding.provider.onDevice.unavailable'),
+      };
+    }
+
+    if (onDeviceDownloadState.phase === 'error') {
+      const reason =
+        onDeviceDownloadState.error && onDeviceDownloadState.error.trim().length > 0
+          ? onDeviceDownloadState.error
+          : translate('onboarding.provider.onDevice.downloadFailedUnknown');
+      return {
+        note: translate('onboarding.provider.onDevice.downloadFailed', [reason]),
+        actionLabel: translate('onboarding.provider.onDevice.retry'),
+        onAction: handleDownloadOnDevice,
+      };
+    }
+
+    if (availability === 'available' || onDeviceDownloadState.phase === 'complete') {
+      return {
+        note: translate('onboarding.provider.onDevice.available'),
+      };
+    }
+
+    if (onDeviceDownloadState.phase === 'downloading' || availability === 'downloading') {
+      const progressValue =
+        onDeviceDownloadState.phase === 'downloading' ? onDeviceDownloadState.progress : 0;
+      const progressPercent = Math.round(progressValue * 100);
+      return {
+        note:
+          progressValue > 0
+            ? translate('onboarding.provider.onDevice.progress', [progressPercent.toString()])
+            : t('onboarding.provider.onDevice.downloading'),
+        progress: Math.max(0, Math.min(100, progressValue * 100)),
+      };
+    }
+
+    return {
+      note: t('onboarding.provider.onDevice.downloadable'),
+      actionLabel: translate('onboarding.provider.onDevice.download'),
+      onAction: handleDownloadOnDevice,
+    };
+  }, [availability, handleDownloadOnDevice, onDeviceDownloadState, t]);
 
   const resolveProfileName = (profile: ProfileRecord): string => {
     const resume = profile.resume;
@@ -1037,7 +1148,7 @@ export default function App() {
                 providerLabels={providerLabels}
                 selectedProvider={selectedProvider}
                 canUseOnDevice={canUseOnDevice}
-                onDeviceNote={onDeviceNote}
+                onDeviceSupport={onDeviceSupport}
                 openAi={{
                   apiKeyLabel: t('onboarding.openai.apiKey'),
                   apiKeyPlaceholder: t('onboarding.openai.apiKeyPlaceholder'),

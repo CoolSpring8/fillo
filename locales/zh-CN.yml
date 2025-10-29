@@ -557,8 +557,14 @@ onboarding:
     helper: 请求会直接从浏览器发送至 Gemini。请妥善保管密钥；我们仅在本地保存。
   provider:
     onDevice:
-      downloadable: 下载模型后可用（需要用户手动触发）。
-      downloading: 模型正在下载，请保持本页面打开。
+      downloadable: 点击下方按钮下载本地模型，Chrome 会在您确认后获取 Gemini Nano。
+      downloading: 模型正在下载，请保持本页面打开等待 Chrome 完成。
+      available: 模型已下载，可切换使用 Chrome 本地模型提供者。
+      download: 下载模型
+      retry: 重试下载
+      progress: 正在下载… $1%
+      downloadFailed: '下载失败：$1'
+      downloadFailedUnknown: 下载失败，请重试。
       unavailable: 当前配置或 Chrome 版本不支持本地模型。
   edit:
     heading: 编辑 "$1"

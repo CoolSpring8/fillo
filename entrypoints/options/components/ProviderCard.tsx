@@ -1,4 +1,12 @@
-import { Paper, PasswordInput, Radio, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Paper, PasswordInput, Progress, Radio, Stack, Text, TextInput } from '@mantine/core';
+
+interface OnDeviceSupportProps {
+  note?: string | null;
+  actionLabel?: string;
+  actionDisabled?: boolean;
+  progress?: number;
+  onAction?: () => void | Promise<void>;
+}
 
 interface ProviderCardProps {
   title: string;
@@ -6,7 +14,7 @@ interface ProviderCardProps {
   providerLabels: Record<'on-device' | 'openai' | 'gemini', string>;
   selectedProvider: 'on-device' | 'openai' | 'gemini';
   canUseOnDevice: boolean;
-  onDeviceNote?: string | null;
+  onDeviceSupport?: OnDeviceSupportProps;
   openAi: {
     apiKeyLabel: string;
     apiKeyPlaceholder: string;
@@ -40,11 +48,17 @@ export function ProviderCard({
   providerLabels,
   selectedProvider,
   canUseOnDevice,
-  onDeviceNote,
+  onDeviceSupport,
   openAi,
   gemini,
   onProviderChange,
 }: ProviderCardProps) {
+  const showOnDeviceSupport =
+    !!onDeviceSupport &&
+    (Boolean(onDeviceSupport.note) ||
+      typeof onDeviceSupport.progress === 'number' ||
+      Boolean(onDeviceSupport.actionLabel));
+
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
       <Stack gap="md">
@@ -67,10 +81,31 @@ export function ProviderCard({
               label={providerLabels['on-device']}
               disabled={!canUseOnDevice}
             />
-            {onDeviceNote && (
-              <Text fz="sm" c="dimmed" pl="sm">
-                {onDeviceNote}
-              </Text>
+            {showOnDeviceSupport && onDeviceSupport && (
+              <Stack gap={6} pl="sm">
+                {onDeviceSupport.note && (
+                  <Text fz="sm" c="dimmed">
+                    {onDeviceSupport.note}
+                  </Text>
+                )}
+                {typeof onDeviceSupport.progress === 'number' && (
+                  <Progress value={onDeviceSupport.progress} size="sm" />
+                )}
+                {onDeviceSupport.actionLabel && (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => {
+                      if (onDeviceSupport.onAction) {
+                        void onDeviceSupport.onAction();
+                      }
+                    }}
+                    disabled={onDeviceSupport.actionDisabled || !onDeviceSupport.onAction}
+                  >
+                    {onDeviceSupport.actionLabel}
+                  </Button>
+                )}
+              </Stack>
             )}
             <Radio value="openai" label={providerLabels.openai} />
             <Radio value="gemini" label={providerLabels.gemini} />

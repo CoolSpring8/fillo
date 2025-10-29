@@ -556,8 +556,14 @@ onboarding:
     helper: We send requests directly to Gemini from your browser. Keep API keys private; they are stored locally.
   provider:
     onDevice:
-      downloadable: Available after model download (requires a user gesture).
-      downloading: Model download in progress. Keep this tab open.
+      downloadable: Download the on-device model to enable parsing. Chrome will fetch Gemini Nano after you confirm.
+      downloading: Model download in progress. Keep this tab open while Chrome finishes.
+      available: Model downloaded. You can now use the Chrome on-device provider.
+      download: Download model
+      retry: Retry download
+      progress: Downloading… $1%
+      downloadFailed: 'Download failed: $1'
+      downloadFailedUnknown: Download failed. Try again.
       unavailable: Not available in this profile or Chrome version.
   edit:
     heading: Edit "$1"

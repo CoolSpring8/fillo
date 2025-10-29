@@ -6,9 +6,29 @@ import {
 
 export type LanguageModelAvailability = 'unavailable' | 'available' | 'downloadable' | 'downloading';
 
+interface ChromeLanguageModelDownloadProgressEvent extends Event {
+  loaded: number;
+}
+
+interface ChromeLanguageModelMonitor {
+  addEventListener(
+    type: 'downloadprogress',
+    listener: (event: ChromeLanguageModelDownloadProgressEvent) => void,
+  ): void;
+  removeEventListener?(
+    type: 'downloadprogress',
+    listener: (event: ChromeLanguageModelDownloadProgressEvent) => void,
+  ): void;
+}
+
+interface ChromeLanguageModelCreateOptions {
+  monitor?: (monitor: ChromeLanguageModelMonitor) => void;
+  signal?: AbortSignal;
+}
+
 interface ChromeLanguageModel {
   availability?: () => Promise<LanguageModelAvailability>;
-  create: (options?: Record<string, unknown>) => Promise<ChromeLanguageModelSession>;
+  create: (options?: ChromeLanguageModelCreateOptions) => Promise<ChromeLanguageModelSession>;
 }
 
 interface ChromeLanguageModelSession {
@@ -35,6 +55,11 @@ interface OnDeviceSessionHandle {
 export interface OnDeviceInvocationOptions {
   responseSchema?: Record<string, unknown>;
   temperature?: number;
+  signal?: AbortSignal;
+}
+
+export interface OnDeviceDownloadOptions {
+  onProgress?: (progress: number) => void;
   signal?: AbortSignal;
 }
 
@@ -71,7 +96,7 @@ async function ensureLanguageModel(kind: 'on-device'): Promise<ChromeLanguageMod
       case 'downloadable':
         throw new ProviderAvailabilityError(
           kind,
-          'On-device model not downloaded. Open the options page to download Gemini Nano before continuing.',
+          'On-device model not downloaded. Use the download button in options to fetch Gemini Nano before continuing.',
           availability,
         );
       case 'downloading':
@@ -187,6 +212,61 @@ export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailab
     return await languageModel.availability();
   } catch {
     return 'unavailable';
+  }
+}
+
+function clampProgress(value: number): number {
+  if (Number.isNaN(value) || !Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
+}
+
+export async function downloadOnDeviceModel({
+  onProgress,
+  signal,
+}: OnDeviceDownloadOptions = {}): Promise<void> {
+  const languageModel = getLanguageModel();
+  if (!languageModel) {
+    throw new ProviderAvailabilityError('on-device', 'Chrome on-device AI is unavailable in this context.');
+  }
+
+  const progressListener = (event: ChromeLanguageModelDownloadProgressEvent) => {
+    const progress = clampProgress(event.loaded);
+    onProgress?.(progress);
+  };
+
+  let createdSession: ChromeLanguageModelSession | null = null;
+  try {
+    createdSession = await languageModel.create({
+      monitor(monitor) {
+        monitor.addEventListener('downloadprogress', progressListener);
+      },
+      signal,
+    });
+    onProgress?.(1);
+  } catch (error) {
+    onProgress?.(0);
+    if (error instanceof ProviderAvailabilityError || error instanceof ProviderInvocationError) {
+      throw error;
+    }
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ProviderInvocationError('on-device', `Failed to download on-device model: ${reason}`);
+  } finally {
+    try {
+      createdSession?.destroy?.();
+    } catch {
+      // ignore destroy failures
+    }
   }
 }
 
