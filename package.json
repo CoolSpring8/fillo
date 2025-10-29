@@ -1,6 +1,6 @@
 {
   "name": "apply-pilot",
-  "description": "Tab complete your resume into job application forms.",
+  "description": "Tab-complete any job form.",
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
