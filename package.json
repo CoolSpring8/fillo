@@ -1,8 +1,9 @@
 {
-  "name": "wxt-react-starter",
-  "description": "manifest.json description",
+  "name": "apply-pilot",
+  "description": "Tab complete your resume into job application forms.",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wxt",
