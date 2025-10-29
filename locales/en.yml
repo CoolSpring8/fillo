@@ -38,7 +38,7 @@ options:
   overlay:
     heading: Highlight overlay
     description: Choose whether ApplyPilot dims the page and highlights fields during guidance.
-    toggle: Show dramatic highlight around fields
+    toggle: Show focused field highlight
     enabled: The highlight overlay will surround fields while prompts are shown.
     disabled: Only the prompt bubble will appear without dimming the rest of the page.
   memory:
