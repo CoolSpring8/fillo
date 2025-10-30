@@ -7,10 +7,16 @@ import {
   ProviderConfigurationError,
 } from './errors';
 
+export interface OnDeviceTemplateOptions {
+  key: string;
+  seedMessages: ChatMessage[];
+}
+
 export interface LlmInvocationOptions {
   responseSchema?: Record<string, unknown>;
   temperature?: number;
   signal?: AbortSignal;
+  onDeviceTemplate?: OnDeviceTemplateOptions;
 }
 
 export async function invokeWithProvider(
@@ -22,9 +28,11 @@ export async function invokeWithProvider(
     throw new NoProviderConfiguredError();
   }
 
+  const { onDeviceTemplate, ...baseOptions } = options;
+
   switch (provider.kind) {
     case 'on-device':
-      return promptOnDevice(messages, options);
+      return promptOnDevice(messages, { ...baseOptions, template: onDeviceTemplate });
     case 'openai':
       return promptOpenAI(
         {
@@ -33,7 +41,7 @@ export async function invokeWithProvider(
           apiBaseUrl: provider.apiBaseUrl,
         },
         messages,
-        options,
+        baseOptions,
       );
     case 'gemini':
       return promptGemini(
@@ -42,7 +50,7 @@ export async function invokeWithProvider(
           model: provider.model,
         },
         messages,
-        options,
+        baseOptions,
       );
     default: {
       const exhaustive: never = provider;

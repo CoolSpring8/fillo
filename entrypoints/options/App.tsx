@@ -621,6 +621,10 @@ export default function App() {
             const raw = await invokeWithProvider(providerConfig, messages, {
               responseSchema: resumeSchema,
               temperature: 0,
+              onDeviceTemplate: {
+                key: 'resume-extraction/v1',
+                seedMessages: messages.slice(0, 1),
+              },
             });
 
             const parsed = JSON.parse(raw) as unknown;
@@ -760,6 +764,10 @@ export default function App() {
       const raw = await invokeWithProvider(providerConfig, messages, {
         responseSchema: resumeSchema,
         temperature: 0,
+        onDeviceTemplate: {
+          key: 'resume-extraction/v1',
+          seedMessages: messages.slice(0, 1),
+        },
       });
 
       const parsed = JSON.parse(raw) as unknown;

@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../types';
+import type { OnDeviceTemplateOptions } from './runtime';
 import {
   ProviderAvailabilityError,
   ProviderInvocationError,
@@ -50,12 +51,14 @@ interface OnDeviceSessionHandle {
   session: ChromeLanguageModelSession;
   release: () => void;
   isShared: boolean;
+  seedMessagesCount: number;
 }
 
 export interface OnDeviceInvocationOptions {
   responseSchema?: Record<string, unknown>;
   temperature?: number;
   signal?: AbortSignal;
+  template?: OnDeviceTemplateOptions;
 }
 
 export interface OnDeviceDownloadOptions {
@@ -66,6 +69,7 @@ export interface OnDeviceDownloadOptions {
 let sharedSessionPromise: Promise<ChromeLanguageModelSession> | null = null;
 let sharedSession: ChromeLanguageModelSession | null = null;
 let sharedSessionQueue: Promise<void> = Promise.resolve();
+const seededSessions = new Map<string, Promise<ChromeLanguageModelSession>>();
 
 function getLanguageModel(): ChromeLanguageModel | undefined {
   const root = globalThis as typeof globalThis & {
@@ -83,6 +87,7 @@ function resetSharedSession(): void {
   sharedSession = null;
   sharedSessionPromise = null;
   sharedSessionQueue = Promise.resolve();
+  resetSeededSessions();
 }
 
 async function ensureLanguageModel(kind: 'on-device'): Promise<ChromeLanguageModel> {
@@ -116,6 +121,23 @@ async function ensureLanguageModel(kind: 'on-device'): Promise<ChromeLanguageMod
   return languageModel;
 }
 
+function resetSeededSessions(): void {
+  for (const entry of seededSessions.values()) {
+    void entry
+      .then((session) => {
+        try {
+          session.destroy?.();
+        } catch {
+          // ignore destroy failures
+        }
+      })
+      .catch(() => {
+        // ignore failures during cleanup
+      });
+  }
+  seededSessions.clear();
+}
+
 async function ensureSharedSession(languageModel: ChromeLanguageModel): Promise<ChromeLanguageModelSession> {
   if (sharedSession) {
     return sharedSession;
@@ -136,11 +158,117 @@ async function ensureSharedSession(languageModel: ChromeLanguageModel): Promise<
   return sharedSession;
 }
 
-async function acquireSession(languageModel: ChromeLanguageModel): Promise<OnDeviceSessionHandle> {
+function isAbortError(error: unknown): boolean {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+    return error.name === 'AbortError';
+  }
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+async function ensureSeededSession(
+  languageModel: ChromeLanguageModel,
+  template: OnDeviceTemplateOptions,
+  signal: AbortSignal | undefined,
+): Promise<ChromeLanguageModelSession> {
+  const existing = seededSessions.get(template.key);
+  if (existing) {
+    try {
+      return await existing;
+    } catch (error) {
+      seededSessions.delete(template.key);
+      throw error;
+    }
+  }
+
+  const creation = (async () => {
+    const session = await languageModel.create(signal ? { signal } : undefined);
+    try {
+      if (template.seedMessages.length > 0) {
+        await session.prompt(template.seedMessages, {
+          temperature: 0,
+          signal,
+        });
+      }
+      return session;
+    } catch (error) {
+      try {
+        session.destroy?.();
+      } catch {
+        // ignore destroy failures
+      }
+      throw error;
+    }
+  })();
+
+  seededSessions.set(template.key, creation);
+
+  try {
+    return await creation;
+  } catch (error) {
+    seededSessions.delete(template.key);
+    throw error;
+  }
+}
+
+async function acquireSession(
+  languageModel: ChromeLanguageModel,
+  template: OnDeviceTemplateOptions | undefined,
+  signal: AbortSignal | undefined,
+): Promise<OnDeviceSessionHandle> {
+  const seedCount = template?.seedMessages.length ?? 0;
+  if (template && seedCount > 0) {
+    try {
+      const seededSession = await ensureSeededSession(languageModel, template, signal);
+      if (typeof seededSession.clone === 'function') {
+        try {
+          const cloneOptions = signal ? { signal } : undefined;
+          const clone = await seededSession.clone(cloneOptions);
+          return {
+            session: clone,
+            release: () => {
+              try {
+                clone.destroy?.();
+              } catch {
+                // noop
+              }
+            },
+            isShared: false,
+            seedMessagesCount: seedCount,
+          };
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+          seededSessions.delete(template.key);
+          try {
+            seededSession.destroy?.();
+          } catch {
+            // ignore destroy failures
+          }
+          console.warn('Chrome Prompt API clone() from seeded session failed. Falling back to shared session.', error);
+        }
+      } else {
+        seededSessions.delete(template.key);
+        try {
+          seededSession.destroy?.();
+        } catch {
+          // ignore destroy failures
+        }
+        console.warn('Chrome Prompt API clone() unavailable on seeded session. Falling back to shared session.');
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      console.warn('Failed to prepare seeded on-device session. Falling back to shared session.', error);
+    }
+  }
+
   const base = await ensureSharedSession(languageModel);
   if (typeof base.clone === 'function') {
     try {
-      const clone = await base.clone();
+      const cloneOptions = signal ? { signal } : undefined;
+      const clone = await base.clone(cloneOptions);
       return {
         session: clone,
         release: () => {
@@ -151,15 +279,19 @@ async function acquireSession(languageModel: ChromeLanguageModel): Promise<OnDev
           }
         },
         isShared: false,
+        seedMessagesCount: 0,
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       console.warn('Chrome Prompt API clone() failed. Falling back to dedicated session.', error);
     }
   }
 
   // If clone is unavailable or failed, create a throwaway session to avoid mutating shared session state across concurrent calls.
   try {
-    const session = await languageModel.create();
+    const session = await languageModel.create(signal ? { signal } : undefined);
     return {
       session,
       release: () => {
@@ -170,8 +302,12 @@ async function acquireSession(languageModel: ChromeLanguageModel): Promise<OnDev
         }
       },
       isShared: false,
+      seedMessagesCount: 0,
     };
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     // As a last resort, fall back to the shared session with queued access.
     console.warn('Falling back to shared session for Chrome Prompt API calls.', error);
     return {
@@ -180,6 +316,7 @@ async function acquireSession(languageModel: ChromeLanguageModel): Promise<OnDev
         // queue release handled separately
       },
       isShared: true,
+      seedMessagesCount: 0,
     };
   }
 }
@@ -198,6 +335,23 @@ function queueSharedSessionWork<T>(work: () => Promise<T>): Promise<T> {
     .finally(() => {
       resolveNext?.();
     });
+}
+
+function matchesSeedPrefix(messages: ChatMessage[], seed: readonly ChatMessage[]): boolean {
+  if (seed.length === 0) {
+    return true;
+  }
+  if (messages.length < seed.length) {
+    return false;
+  }
+  for (let index = 0; index < seed.length; index += 1) {
+    const message = messages[index];
+    const expected = seed[index];
+    if (!message || message.role !== expected.role || message.content !== expected.content) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function ensureOnDeviceAvailability(): Promise<LanguageModelAvailability> {
@@ -272,21 +426,29 @@ export async function downloadOnDeviceModel({
 
 export async function promptOnDevice(
   messages: ChatMessage[],
-  { responseSchema, temperature = 0, signal }: OnDeviceInvocationOptions = {},
+  { responseSchema, temperature = 0, signal, template }: OnDeviceInvocationOptions = {},
 ): Promise<string> {
   const languageModel = await ensureLanguageModel('on-device');
-  const handle = await acquireSession(languageModel);
+  const handle = await acquireSession(languageModel, template, signal);
+
+  let effectiveMessages = messages;
+  if (template && handle.seedMessagesCount > 0 && matchesSeedPrefix(messages, template.seedMessages)) {
+    const trimmed = messages.slice(handle.seedMessagesCount);
+    if (trimmed.length > 0) {
+      effectiveMessages = trimmed;
+    }
+  }
 
   const runPrompt = async () => {
     try {
-      return await handle.session.prompt(messages, {
+      return await handle.session.prompt(effectiveMessages, {
         responseConstraint: responseSchema,
         temperature,
         signal,
       });
     } catch (error) {
       resetSharedSession();
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (isAbortError(error)) {
         throw error;
       }
       const reason = error instanceof Error ? error.message : String(error);

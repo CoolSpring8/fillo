@@ -73,10 +73,16 @@ export async function requestGuidedSuggestion({
     },
   ];
 
+  const onDeviceTemplate = {
+    key: 'guided-suggestion/v1',
+    seedMessages: messages.slice(0, 1),
+  };
+
   const raw = await invokeWithProvider(provider, messages, {
     responseSchema: GUIDED_AI_SUGGESTION_SCHEMA,
     temperature: 0.2,
     signal,
+    onDeviceTemplate,
   });
 
   const trimmed = raw.trim();

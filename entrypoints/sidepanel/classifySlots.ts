@@ -84,9 +84,15 @@ export async function classifyFieldDescriptors(
         },
       ];
 
+      const onDeviceTemplate = {
+        key: 'field-classification/v1',
+        seedMessages: messages.slice(0, 1),
+      };
+
       const raw = await invokeWithProvider(provider, messages, {
         responseSchema: FIELD_CLASSIFICATION_RESPONSE_SCHEMA,
         temperature: 0,
+        onDeviceTemplate,
       });
 
       const parsed = JSON.parse(raw) as {

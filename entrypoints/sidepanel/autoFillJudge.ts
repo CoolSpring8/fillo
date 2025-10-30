@@ -64,10 +64,16 @@ export async function judgeAutoFill(
     },
   ];
 
+  const onDeviceTemplate = {
+    key: 'auto-fill-judge/v1',
+    seedMessages: messages.slice(0, 1),
+  };
+
   try {
     const raw = await invokeWithProvider(provider, messages, {
       responseSchema: AUTO_FILL_DECISION_SCHEMA,
       temperature: 0,
+      onDeviceTemplate,
     });
     return parseDecision(raw);
   } catch (error) {
