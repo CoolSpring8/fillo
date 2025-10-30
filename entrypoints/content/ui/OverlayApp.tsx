@@ -176,7 +176,7 @@ interface SuggestionCandidate {
   label?: string;
 }
 
-const AI_DEBOUNCE_MS = 350;
+const AI_DEBOUNCE_MS = 250;
 
 function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
