@@ -55,11 +55,29 @@ interface FillResultResponse extends FillResultMessage {
   kind: 'FILL_RESULT';
 }
 
+function buildPromptRequestKey(
+  tabId: number | null | undefined,
+  frameId: number | undefined,
+  requestId: string | null,
+): string | null {
+  if (tabId === null || tabId === undefined) {
+    return null;
+  }
+  if (typeof frameId !== 'number' || !Number.isFinite(frameId)) {
+    return null;
+  }
+  if (!requestId || requestId.trim().length === 0) {
+    return null;
+  }
+  return `${tabId}:${frameId}:${requestId}`;
+}
+
 const contentPorts = new Map<number, Map<number, RuntimePort>>();
 const sidePanelPorts = new Set<RuntimePort>();
 const pendingScans = new Map<string, PendingScan>();
 const pendingFills = new Map<string, PendingFill>();
 const popupOverlayTabs = new Set<number>();
+const pendingPromptAi = new Map<string, AbortController>();
 const overlayAdapterIds = getAllAdapterIds();
 const ACTIVE_PROFILE_STORAGE_KEY = 'popupActiveProfileId';
 let activeProfileId: string | null = null;
@@ -121,7 +139,7 @@ export default defineBackground(() => {
     await openSidePanelForTab(tab.id);
   });
 
-  browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     if (!raw || typeof raw !== 'object') {
       return undefined;
     }
@@ -166,15 +184,50 @@ export default defineBackground(() => {
       return true;
     }
     if (message.kind === 'PROMPT_AI_SUGGEST') {
-      handlePromptAiSuggestMessage(message)
+      const tabId = sender.tab?.id ?? null;
+      const frameId = typeof message.frameId === 'number' ? (message.frameId as number) : undefined;
+      const requestId = typeof message.requestId === 'string' ? (message.requestId as string) : null;
+      const key = buildPromptRequestKey(tabId, frameId, requestId);
+      const controller = key ? new AbortController() : null;
+      if (key && controller) {
+        const previous = pendingPromptAi.get(key);
+        if (previous) {
+          previous.abort();
+        }
+        pendingPromptAi.set(key, controller);
+      }
+      handlePromptAiSuggestMessage(message, controller)
         .then((result) => {
           sendResponse(result);
         })
         .catch((error) => {
           const fallback = error instanceof Error ? error.message : String(error ?? 'Unknown AI error');
           sendResponse({ status: 'error', error: fallback } satisfies PromptAiSuggestResponse);
+        })
+        .finally(() => {
+          if (key) {
+            const current = pendingPromptAi.get(key);
+            if (current === controller) {
+              pendingPromptAi.delete(key);
+            }
+          }
         });
       return true;
+    }
+    if (message.kind === 'PROMPT_AI_ABORT') {
+      const tabId = sender.tab?.id ?? null;
+      const frameId = typeof message.frameId === 'number' ? (message.frameId as number) : undefined;
+      const requestId = typeof message.requestId === 'string' ? (message.requestId as string) : null;
+      const key = buildPromptRequestKey(tabId, frameId, requestId);
+      if (key) {
+        const controller = pendingPromptAi.get(key);
+        if (controller) {
+          pendingPromptAi.delete(key);
+          controller.abort();
+        }
+      }
+      sendResponse({ status: 'ok' });
+      return false;
     }
     return undefined;
   });
@@ -610,7 +663,10 @@ async function handlePromptPreview(_: RuntimePort, payload: Record<string, unkno
   framePort.postMessage(outbound);
 }
 
-async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promise<PromptAiSuggestResponse> {
+async function handlePromptAiSuggestMessage(
+  raw: Record<string, unknown>,
+  controller: AbortController | null,
+): Promise<PromptAiSuggestResponse> {
   const query = typeof raw.query === 'string' ? raw.query : '';
   if (!query.trim()) {
     return { status: 'error', error: 'Query required.' };
@@ -644,6 +700,9 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
   }
 
   try {
+    if (controller?.signal.aborted) {
+      return { status: 'aborted' };
+    }
     const settings = await getSettings();
     const provider = settings.provider;
     const profileRecord = profileId ? await getProfile(profileId) : undefined;
@@ -662,6 +721,7 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
       suggestion,
       matches,
       profile: profileRecord?.resume ?? null,
+      signal: controller?.signal,
     });
     const normalized = result.value.trim();
     if (!normalized) {
@@ -673,6 +733,12 @@ async function handlePromptAiSuggestMessage(raw: Record<string, unknown>): Promi
       slot: selectedSlot ?? null,
     };
   } catch (error) {
+    if (
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
+      return { status: 'aborted' };
+    }
     if (
       error instanceof NoProviderConfiguredError ||
       error instanceof ProviderConfigurationError ||

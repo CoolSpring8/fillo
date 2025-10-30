@@ -69,6 +69,10 @@ export interface PromptAiRequestInput {
   matches: PromptOption[];
 }
 
+export interface PromptAiRequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface PromptAiResult {
   value: string;
   slot?: PromptOptionSlot | null;
@@ -101,9 +105,17 @@ export interface PromptAiSuggestMessage {
   profileId?: string | null;
 }
 
+export interface PromptAiAbortMessage {
+  kind: 'PROMPT_AI_ABORT';
+  requestId: string;
+  fieldId: string;
+  frameId: number;
+}
+
 export type PromptAiSuggestResponse =
   | { status: 'ok'; value: string; slot?: PromptOptionSlot | null }
-  | { status: 'error'; error: string };
+  | { status: 'error'; error: string }
+  | { status: 'aborted' };
 
 export interface PromptFillRequest {
   requestId: string;

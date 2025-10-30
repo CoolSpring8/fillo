@@ -242,6 +242,9 @@ function PromptForm({ t, tLoose, prompt, editor }: PromptFormProps) {
           if (error instanceof Error && error.message === 'query-missing') {
             return;
           }
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
           const message = error instanceof Error ? error.message : String(error);
           editor.setAiError(message || tLoose('overlay.prompt.aiError'));
           setAiSuggestion(null);

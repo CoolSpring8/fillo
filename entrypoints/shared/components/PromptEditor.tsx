@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   PromptAiRequestInput,
   PromptAiResult,
   PromptOption,
   PromptOptionSlot,
+  PromptAiRequestOptions,
 } from '../../../shared/apply/types';
 
 interface PromptEditorProps {
@@ -17,7 +18,10 @@ interface PromptEditorProps {
   onSlotChange?: (slot: PromptOptionSlot | null) => void;
   instruction?: string;
   onInstructionChange?: (value: string) => void;
-  onRequestAi?: (input: PromptAiRequestInput) => Promise<PromptAiResult | null>;
+  onRequestAi?: (
+    input: PromptAiRequestInput,
+    options?: PromptAiRequestOptions,
+  ) => Promise<PromptAiResult | null>;
   children: (state: PromptEditorState) => ReactNode;
 }
 
@@ -59,12 +63,21 @@ export function PromptEditor({
   const [internalInstruction, setInternalInstruction] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const pendingAbortRef = useRef<AbortController | null>(null);
+
+  const abortPendingRequest = useCallback(() => {
+    if (pendingAbortRef.current) {
+      pendingAbortRef.current.abort();
+      pendingAbortRef.current = null;
+    }
+  }, []);
 
   const valueIsControlled = controlledValue !== undefined;
   const slotIsControlled = controlledSlot !== undefined;
   const instructionIsControlled = controlledInstruction !== undefined;
 
   useEffect(() => {
+    abortPendingRequest();
     let slot: PromptOptionSlot | null = defaultSlot ?? null;
     let nextValue = defaultValue ?? preview ?? '';
 
@@ -100,7 +113,15 @@ export function PromptEditor({
     valueIsControlled,
     instructionIsControlled,
     onInstructionChange,
+    abortPendingRequest,
   ]);
+
+  useEffect(
+    () => () => {
+      abortPendingRequest();
+    },
+    [abortPendingRequest],
+  );
 
   const value = valueIsControlled ? controlledValue ?? '' : internalValue;
   const selectedSlot = slotIsControlled ? controlledSlot ?? null : internalSlot;
@@ -146,25 +167,35 @@ export function PromptEditor({
     if (!trimmedQuery) {
       throw new Error('query-missing');
     }
+    abortPendingRequest();
+    const controller = new AbortController();
+    pendingAbortRef.current = controller;
     setAiError(null);
     setAiLoading(true);
     try {
       const selected = selectedSlot ? normalizedOptions.find((option) => option.slot === selectedSlot) : undefined;
       const suggestion = selected?.value ?? preview ?? '';
       const matches = matchPromptOptions(normalizedOptions, trimmedQuery);
-      return await onRequestAi({
-        query: trimmedQuery,
-        currentValue: value,
-        suggestion,
-        selectedSlot,
-        matches,
-      });
+      return await onRequestAi(
+        {
+          query: trimmedQuery,
+          currentValue: value,
+          suggestion,
+          selectedSlot,
+          matches,
+        },
+        { signal: controller.signal },
+      );
     } finally {
+      if (pendingAbortRef.current === controller) {
+        pendingAbortRef.current = null;
+      }
       setAiLoading(false);
     }
-  }, [instructionValue, value, onRequestAi, selectedSlot, normalizedOptions, preview]);
+  }, [instructionValue, value, onRequestAi, selectedSlot, normalizedOptions, preview, abortPendingRequest]);
 
   const reset = useCallback(() => {
+    abortPendingRequest();
     if (!instructionIsControlled) {
       setInternalInstruction('');
     } else {
@@ -172,7 +203,7 @@ export function PromptEditor({
     }
     setAiError(null);
     setAiLoading(false);
-  }, [instructionIsControlled, onInstructionChange]);
+  }, [instructionIsControlled, onInstructionChange, abortPendingRequest]);
 
   return (
     <>

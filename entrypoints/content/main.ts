@@ -4,7 +4,8 @@ import type {
   FieldKind,
   FillResultStatus,
   PromptAiSuggestMessage,
-  PromptAiSuggestResponse,
+  PromptAiAbortMessage,
+  PromptAiResult,
   PromptFieldState,
   PromptFillRequest,
   PromptOptionSlot,
@@ -92,6 +93,105 @@ interface SerializedField {
   };
   attributes?: FieldAttributes;
   hasValue: boolean;
+}
+
+function createAbortError(): Error {
+  try {
+    return new DOMException('Aborted', 'AbortError');
+  } catch {
+    const error = new Error('Aborted');
+    error.name = 'AbortError';
+    return error;
+  }
+}
+
+function requestPromptAi(
+  payload: PromptAiSuggestMessage,
+  signal?: AbortSignal,
+): Promise<PromptAiResult> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let requestStarted = false;
+    let abortListener: (() => void) | null = null;
+
+    const cleanup = () => {
+      if (signal && abortListener) {
+        signal.removeEventListener('abort', abortListener);
+        abortListener = null;
+      }
+    };
+
+    const settle = (handler: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      handler();
+    };
+
+    const abortPayload: PromptAiAbortMessage = {
+      kind: 'PROMPT_AI_ABORT',
+      requestId: payload.requestId,
+      fieldId: payload.fieldId,
+      frameId: payload.frameId,
+    };
+
+    const rejectWithAbort = () => {
+      reject(createAbortError());
+    };
+
+    abortListener = () => {
+      if (!requestStarted) {
+        settle(rejectWithAbort);
+        return;
+      }
+      settle(() => {
+        void browser.runtime.sendMessage(abortPayload).catch((error) => {
+          console.warn('Failed to send AI abort message', error);
+        });
+        rejectWithAbort();
+      });
+    };
+
+    if (signal?.aborted) {
+      abortListener();
+      return;
+    }
+
+    if (signal) {
+      signal.addEventListener('abort', abortListener, { once: true });
+    }
+
+    requestStarted = true;
+    browser.runtime
+      .sendMessage(payload)
+      .then((response) => {
+        settle(() => {
+          if (!response) {
+            reject(new Error('AI request failed'));
+            return;
+          }
+          if (response.status === 'aborted') {
+            rejectWithAbort();
+            return;
+          }
+          if (response.status === 'ok') {
+            resolve({
+              value: response.value,
+              slot: response.slot ?? null,
+            });
+            return;
+          }
+          reject(new Error(response.error || 'AI request failed'));
+        });
+      })
+      .catch((error) => {
+        settle(() => {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      });
+  });
 }
 
 export default defineContentScript({
@@ -445,7 +545,7 @@ export default defineContentScript({
           });
           clearOverlay();
         },
-        onRequestAi: async (input) => {
+        onRequestAi: async (input, options) => {
           const messagePayload: PromptAiSuggestMessage = {
             kind: 'PROMPT_AI_SUGGEST',
             requestId: message.requestId,
@@ -459,17 +559,7 @@ export default defineContentScript({
             matches: input.matches,
             profileId,
           };
-          const response = (await browser.runtime.sendMessage(messagePayload)) as PromptAiSuggestResponse | undefined;
-          if (!response) {
-            throw new Error('AI request failed');
-          }
-          if (response.status === 'ok') {
-            return {
-              value: response.value,
-              slot: response.slot ?? null,
-            };
-          }
-          throw new Error(response.error || 'AI request failed');
+          return await requestPromptAi(messagePayload, options?.signal);
         },
       });
     }
@@ -541,7 +631,7 @@ export default defineContentScript({
         onSkip: () => {
           clearOverlay();
         },
-        onRequestAi: async (input) => {
+        onRequestAi: async (input, options) => {
           const payload: PromptAiSuggestMessage = {
             kind: 'PROMPT_AI_SUGGEST',
             requestId,
@@ -555,17 +645,7 @@ export default defineContentScript({
             matches: input.matches,
             profileId,
           };
-          const response = (await browser.runtime.sendMessage(payload)) as PromptAiSuggestResponse | undefined;
-          if (!response) {
-            throw new Error('AI request failed');
-          }
-          if (response.status === 'ok') {
-            return {
-              value: response.value,
-              slot: response.slot ?? null,
-            };
-          }
-          throw new Error(response.error || 'AI request failed');
+          return await requestPromptAi(payload, options?.signal);
         },
       });
     }

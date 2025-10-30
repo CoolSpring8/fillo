@@ -28,6 +28,7 @@ import type { ProfileRecord, ProviderConfig } from '../../shared/types';
 import type {
   FillResultMessage,
   PromptAiRequestInput,
+  PromptAiRequestOptions,
   PromptOption,
   PromptOptionSlot,
   ScannedField,
@@ -1362,7 +1363,10 @@ export default function App() {
       : 'sidepanel.guided.manualInputPlaceholder';
     const defaultSlot = fallbackOption ? (fallbackOption.slot as PromptOptionSlot | null) : undefined;
 
-    const requestAi = async (input: PromptAiRequestInput) => {
+    const requestAi = async (
+      input: PromptAiRequestInput,
+      options?: PromptAiRequestOptions,
+    ) => {
       const provider = providerRef.current;
       if (!provider) {
         throw new NoProviderConfiguredError();
@@ -1382,6 +1386,7 @@ export default function App() {
         suggestion: input.suggestion ?? selectedEntry.suggestion ?? '',
         matches: input.matches,
         profile: selectedProfile?.resume ?? null,
+        signal: options?.signal,
       });
     };
 
@@ -1431,6 +1436,12 @@ export default function App() {
                 editor.setAiError(null);
                 notify(tLoose('sidepanel.guided.aiPromptApplied'), 'success');
               } catch (error) {
+                if (
+                  (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
+                  (error instanceof Error && error.name === 'AbortError')
+                ) {
+                  return;
+                }
                 if (
                   error instanceof NoProviderConfiguredError ||
                   error instanceof ProviderConfigurationError ||
