@@ -1,20 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Affix,
   Alert,
+  Badge,
+  Box,
   Button,
   Container,
   CopyButton,
+  Flex,
   Group,
   List,
   Modal,
+  NavLink,
   Paper,
   SimpleGrid,
   Stack,
-  Tabs,
   Text,
   Textarea,
+  ThemeIcon,
   Title,
+  rem,
 } from '@mantine/core';
 import { useForm } from 'react-hook-form';
 import {
@@ -45,6 +50,8 @@ import { getActiveProfileId, setActiveProfileId } from '../../shared/storage/act
 import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.llm.json';
 import { validateResume } from '../../shared/validate';
+import { CheckCircle2, Circle } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 import type {
   AppSettings,
   ProviderConfig,
@@ -88,6 +95,22 @@ interface OnDeviceDownloadState {
   phase: OnDeviceDownloadPhase;
   progress: number;
   error?: string;
+}
+
+interface ConfettiPiece {
+  id: number;
+  left: number;
+  tx: number;
+  delay: number;
+  color: string;
+}
+
+interface TourStep {
+  element: HTMLElement;
+  title: string;
+  description: string;
+  side: 'top' | 'bottom' | 'left' | 'right';
+  align: 'start' | 'center' | 'end';
 }
 
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
@@ -164,9 +187,22 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<'upload' | 'parse' | 'save' | null>(null);
   const [rawText, setRawText] = useState('');
-  const [activeTab, setActiveTab] = useState<'profiles' | 'settings'>('profiles');
   const [memoryItems, setMemoryItems] = useState<MemoryEntry[]>([]);
   const [memoryState, setMemoryState] = useState<MemoryState>({ loading: true });
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
+  const [celebrationVersion, setCelebrationVersion] = useState(0);
+  const celebrationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const importButtonRef = useRef<HTMLButtonElement | null>(null);
+  const statusNotificationId = useRef<string | null>(null);
+  const skipNextCelebrationRef = useRef(false);
+  const [tourState, setTourState] = useState<{ steps: TourStep[]; index: number } | null>(null);
+  const [tourRect, setTourRect] = useState<DOMRect | null>(null);
+  const setupSectionRef = useRef<HTMLDivElement | null>(null);
+  const providerSectionRef = useRef<HTMLDivElement | null>(null);
+  const profilesSectionRef = useRef<HTMLDivElement | null>(null);
+  const autofillSectionRef = useRef<HTMLDivElement | null>(null);
+  const advancedSectionRef = useRef<HTMLDivElement | null>(null);
   const { t } = i18n;
   const translate = t as unknown as (key: string, substitutions?: unknown) => string;
   const providerLabels: Record<'on-device' | 'openai' | 'gemini', string> = {
@@ -178,6 +214,27 @@ export default function App() {
   useEffect(() => {
     selectedProfileIdRef.current = selectedProfileId;
   }, [selectedProfileId]);
+
+  useEffect(() => {
+    let mounted = true;
+    browser.storage.local
+      .get('onboarding:completed')
+      .then((result) => {
+        if (!mounted) {
+          return;
+        }
+        const completed = Boolean(result['onboarding:completed']);
+        setOnboardingCompleted(completed);
+      })
+      .catch(() => {
+        if (mounted) {
+          setOnboardingCompleted(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const refreshProfiles = useCallback(
     async (preferredId?: string) => {
@@ -944,6 +1001,30 @@ export default function App() {
     await refreshProfiles(id);
   };
 
+  const handleResetOnboarding = useCallback(async () => {
+    try {
+      await browser.storage.local.set({ 'onboarding:completed': false });
+      setCelebrationOpen(false);
+      setOnboardingCompleted(false);
+      skipNextCelebrationRef.current = true;
+      notifications.show({
+        color: 'brand',
+        message: t('options.advanced.resetOnboardingSuccess'),
+      });
+    } catch (error) {
+      notifications.show({
+        color: 'red',
+        message: t('options.advanced.resetOnboardingError'),
+      });
+      console.error('Unable to reset onboarding flag', error);
+    }
+  }, [t]);
+
+  const handleReplayCelebration = useCallback(() => {
+    setCelebrationVersion((value) => value + 1);
+    setCelebrationOpen(true);
+  }, []);
+
   const canUseOnDevice = availability !== 'unavailable';
   const onDeviceSupport = useMemo(() => {
     if (availability === 'unavailable') {
@@ -1037,7 +1118,380 @@ export default function App() {
       : t('onboarding.manage.parsedOnDevice');
   };
 
+  const providerConfigured = useMemo(() => {
+    if (selectedProvider === 'on-device') {
+      return availability === 'available' || onDeviceDownloadState.phase === 'complete';
+    }
+    if (selectedProvider === 'openai') {
+      return openAiConfig.apiKey.trim().length > 0 && openAiConfig.model.trim().length > 0;
+    }
+    if (selectedProvider === 'gemini') {
+      return geminiConfig.apiKey.trim().length > 0 && geminiConfig.model.trim().length > 0;
+    }
+    return false;
+  }, [
+    availability,
+    onDeviceDownloadState.phase,
+    openAiConfig.apiKey,
+    openAiConfig.model,
+    geminiConfig.apiKey,
+    geminiConfig.model,
+    selectedProvider,
+  ]);
+
   const profileCountLabel = profiles.length.toLocaleString();
+  const hasProfiles = profiles.length > 0;
+  const totalSteps = 2;
+  const completedSteps = (providerConfigured ? 1 : 0) + (hasProfiles ? 1 : 0);
+  const progressCountLabel = t('options.progress.count', [`${completedSteps}`, `${totalSteps}`]);
+  const progressBadgeLabel =
+    completedSteps === totalSteps ? t('options.progress.done', [progressCountLabel]) : progressCountLabel;
+  const progressColor = completedSteps === totalSteps ? 'teal' : completedSteps > 0 ? 'brand' : 'gray';
+
+  const setupChecklist = useMemo(
+    () => [
+      {
+        id: 'provider',
+        complete: providerConfigured,
+        title: t('options.checklist.provider.title'),
+        description: t('options.checklist.provider.description'),
+        target: 'section-provider',
+      },
+      {
+        id: 'profile',
+        complete: hasProfiles,
+        title: t('options.checklist.profile.title'),
+        description: t('options.checklist.profile.description'),
+        target: 'section-profiles',
+      },
+    ],
+    [providerConfigured, hasProfiles, t],
+  );
+
+  const navLinks = useMemo(
+    () => [
+      { id: 'section-getting-started', label: t('options.sections.gettingStarted'), ref: setupSectionRef },
+      { id: 'section-provider', label: t('options.sections.provider'), ref: providerSectionRef },
+      { id: 'section-profiles', label: t('options.sections.profiles'), ref: profilesSectionRef },
+      { id: 'section-autofill', label: t('options.sections.autofill'), ref: autofillSectionRef },
+      { id: 'section-advanced', label: t('options.sections.advanced'), ref: advancedSectionRef },
+    ],
+    [t],
+  );
+
+  const confettiPieces = useMemo<ConfettiPiece[]>(() => {
+    if (!celebrationOpen) {
+      return [];
+    }
+    return Array.from({ length: 80 }, (_, index) => ({
+      id: index,
+      left: Math.random() * 100,
+      tx: Math.random() * 100 - 50,
+      delay: Math.random() * 0.2,
+      color: `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`,
+    }));
+  }, [celebrationOpen, celebrationVersion]);
+
+  useEffect(() => {
+    if (!providerConfigured || !hasProfiles || onboardingCompleted === null) {
+      return;
+    }
+    if (!onboardingCompleted) {
+      if (skipNextCelebrationRef.current) {
+        skipNextCelebrationRef.current = false;
+        return;
+      }
+      setCelebrationVersion((value) => value + 1);
+      setCelebrationOpen(true);
+      setOnboardingCompleted(true);
+      void browser.storage.local.set({ 'onboarding:completed': true }).catch((error) => {
+        console.warn('Unable to persist onboarding completion', error);
+      });
+    }
+  }, [providerConfigured, hasProfiles, onboardingCompleted]);
+
+  useEffect(() => {
+    if (!celebrationOpen) {
+      return;
+    }
+    celebrationButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCelebrationOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [celebrationOpen]);
+
+  useEffect(() => {
+    if (!tourState) {
+      setTourRect(null);
+      return;
+    }
+    const step = tourState.steps[tourState.index];
+    if (!step) {
+      setTourState(null);
+      setTourRect(null);
+      return;
+    }
+    const updateRect = () => {
+      const rect = step.element.getBoundingClientRect();
+      setTourRect(rect);
+    };
+    updateRect();
+    const handleResize = () => updateRect();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleResize, true);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleResize, true);
+    };
+  }, [tourState]);
+
+  useEffect(() => {
+    if (!tourState) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTourState(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [tourState]);
+
+  const handleScrollTo = useCallback((id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  useEffect(() => {
+    const activeId = statusNotificationId.current;
+
+    if (!status.message) {
+      if (activeId) {
+        notifications.hide(activeId);
+        statusNotificationId.current = null;
+      }
+      return;
+    }
+
+    const baseId = activeId ?? `status-${Date.now()}`;
+
+    if (status.phase === 'idle') {
+      if (activeId) {
+        notifications.hide(activeId);
+        statusNotificationId.current = null;
+      }
+      return;
+    }
+
+    if (status.phase === 'complete') {
+      const payload = {
+        id: baseId,
+        color: 'teal' as const,
+        title: status.message,
+        message: errorDetails ?? undefined,
+        autoClose: 4000,
+        withCloseButton: true,
+        loading: false,
+      };
+      if (activeId) {
+        notifications.update(payload);
+      } else {
+        notifications.show(payload);
+      }
+      statusNotificationId.current = null;
+      return;
+    }
+
+    if (status.phase === 'error') {
+      const payload = {
+        id: baseId,
+        color: 'red' as const,
+        title: status.message,
+        message: errorDetails ?? undefined,
+        autoClose: 6000,
+        withCloseButton: true,
+        loading: false,
+      };
+      if (activeId) {
+        notifications.update(payload);
+      } else {
+        notifications.show(payload);
+      }
+      statusNotificationId.current = null;
+      return;
+    }
+
+    const payload = {
+      id: baseId,
+      color: 'brand' as const,
+      title: status.message,
+      message: errorDetails ?? undefined,
+      autoClose: false,
+      withCloseButton: false,
+      loading: true,
+    };
+
+    if (activeId) {
+      notifications.update(payload);
+    } else {
+      notifications.show(payload);
+    }
+    statusNotificationId.current = baseId;
+  }, [status, errorDetails]);
+
+  const handleStartTour = useCallback(() => {
+    const steps: TourStep[] = [];
+    if (importButtonRef.current) {
+      steps.push({
+        element: importButtonRef.current,
+        title: t('options.tour.import.title'),
+        description: t('options.tour.import.description'),
+        side: 'bottom',
+        align: 'center',
+      });
+    }
+    if (providerSectionRef.current) {
+      steps.push({
+        element: providerSectionRef.current,
+        title: t('options.tour.provider.title'),
+        description: t('options.tour.provider.description'),
+        side: 'right',
+        align: 'start',
+      });
+    }
+    if (profilesSectionRef.current) {
+      steps.push({
+        element: profilesSectionRef.current,
+        title: t('options.tour.profiles.title'),
+        description: t('options.tour.profiles.description'),
+        side: 'right',
+        align: 'center',
+      });
+    }
+    if (autofillSectionRef.current) {
+      steps.push({
+        element: autofillSectionRef.current,
+        title: t('options.tour.autofill.title'),
+        description: t('options.tour.autofill.description'),
+        side: 'right',
+        align: 'start',
+      });
+    }
+
+    if (steps.length === 0) {
+      notifications.show({
+        color: 'yellow',
+        message: t('options.tour.unavailable'),
+      });
+      return;
+    }
+
+    steps[0].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTourState({ steps, index: 0 });
+  }, [t]);
+
+  const handleTourAdvance = useCallback(() => {
+    setTourState((state) => {
+      if (!state) {
+        return state;
+      }
+      const nextIndex = state.index + 1;
+      if (nextIndex >= state.steps.length) {
+        return null;
+      }
+      state.steps[nextIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return { steps: state.steps, index: nextIndex };
+    });
+  }, []);
+
+  const handleTourRetreat = useCallback(() => {
+    setTourState((state) => {
+      if (!state) {
+        return state;
+      }
+      const prevIndex = Math.max(0, state.index - 1);
+      if (prevIndex === state.index) {
+        return state;
+      }
+      state.steps[prevIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return { steps: state.steps, index: prevIndex };
+    });
+  }, []);
+
+  const handleTourClose = useCallback(() => {
+    setTourState(null);
+  }, []);
+
+  const currentTourStep = tourState ? tourState.steps[tourState.index] ?? null : null;
+  const tourStepCount = tourState ? tourState.steps.length : 0;
+  const tourStepNumber = tourState ? tourState.index + 1 : 0;
+
+  const tourPopoverStyle = useMemo(() => {
+    if (!tourRect || !currentTourStep) {
+      return undefined;
+    }
+    const gap = 16;
+    const transforms: string[] = [];
+    const style: CSSProperties = {
+      position: 'fixed',
+      pointerEvents: 'auto',
+    };
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+
+    if (currentTourStep.side === 'bottom') {
+      style.top = Math.min(viewportHeight - gap, tourRect.bottom + gap);
+    } else if (currentTourStep.side === 'top') {
+      style.top = Math.max(gap, tourRect.top - gap);
+      transforms.push('translateY(-100%)');
+    } else {
+      style.top = Math.max(gap, Math.min(tourRect.top, viewportHeight - gap));
+    }
+
+    if (currentTourStep.side === 'right') {
+      style.left = Math.min(viewportWidth - gap, tourRect.right + gap);
+    } else if (currentTourStep.side === 'left') {
+      style.left = Math.max(gap, tourRect.left - gap);
+      transforms.push('translateX(-100%)');
+    } else {
+      style.left = Math.max(gap, Math.min(tourRect.left, viewportWidth - gap));
+    }
+
+    if (currentTourStep.side === 'top' || currentTourStep.side === 'bottom') {
+      if (currentTourStep.align === 'center') {
+        style.left = tourRect.left + tourRect.width / 2;
+        transforms.push('translateX(-50%)');
+      } else if (currentTourStep.align === 'end') {
+        style.left = tourRect.right;
+        transforms.push('translateX(-100%)');
+      }
+    } else {
+      if (currentTourStep.align === 'center') {
+        style.top = tourRect.top + tourRect.height / 2;
+        transforms.push('translateY(-50%)');
+      } else if (currentTourStep.align === 'end') {
+        style.top = tourRect.bottom;
+        transforms.push('translateY(-100%)');
+      }
+    }
+
+    if (transforms.length > 0) {
+      style.transform = transforms.join(' ');
+    }
+
+    return style;
+  }, [tourRect, currentTourStep]);
 
   const profilesData: ProfilesCardProfile[] = profiles.map((profile) => ({
     id: profile.id,
@@ -1074,111 +1528,172 @@ export default function App() {
     ? t('onboarding.manage.error', [profilesState.error])
     : undefined;
 
-  const statusColor =
-    status.phase === 'error'
-      ? 'red'
-      : status.phase === 'complete'
-        ? 'green'
-        : status.phase === 'idle'
-          ? 'gray'
-          : 'brand';
-
   return (
-    <Container size="lg" py="xl" style={{ minHeight: '100vh' }}>
-      <Stack gap="xl">
-        <Stack gap={4}>
-          <Title order={1}>{t('onboarding.title')}</Title>
-          <Text c="dimmed">{t('onboarding.description')}</Text>
-        </Stack>
-
-        <Tabs value={activeTab} onChange={(value) => setActiveTab((value ?? 'profiles') as 'profiles' | 'settings')}>
-          <Tabs.List>
-            <Tabs.Tab value="profiles">{t('onboarding.tabs.profiles')}</Tabs.Tab>
-            <Tabs.Tab value="settings">{t('onboarding.tabs.aiSettings')}</Tabs.Tab>
-          </Tabs.List>
-
-          <Tabs.Panel value="profiles">
-            <Stack gap="xl" pt="md">
-              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="xl">
-                <ProfilesCard
-                  title={t('onboarding.manage.heading')}
-                  countLabel={t('onboarding.manage.count', [profileCountLabel])}
-                  addLabel={t('onboarding.manage.addProfile')}
-                  loadingLabel={t('onboarding.manage.loading')}
-                  emptyLabel={t('onboarding.manage.empty')}
-                  deleteLabel={t('onboarding.manage.delete')}
-                  errorLabel={profilesErrorLabel}
-                  profiles={profilesData}
-                  isLoading={profilesState.loading}
-                  busy={busy}
-                  onCreate={handleCreateProfile}
-                  onSelect={handleSelectProfile}
-                  onDelete={handleDeleteProfile}
-                />
-
-                <Stack gap="md">
-                  {selectedProfile ? (
-                    <ProfileForm
-                      form={form}
-                      onSubmit={handleSaveForm}
-                      onReset={handleResetForm}
-                      disabled={busy}
-                      saving={formSaving}
-                      onFileSelect={handleFileSelect}
-                      onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
-                      parseAgainDisabled={!canParseAgain}
-                      fileSummary={fileSummary}
-                      rawSummary={rawSummary}
-                    />
-                  ) : (
-                    <Paper withBorder radius="lg" p="lg" shadow="sm">
-                      <Stack gap="sm">
-                        <Text fw={600}>{t('options.profileForm.empty.heading')}</Text>
-                        <Text fz="sm" c="dimmed">
-                          {t('options.profileForm.empty.description')}
-                        </Text>
-                        <Button variant="light" onClick={handleCreateProfile} disabled={busy}>
-                          {t('options.profileForm.empty.create')}
-                        </Button>
-                      </Stack>
-                    </Paper>
-                  )}
-
-                  {status.message && (
-                    <Alert variant="light" color={statusColor}>
-                      <Stack gap={4}>
-                        <Text fw={600}>{status.message}</Text>
-                        {errorDetails && (
-                          <Text fz="sm" c="dimmed">
-                            {errorDetails}
-                          </Text>
-                        )}
-                      </Stack>
-                    </Alert>
-                  )}
-
-                  {validationErrors.length > 0 && (
-                    <Alert variant="light" color="yellow">
-                      <Stack gap="xs">
-                        <Text fw={600}>{t('onboarding.validation.heading')}</Text>
-                        <List spacing={4} size="sm">
-                          {validationErrors.map((item) => (
-                            <List.Item key={item}>{item}</List.Item>
-                          ))}
-                        </List>
-                      </Stack>
-                    </Alert>
-                  )}
-                </Stack>
-              </SimpleGrid>
+    <>
+      <style>{`
+        .fillo-celebration {
+          position: fixed;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          background-color: rgba(0, 0, 0, 0.55);
+          z-index: 2000;
+          padding: 24px;
+        }
+        .fillo-celebration__confetti {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+        }
+        .fillo-confetto {
+          position: absolute;
+          top: -10px;
+          width: 8px;
+          height: 14px;
+          border-radius: 2px;
+          animation: fillo-confetti-fall 1.8s linear forwards;
+        }
+        .fillo-celebration__card {
+          position: relative;
+          width: min(320px, 90vw);
+          text-align: center;
+          animation: fillo-celebration-pop 0.18s ease-out;
+        }
+        .fillo-tour {
+          position: fixed;
+          inset: 0;
+          z-index: 2100;
+        }
+        .fillo-tour__highlight {
+          position: fixed;
+          border-radius: 12px;
+          box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+          pointer-events: none;
+          transition: all 140ms ease;
+        }
+        .fillo-tour__popover {
+          max-width: min(360px, calc(100vw - 32px));
+        }
+        @keyframes fillo-celebration-pop {
+          from {
+            transform: scale(0.96);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        @keyframes fillo-confetti-fall {
+          to {
+            transform: translate3d(var(--tx, 0px), 110vh, 0) rotate(540deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+      <Container size="xl" py="xl" style={{ minHeight: '100vh' }}>
+        <Stack gap="xl">
+          <Group align="flex-start" justify="space-between" gap="xl" wrap="wrap">
+            <Stack gap={4} style={{ flex: '1 1 320px', minWidth: 240 }}>
+              <Title order={1}>{t('options.title')}</Title>
+              <Text c="dimmed">{t('options.description')}</Text>
             </Stack>
-          </Tabs.Panel>
 
-          <Tabs.Panel value="settings">
-            <Stack gap="xl" pt="md">
+            <Group gap="sm" align="center">
+              <Badge variant="light" color={progressColor} radius="xl">
+                {progressBadgeLabel}
+              </Badge>
+              <Button
+                variant="default"
+                onClick={handleStartTour}
+              >
+                {t('options.actions.startTour')}
+              </Button>
+              <Button
+                ref={importButtonRef}
+                variant="filled"
+                onClick={handleCreateProfile}
+                disabled={!providerConfigured || busy}
+              >
+                {t('options.actions.importResume')}
+              </Button>
+            </Group>
+          </Group>
+
+          <Flex gap="xl" align="flex-start" direction={{ base: 'column', md: 'row' }}>
+          <Paper
+            withBorder
+            radius="lg"
+            shadow="sm"
+            p="md"
+            w={{ base: '100%', md: 260 }}
+            style={{ position: 'sticky', top: rem(32) }}
+          >
+            <Stack gap="xs">
+              {navLinks.map((link) => (
+                <NavLink
+                  key={link.id}
+                  label={link.label}
+                  component="button"
+                  type="button"
+                  onClick={() => handleScrollTo(link.id)}
+                  style={{ textAlign: 'left' }}
+                />
+              ))}
+            </Stack>
+          </Paper>
+
+          <Stack flex={1} gap="xl">
+            <Box id="section-getting-started" ref={setupSectionRef}>
+              <Paper withBorder radius="lg" p="lg" shadow="sm">
+                <Stack gap="md">
+                  <div>
+                    <Text fw={600} fz="xl">
+                      {t('options.sections.gettingStarted')}
+                    </Text>
+                    <Text fz="sm" c="dimmed">
+                      {t('options.gettingStarted.helper')}
+                    </Text>
+                  </div>
+                  <Stack gap="md">
+                    {setupChecklist.map((item) => (
+                      <Group key={item.id} align="flex-start" gap="sm">
+                        <ThemeIcon
+                          size={32}
+                          variant="light"
+                          color={item.complete ? 'teal' : 'gray'}
+                          radius="xl"
+                        >
+                          {item.complete ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                        </ThemeIcon>
+                        <Stack gap={4} style={{ flex: 1 }}>
+                          <Text fw={600}>{item.title}</Text>
+                          <Text fz="sm" c="dimmed">
+                            {item.description}
+                          </Text>
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            onClick={() => handleScrollTo(item.target)}
+                          >
+                            {t('options.checklist.openSection')}
+                          </Button>
+                        </Stack>
+                      </Group>
+                    ))}
+                  </Stack>
+                  <Text fz="sm" c="dimmed">
+                    {t('options.gettingStarted.tip')}
+                  </Text>
+                </Stack>
+              </Paper>
+            </Box>
+
+            <Box id="section-provider" ref={providerSectionRef}>
               <ProviderCard
-                title={t('onboarding.parse.heading')}
-                helper={t('onboarding.parse.helper')}
+                title={t('options.sections.provider')}
+                helper={t('options.provider.helper')}
                 providerLabels={providerLabels}
                 selectedProvider={selectedProvider}
                 canUseOnDevice={canUseOnDevice}
@@ -1209,62 +1724,176 @@ export default function App() {
                 }}
                 onProviderChange={handleProviderChange}
               />
+            </Box>
 
-              <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
-                <AdaptersCard
-                  title={t('options.adapters.heading')}
-                  description={t('options.adapters.description')}
-                  items={adapterItems}
-                  onToggle={handleToggleAdapter}
+            <Box id="section-profiles" ref={profilesSectionRef}>
+              <Stack gap="md">
+                {providerConfigured ? (
+                  <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="xl">
+                    <ProfilesCard
+                      title={t('onboarding.manage.heading')}
+                      countLabel={t('onboarding.manage.count', [profileCountLabel])}
+                      addLabel={t('onboarding.manage.addProfile')}
+                      loadingLabel={t('onboarding.manage.loading')}
+                      emptyLabel={t('onboarding.manage.empty')}
+                      deleteLabel={t('onboarding.manage.delete')}
+                      errorLabel={profilesErrorLabel}
+                      profiles={profilesData}
+                      isLoading={profilesState.loading}
+                      busy={busy}
+                      onCreate={handleCreateProfile}
+                      onSelect={handleSelectProfile}
+                      onDelete={handleDeleteProfile}
+                    />
+
+                    <Stack gap="md">
+                      {selectedProfile ? (
+                        <ProfileForm
+                          form={form}
+                          onSubmit={handleSaveForm}
+                          onReset={handleResetForm}
+                          disabled={busy}
+                          saving={formSaving}
+                          onFileSelect={handleFileSelect}
+                          onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
+                          parseAgainDisabled={!canParseAgain}
+                          fileSummary={fileSummary}
+                          rawSummary={rawSummary}
+                        />
+                      ) : (
+                        <Paper withBorder radius="lg" p="lg" shadow="sm">
+                          <Stack gap="sm">
+                            <Text fw={600}>{t('options.profileForm.empty.heading')}</Text>
+                            <Text fz="sm" c="dimmed">
+                              {t('options.profileForm.empty.description')}
+                            </Text>
+                            <Button variant="light" onClick={handleCreateProfile} disabled={busy}>
+                              {t('options.profileForm.empty.create')}
+                            </Button>
+                          </Stack>
+                        </Paper>
+                      )}
+
+                      {validationErrors.length > 0 && (
+                        <Alert variant="light" color="yellow">
+                          <Stack gap="xs">
+                            <Text fw={600}>{t('onboarding.validation.heading')}</Text>
+                            <List spacing={4} size="sm">
+                              {validationErrors.map((item) => (
+                                <List.Item key={item}>{item}</List.Item>
+                              ))}
+                            </List>
+                          </Stack>
+                        </Alert>
+                      )}
+                    </Stack>
+                  </SimpleGrid>
+                ) : (
+                  <Paper withBorder radius="lg" p="xl" shadow="sm">
+                    <Stack gap="sm" align="center">
+                      <Text fw={600} fz="lg" ta="center">
+                        {t('options.profiles.gate.title')}
+                      </Text>
+                      <Text fz="sm" c="dimmed" ta="center">
+                        {t('options.profiles.gate.description')}
+                      </Text>
+                      <Button onClick={() => handleScrollTo('section-provider')}>
+                        {t('options.profiles.gate.cta')}
+                      </Button>
+                    </Stack>
+                  </Paper>
+                )}
+              </Stack>
+            </Box>
+
+            <Box id="section-autofill" ref={autofillSectionRef}>
+              <Stack gap="md">
+                <div>
+                  <Text fw={600} fz="xl">
+                    {t('options.sections.autofill')}
+                  </Text>
+                  <Text fz="sm" c="dimmed">
+                    {t('options.autofill.description')}
+                  </Text>
+                </div>
+                <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
+                  <AdaptersCard
+                    title={t('options.adapters.heading')}
+                    description={t('options.adapters.description')}
+                    items={adapterItems}
+                    onToggle={handleToggleAdapter}
+                  />
+
+                  <AutofillCard
+                    title={t('options.autofill.heading')}
+                    description={t('options.autofill.description')}
+                    value={autoFallback}
+                    skipLabel={t('options.autofill.skip')}
+                    pauseLabel={t('options.autofill.pause')}
+                    onChange={handleAutoFallbackChange}
+                  />
+
+                  <OverlayCard
+                    title={translate('options.overlay.heading')}
+                    description={translate('options.overlay.description')}
+                    toggleLabel={translate('options.overlay.toggle')}
+                    enabledHint={translate('options.overlay.enabled')}
+                    disabledHint={translate('options.overlay.disabled')}
+                    value={highlightOverlay}
+                    onChange={handleHighlightOverlayChange}
+                  />
+                </SimpleGrid>
+              </Stack>
+            </Box>
+
+            <Box id="section-advanced" ref={advancedSectionRef}>
+              <Stack gap="md">
+                <div>
+                  <Text fw={600} fz="xl">
+                    {t('options.sections.advanced')}
+                  </Text>
+                  <Text fz="sm" c="dimmed">
+                    {t('options.advanced.description')}
+                  </Text>
+                </div>
+
+                <MemoryCard
+                  title={t('options.memory.heading')}
+                  description={t('options.memory.description')}
+                  refreshLabel={t('options.memory.refresh')}
+                  clearLabel={t('options.memory.clearAll')}
+                  deleteLabel={t('options.memory.delete')}
+                  emptyLabel={t('options.memory.empty')}
+                  loadingLabel={t('options.memory.loading')}
+                  error={memoryState.error ? t('options.memory.error', [memoryState.error]) : undefined}
+                  items={memoryItems}
+                  loading={memoryState.loading}
+                  onRefresh={() => {
+                    void refreshMemoryItems();
+                  }}
+                  onClearAll={() => {
+                    void handleClearMemory();
+                  }}
+                  onDelete={(key) => {
+                    void handleDeleteMemory(key);
+                  }}
+                  formatEntry={formatMemoryEntry}
                 />
+                <Group gap="sm">
+                  <Button variant="subtle" size="xs" onClick={handleResetOnboarding}>
+                    {t('options.advanced.resetOnboarding')}
+                  </Button>
+                  <Button variant="subtle" size="xs" onClick={handleReplayCelebration}>
+                    {t('options.advanced.replayCelebration')}
+                  </Button>
+                </Group>
+              </Stack>
+            </Box>
+          </Stack>
+        </Flex>
+      </Stack>
 
-                <AutofillCard
-                  title={t('options.autofill.heading')}
-                  description={t('options.autofill.description')}
-                  value={autoFallback}
-                  skipLabel={t('options.autofill.skip')}
-                  pauseLabel={t('options.autofill.pause')}
-                  onChange={handleAutoFallbackChange}
-                />
-
-                <OverlayCard
-                  title={translate('options.overlay.heading')}
-                  description={translate('options.overlay.description')}
-                  toggleLabel={translate('options.overlay.toggle')}
-                  enabledHint={translate('options.overlay.enabled')}
-                  disabledHint={translate('options.overlay.disabled')}
-                  value={highlightOverlay}
-                  onChange={handleHighlightOverlayChange}
-                />
-              </SimpleGrid>
-
-              <MemoryCard
-                title={t('options.memory.heading')}
-                description={t('options.memory.description')}
-                refreshLabel={t('options.memory.refresh')}
-                clearLabel={t('options.memory.clearAll')}
-                deleteLabel={t('options.memory.delete')}
-                emptyLabel={t('options.memory.empty')}
-                loadingLabel={t('options.memory.loading')}
-                error={memoryState.error ? t('options.memory.error', [memoryState.error]) : undefined}
-                items={memoryItems}
-                loading={memoryState.loading}
-                onRefresh={() => {
-                  void refreshMemoryItems();
-                }}
-                onClearAll={() => {
-                  void handleClearMemory();
-                }}
-                onDelete={(key) => {
-                  void handleDeleteMemory(key);
-                }}
-                formatEntry={formatMemoryEntry}
-              />
-            </Stack>
-          </Tabs.Panel>
-        </Tabs>
-
-        <Modal
+      <Modal
           opened={filePromptOpen}
           onClose={closeFilePrompt}
           title={t('options.profileForm.upload.modalTitle')}
@@ -1290,11 +1919,11 @@ export default function App() {
           </Stack>
         </Modal>
 
-        <Modal
-          opened={parseAgainConfirmOpen}
-          onClose={closeParseAgainConfirm}
-          title={translate('options.profileForm.upload.parseAgainConfirmTitle')}
-          centered
+      <Modal
+        opened={parseAgainConfirmOpen}
+        onClose={closeParseAgainConfirm}
+        title={translate('options.profileForm.upload.parseAgainConfirmTitle')}
+        centered
         >
           <Stack gap="md">
             <Text>{translate('options.profileForm.upload.parseAgainConfirmDescription')}</Text>
@@ -1305,10 +1934,9 @@ export default function App() {
               <Button onClick={handleParseAgain} disabled={busy}>
                 {translate('options.profileForm.upload.parseAgainConfirmConfirm')}
               </Button>
-            </Group>
-          </Stack>
-        </Modal>
-      </Stack>
+          </Group>
+        </Stack>
+      </Modal>
 
       {showCopyHelper && (
         <Affix position={{ bottom: 24, right: 24 }}>
@@ -1340,6 +1968,121 @@ export default function App() {
         </Affix>
       )}
     </Container>
+      {celebrationOpen && (
+        <Box
+          className="fillo-celebration"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fillo-celebration-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setCelebrationOpen(false);
+            }
+          }}
+        >
+          <Box className="fillo-celebration__confetti">
+            {confettiPieces.map((piece) => (
+              <Box
+                key={piece.id}
+                className="fillo-confetto"
+                style={
+                  {
+                    left: `${piece.left}%`,
+                    animationDelay: `${piece.delay}s`,
+                    backgroundColor: piece.color,
+                    '--tx': `${piece.tx}px`,
+                  } as CSSProperties & { '--tx': string }
+                }
+              />
+            ))}
+          </Box>
+          <Paper className="fillo-celebration__card" shadow="xl" radius="lg" p="xl">
+            <Stack gap="sm" align="center">
+              <Title id="fillo-celebration-title" order={3}>
+                {t('options.celebration.title')}
+              </Title>
+              <Text fz="sm" c="dimmed">
+                {t('options.celebration.message')}
+              </Text>
+              <Button
+                ref={celebrationButtonRef}
+                onClick={() => {
+                  setCelebrationOpen(false);
+                  handleScrollTo('section-autofill');
+                }}
+              >
+                {t('options.celebration.cta')}
+              </Button>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
+      {tourState && currentTourStep && tourRect && tourPopoverStyle && (
+        <Box
+          className="fillo-tour"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fillo-tour-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleTourClose();
+            }
+          }}
+        >
+          <Box
+            className="fillo-tour__highlight"
+            style={{
+              top: Math.max(8, tourRect.top),
+              left: Math.max(8, tourRect.left),
+              width: Math.max(1, tourRect.width),
+              height: Math.max(1, tourRect.height),
+            }}
+          />
+          <Paper
+            className="fillo-tour__popover"
+            shadow="xl"
+            radius="lg"
+            p="md"
+            style={tourPopoverStyle}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Stack gap="sm">
+              <Stack gap={4}>
+                <Text fz="xs" c="dimmed">
+                  {t('options.tour.progress', [tourStepNumber.toString(), tourStepCount.toString()])}
+                </Text>
+                <Text fw={600} id="fillo-tour-title">
+                  {currentTourStep.title}
+                </Text>
+                <Text fz="sm" c="dimmed">
+                  {currentTourStep.description}
+                </Text>
+              </Stack>
+              <Group gap="xs" justify="space-between" align="center">
+                <Button variant="subtle" size="xs" onClick={handleTourClose}>
+                  {t('options.tour.close')}
+                </Button>
+                <Group gap="xs">
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    onClick={handleTourRetreat}
+                    disabled={tourState.index === 0}
+                  >
+                    {t('options.tour.previous')}
+                  </Button>
+                  <Button size="xs" onClick={handleTourAdvance}>
+                    {tourState.index === tourStepCount - 1
+                      ? t('options.tour.done')
+                      : t('options.tour.next')}
+                  </Button>
+                </Group>
+              </Group>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
+    </>
   );
 }
 

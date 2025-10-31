@@ -6,6 +6,26 @@ options:
   loading: 正在加载设置…
   title: Fillo 设置
   description: Fillo 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
+  progress:
+    count: '$1/$2 已完成'
+    done: '✓ $1'
+  sections:
+    gettingStarted: 入门
+    provider: AI 提供方
+    profiles: 档案
+    autofill: 自动填表
+    advanced: 高级
+  gettingStarted:
+    helper: 按照下方步骤完成 Fillo 的初始设置。
+    tip: '提示：在 manifest 中将 `open_in_tab` 设为 true，可在独立标签页打开设置页面。'
+  checklist:
+    provider:
+      title: 连接 AI 提供方
+      description: 选择 Chrome 本地、OpenAI 或 Gemini。
+    profile:
+      title: 创建首个档案
+      description: 上传简历并使用提供方进行解析。
+    openSection: 打开区块
   provider:
     heading: 服务提供方
     onDevice: Chrome 本地模型（Prompt API）
@@ -16,6 +36,7 @@ options:
     apiKey: API 密钥
     model: 模型
     apiBaseUrl: API 基础地址
+    helper: 选择 Fillo 用来解析简历并驱动自动填表的模型。
   adapters:
     heading: 字段匹配适配器
     description: 选择 Fillo 需要启用的字段标签适配器。所有匹配均在本地完成。
@@ -29,6 +50,8 @@ options:
   actions:
     save: 保存设置
     saving: 正在保存…
+    importResume: 导入简历
+    startTour: 快速导览
   feedback:
     saved: 设置已保存。
   autofill:
@@ -53,6 +76,45 @@ options:
     error: 无法加载字段记忆（$1）
     preferredSlot: '首选槽位：$1'
     lastValue: '上次填入：$1'
+
+  profiles:
+    gate:
+      title: 请先连接 AI 提供方
+      description: 完成配置后即可管理档案。
+      cta: 前往提供方设置
+
+  advanced:
+    description: 导出设置、管理记忆并重复体验引导流程。
+    resetOnboarding: 重置引导状态
+    replayCelebration: 重新播放完成提示
+    resetOnboardingSuccess: 已清除引导进度，保存一个档案即可再次触发。
+    resetOnboardingError: 无法重置引导状态。
+
+  celebration:
+    title: '全部完成！🎉'
+    message: 你已连接提供方并保存了首个档案。
+    cta: 开始自动填表
+
+  tour:
+    import:
+      title: 导入简历
+      description: 新建空白档案或上传简历，从这里开始。
+    provider:
+      title: 选择 AI 提供方
+      description: 配置本地模型、OpenAI 或 Gemini。
+    profiles:
+      title: 管理档案
+      description: 上传、解析并核对结构化简历数据。
+    autofill:
+      title: 调整自动填表
+      description: 设置适配器、填表策略和高亮效果。
+    unavailable: 暂时无法启动导览，没有可高亮的元素。
+    failed: 导览启动失败。
+    next: 下一步
+    previous: 上一步
+    done: 完成
+    close: 结束导览
+    progress: '第 $1/$2 步'
 
   profileForm:
     heading: 简历详情
