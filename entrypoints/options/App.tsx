@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Affix,
   Alert,
@@ -41,6 +41,7 @@ import {
   OPENAI_DEFAULT_BASE_URL,
   GEMINI_DEFAULT_MODEL,
 } from '../../shared/storage/settings';
+import { getActiveProfileId, setActiveProfileId } from '../../shared/storage/activeProfile';
 import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.llm.json';
 import { validateResume } from '../../shared/validate';
@@ -157,6 +158,7 @@ export default function App() {
     loading: true,
   });
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const selectedProfileIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<StatusState>({ phase: 'idle', message: '' });
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -173,6 +175,10 @@ export default function App() {
     gemini: t('options.provider.gemini'),
   };
 
+  useEffect(() => {
+    selectedProfileIdRef.current = selectedProfileId;
+  }, [selectedProfileId]);
+
   const refreshProfiles = useCallback(
     async (preferredId?: string) => {
       setProfilesState((state) => ({ ...state, loading: true, error: undefined }));
@@ -180,15 +186,27 @@ export default function App() {
         const list = await listProfiles();
         setProfiles(list);
         setProfilesState({ loading: false });
-        setSelectedProfileId((current) => {
-          if (preferredId && list.some((profile) => profile.id === preferredId)) {
-            return preferredId;
+        const storedActiveId = await getActiveProfileId();
+        const availableIds = new Set(list.map((profile) => profile.id));
+        const currentSelected = selectedProfileIdRef.current;
+        let nextSelected: string | null = null;
+        if (preferredId && availableIds.has(preferredId)) {
+          nextSelected = preferredId;
+        } else if (storedActiveId && availableIds.has(storedActiveId)) {
+          nextSelected = storedActiveId;
+        } else if (currentSelected && availableIds.has(currentSelected)) {
+          nextSelected = currentSelected;
+        } else {
+          nextSelected = list.length > 0 ? list[0].id : null;
+        }
+        setSelectedProfileId(nextSelected);
+        if (nextSelected !== storedActiveId) {
+          try {
+            await setActiveProfileId(nextSelected);
+          } catch (error) {
+            console.warn('Unable to persist active profile', error);
           }
-          if (current && list.some((profile) => profile.id === current)) {
-            return current;
-          }
-          return list.length > 0 ? list[0].id : null;
-        });
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setProfilesState({ loading: false, error: message });
@@ -895,6 +913,9 @@ export default function App() {
 
   const handleSelectProfile = (id: string) => {
     setSelectedProfileId(id);
+    void setActiveProfileId(id).catch((error) => {
+      console.warn('Unable to set active profile', error);
+    });
   };
 
   const handleDeleteProfile = async (id: string) => {
@@ -913,6 +934,11 @@ export default function App() {
       resume: {},
     };
     await saveProfile(profile);
+    try {
+      await setActiveProfileId(id);
+    } catch (error) {
+      console.warn('Unable to set active profile after creation', error);
+    }
     setStatus({ phase: 'complete', message: t('options.profileForm.status.profileCreated') });
     setErrorDetails(null);
     await refreshProfiles(id);

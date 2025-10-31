@@ -6,7 +6,6 @@ import {
   Button,
   Container,
   Group,
-  Loader,
   ScrollArea,
   Select,
   Stack,
@@ -17,14 +16,10 @@ import { Eye, EyeOff, FolderOpen, PanelRightOpen } from 'lucide-react';
 import { listProfiles } from '../../shared/storage/profiles';
 import type { ProfileRecord } from '../../shared/types';
 
-interface ViewState {
-  loading: boolean;
-  error?: string;
-}
-
 export default function App() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
-  const [viewState, setViewState] = useState<ViewState>({ loading: true });
+  const [hasLoadedProfiles, setHasLoadedProfiles] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [profileUpdating, setProfileUpdating] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(false);
@@ -79,14 +74,15 @@ export default function App() {
   );
 
   const refresh = useCallback(async () => {
-    setViewState({ loading: true });
     try {
       const result = await listProfiles();
       setProfiles(result);
-      setViewState({ loading: false });
+      setViewError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setViewState({ loading: false, error: message });
+      setViewError(message);
+    } finally {
+      setHasLoadedProfiles(true);
     }
   }, []);
 
@@ -205,7 +201,7 @@ export default function App() {
         padding: 16,
       }}
     >
-      <ScrollArea.Autosize mah={580} type="auto">
+      <ScrollArea type="auto" style={{ maxHeight: 580 }}>
         <Container size="sm" px={0}>
           <Stack gap="lg">
             <Stack gap={4}>
@@ -215,7 +211,7 @@ export default function App() {
                 variant={overlayEnabled ? 'filled' : 'light'}
                 color={overlayEnabled ? 'brand' : 'gray'}
                 onClick={() => void handleOverlayToggle(!overlayEnabled)}
-                disabled={!overlayAvailable || viewState.loading}
+                disabled={!overlayAvailable}
                 loading={overlayLoading}
                 aria-pressed={overlayEnabled}
                 aria-label={tLoose('popup.overlay.toggleLabel')}
@@ -229,13 +225,13 @@ export default function App() {
               </Text>
             </Stack>
 
-            {viewState.error && (
+            {viewError && (
               <Alert color="red" variant="light">
-                {t('popup.error', [viewState.error])}
+                {t('popup.error', [viewError])}
               </Alert>
             )}
 
-            {!viewState.loading && profiles.length === 0 && (
+            {hasLoadedProfiles && profiles.length === 0 && (
               <Alert color="gray" variant="light">
                 {t('popup.empty')}
               </Alert>
@@ -263,15 +259,6 @@ export default function App() {
                 }
                 size="sm"
               />
-
-              {viewState.loading && (
-                <Stack align="center" py="md">
-                  <Loader size="sm" color="brand" />
-                  <Text fz="sm" c="dimmed">
-                    {t('popup.loading')}
-                  </Text>
-                </Stack>
-              )}
             </Stack>
 
             <Group justify="flex-end" gap="sm">
@@ -300,7 +287,7 @@ export default function App() {
             </Group>
           </Stack>
         </Container>
-      </ScrollArea.Autosize>
+      </ScrollArea>
     </Box>
   );
 }
