@@ -25,6 +25,11 @@ import {
 } from '../shared/llm/errors';
 import { getSettings } from '../shared/storage/settings';
 import { getProfile } from '../shared/storage/profiles';
+import {
+  ACTIVE_PROFILE_STORAGE_KEY,
+  getActiveProfileId as getStoredActiveProfileId,
+  setActiveProfileId as setStoredActiveProfileId,
+} from '../shared/storage/activeProfile';
 
 type BrowserApi = typeof browser;
 type RuntimePort = ReturnType<BrowserApi['runtime']['connect']>;
@@ -79,7 +84,6 @@ const pendingFills = new Map<string, PendingFill>();
 const popupOverlayTabs = new Set<number>();
 const pendingPromptAi = new Map<string, AbortController>();
 const overlayAdapterIds = getAllAdapterIds();
-const ACTIVE_PROFILE_STORAGE_KEY = 'popupActiveProfileId';
 let activeProfileId: string | null = null;
 
 async function openSidePanelForTab(tabId: number): Promise<void> {
@@ -948,9 +952,7 @@ function clearOverlayForTab(tabId: number): void {
 
 async function loadActiveProfilePreference(): Promise<void> {
   try {
-    const stored = await browser.storage.local.get(ACTIVE_PROFILE_STORAGE_KEY);
-    const raw = stored[ACTIVE_PROFILE_STORAGE_KEY];
-    activeProfileId = typeof raw === 'string' && raw.trim().length > 0 ? raw : null;
+    activeProfileId = await getStoredActiveProfileId();
   } catch (error) {
     console.warn('Unable to load active profile preference.', error);
     activeProfileId = null;
@@ -962,11 +964,7 @@ async function setActiveProfilePreference(profileId: string | null): Promise<voi
   if (next === activeProfileId) {
     return;
   }
-  if (next) {
-    await browser.storage.local.set({ [ACTIVE_PROFILE_STORAGE_KEY]: next });
-  } else {
-    await browser.storage.local.remove(ACTIVE_PROFILE_STORAGE_KEY);
-  }
+  await setStoredActiveProfileId(next);
   activeProfileId = next;
   for (const tabId of popupOverlayTabs) {
     clearOverlayForTab(tabId);
