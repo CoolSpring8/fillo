@@ -55,7 +55,7 @@ export function ProfilesCard({
         </Button>
       </Group>
 
-      {isLoading && (
+      {isLoading && profiles.length === 0 && (
         <Alert mt="md" variant="light" color="brand">
           {loadingLabel}
         </Alert>
