@@ -42,7 +42,7 @@ import {
   GEMINI_DEFAULT_MODEL,
 } from '../../shared/storage/settings';
 import { listAvailableAdapters } from '../../shared/apply/adapters';
-import resumeSchema from '../../shared/schema/jsonresume-v1.json';
+import resumeSchema from '../../shared/schema/jsonresume-v1.llm.json';
 import { validateResume } from '../../shared/validate';
 import type {
   AppSettings,
