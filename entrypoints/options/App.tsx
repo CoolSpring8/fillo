@@ -1729,7 +1729,7 @@ export default function App() {
             <Box id="section-profiles" ref={profilesSectionRef}>
               <Stack gap="md">
                 {providerConfigured ? (
-                  <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="xl">
+                  <Stack gap="xl">
                     <ProfilesCard
                       title={t('onboarding.manage.heading')}
                       countLabel={t('onboarding.manage.count', [profileCountLabel])}
@@ -1787,7 +1787,7 @@ export default function App() {
                         </Alert>
                       )}
                     </Stack>
-                  </SimpleGrid>
+                  </Stack>
                 ) : (
                   <Paper withBorder radius="lg" p="xl" shadow="sm">
                     <Stack gap="sm" align="center">
