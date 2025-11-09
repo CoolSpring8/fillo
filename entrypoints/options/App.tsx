@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import {
   Affix,
   Alert,
-  Badge,
   Box,
   Button,
   Container,
@@ -113,14 +112,6 @@ interface ConfettiPiece {
   tx: number;
   delay: number;
   color: string;
-}
-
-interface TourStep {
-  element: HTMLElement;
-  title: string;
-  description: string;
-  side: 'top' | 'bottom' | 'left' | 'right';
-  align: 'start' | 'center' | 'end';
 }
 
 type TocNavLink = {
@@ -238,11 +229,7 @@ export default function App() {
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationVersion, setCelebrationVersion] = useState(0);
   const celebrationButtonRef = useRef<HTMLButtonElement | null>(null);
-  const importButtonRef = useRef<HTMLButtonElement | null>(null);
   const statusNotificationId = useRef<string | null>(null);
-  const skipNextCelebrationRef = useRef(false);
-  const [tourState, setTourState] = useState<{ steps: TourStep[]; index: number } | null>(null);
-  const [tourRect, setTourRect] = useState<DOMRect | null>(null);
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
   const setupSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1048,30 +1035,6 @@ export default function App() {
     await refreshProfiles(id);
   };
 
-  const handleResetOnboarding = useCallback(async () => {
-    try {
-      await browser.storage.local.set({ 'onboarding:completed': false });
-      setCelebrationOpen(false);
-      setOnboardingCompleted(false);
-      skipNextCelebrationRef.current = true;
-      notifications.show({
-        color: 'brand',
-        message: t('options.advanced.resetOnboardingSuccess'),
-      });
-    } catch (error) {
-      notifications.show({
-        color: 'red',
-        message: t('options.advanced.resetOnboardingError'),
-      });
-      console.error('Unable to reset onboarding flag', error);
-    }
-  }, [t]);
-
-  const handleReplayCelebration = useCallback(() => {
-    setCelebrationVersion((value) => value + 1);
-    setCelebrationOpen(true);
-  }, []);
-
   const canUseOnDevice = availability !== 'unavailable';
   const onDeviceSupport = useMemo(() => {
     if (availability === 'unavailable') {
@@ -1188,13 +1151,6 @@ export default function App() {
 
   const profileCountLabel = profiles.length.toLocaleString();
   const hasProfiles = profiles.length > 0;
-  const totalSteps = 2;
-  const completedSteps = (providerConfigured ? 1 : 0) + (hasProfiles ? 1 : 0);
-  const progressCountLabel = t('options.progress.count', [`${completedSteps}`, `${totalSteps}`]);
-  const progressBadgeLabel =
-    completedSteps === totalSteps ? t('options.progress.done', [progressCountLabel]) : progressCountLabel;
-  const progressColor = completedSteps === totalSteps ? 'teal' : completedSteps > 0 ? 'brand' : 'gray';
-
   const setupChecklist = useMemo(
     () => [
       {
@@ -1274,10 +1230,6 @@ export default function App() {
       return;
     }
     if (!onboardingCompleted) {
-      if (skipNextCelebrationRef.current) {
-        skipNextCelebrationRef.current = false;
-        return;
-      }
       setCelebrationVersion((value) => value + 1);
       setCelebrationOpen(true);
       setOnboardingCompleted(true);
@@ -1304,52 +1256,12 @@ export default function App() {
   }, [celebrationOpen]);
 
   useEffect(() => {
-    if (!tourState) {
-      setTourRect(null);
-      return;
-    }
-    const step = tourState.steps[tourState.index];
-    if (!step) {
-      setTourState(null);
-      setTourRect(null);
-      return;
-    }
-    const updateRect = () => {
-      const rect = step.element.getBoundingClientRect();
-      setTourRect(rect);
-    };
-    updateRect();
-    const handleResize = () => updateRect();
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleResize, true);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleResize, true);
-    };
-  }, [tourState]);
-
-  useEffect(() => {
     return () => {
       if (highlightTimeoutRef.current) {
         window.clearTimeout(highlightTimeoutRef.current);
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!tourState) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setTourState(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [tourState]);
 
   const triggerSectionHighlight = useCallback((id: string) => {
     setHighlightedSection(id);
@@ -1449,149 +1361,6 @@ export default function App() {
     statusNotificationId.current = baseId;
   }, [status, errorDetails]);
 
-  const handleStartTour = useCallback(() => {
-    const steps: TourStep[] = [];
-    if (importButtonRef.current) {
-      steps.push({
-        element: importButtonRef.current,
-        title: t('options.tour.import.title'),
-        description: t('options.tour.import.description'),
-        side: 'bottom',
-        align: 'center',
-      });
-    }
-    if (providerSectionRef.current) {
-      steps.push({
-        element: providerSectionRef.current,
-        title: t('options.tour.provider.title'),
-        description: t('options.tour.provider.description'),
-        side: 'right',
-        align: 'start',
-      });
-    }
-    if (profilesSectionRef.current) {
-      steps.push({
-        element: profilesSectionRef.current,
-        title: t('options.tour.profiles.title'),
-        description: t('options.tour.profiles.description'),
-        side: 'right',
-        align: 'center',
-      });
-    }
-    if (autofillSectionRef.current) {
-      steps.push({
-        element: autofillSectionRef.current,
-        title: t('options.tour.autofill.title'),
-        description: t('options.tour.autofill.description'),
-        side: 'right',
-        align: 'start',
-      });
-    }
-
-    if (steps.length === 0) {
-      notifications.show({
-        color: 'yellow',
-        message: t('options.tour.unavailable'),
-      });
-      return;
-    }
-
-    steps[0].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTourState({ steps, index: 0 });
-  }, [t]);
-
-  const handleTourAdvance = useCallback(() => {
-    setTourState((state) => {
-      if (!state) {
-        return state;
-      }
-      const nextIndex = state.index + 1;
-      if (nextIndex >= state.steps.length) {
-        return null;
-      }
-      state.steps[nextIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return { steps: state.steps, index: nextIndex };
-    });
-  }, []);
-
-  const handleTourRetreat = useCallback(() => {
-    setTourState((state) => {
-      if (!state) {
-        return state;
-      }
-      const prevIndex = Math.max(0, state.index - 1);
-      if (prevIndex === state.index) {
-        return state;
-      }
-      state.steps[prevIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return { steps: state.steps, index: prevIndex };
-    });
-  }, []);
-
-  const handleTourClose = useCallback(() => {
-    setTourState(null);
-  }, []);
-
-  const currentTourStep = tourState ? tourState.steps[tourState.index] ?? null : null;
-  const tourStepCount = tourState ? tourState.steps.length : 0;
-  const tourStepNumber = tourState ? tourState.index + 1 : 0;
-
-  const tourPopoverStyle = useMemo(() => {
-    if (!tourRect || !currentTourStep) {
-      return undefined;
-    }
-    const gap = 16;
-    const transforms: string[] = [];
-    const style: CSSProperties = {
-      position: 'fixed',
-      pointerEvents: 'auto',
-    };
-    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
-    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-
-    if (currentTourStep.side === 'bottom') {
-      style.top = Math.min(viewportHeight - gap, tourRect.bottom + gap);
-    } else if (currentTourStep.side === 'top') {
-      style.top = Math.max(gap, tourRect.top - gap);
-      transforms.push('translateY(-100%)');
-    } else {
-      style.top = Math.max(gap, Math.min(tourRect.top, viewportHeight - gap));
-    }
-
-    if (currentTourStep.side === 'right') {
-      style.left = Math.min(viewportWidth - gap, tourRect.right + gap);
-    } else if (currentTourStep.side === 'left') {
-      style.left = Math.max(gap, tourRect.left - gap);
-      transforms.push('translateX(-100%)');
-    } else {
-      style.left = Math.max(gap, Math.min(tourRect.left, viewportWidth - gap));
-    }
-
-    if (currentTourStep.side === 'top' || currentTourStep.side === 'bottom') {
-      if (currentTourStep.align === 'center') {
-        style.left = tourRect.left + tourRect.width / 2;
-        transforms.push('translateX(-50%)');
-      } else if (currentTourStep.align === 'end') {
-        style.left = tourRect.right;
-        transforms.push('translateX(-100%)');
-      }
-    } else {
-      if (currentTourStep.align === 'center') {
-        style.top = tourRect.top + tourRect.height / 2;
-        transforms.push('translateY(-50%)');
-      } else if (currentTourStep.align === 'end') {
-        style.top = tourRect.bottom;
-        transforms.push('translateY(-100%)');
-      }
-    }
-
-    if (transforms.length > 0) {
-      style.transform = transforms.join(' ');
-    }
-
-    return style;
-  }, [tourRect, currentTourStep]);
-
   const profilesData: ProfilesCardProfile[] = profiles.map((profile) => ({
     id: profile.id,
     name: resolveProfileName(profile),
@@ -1666,21 +1435,6 @@ export default function App() {
           text-align: center;
           animation: fillo-celebration-pop 0.18s ease-out;
         }
-        .fillo-tour {
-          position: fixed;
-          inset: 0;
-          z-index: 2100;
-        }
-        .fillo-tour__highlight {
-          position: fixed;
-          border-radius: 12px;
-          box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-          pointer-events: none;
-          transition: all 140ms ease;
-        }
-        .fillo-tour__popover {
-          max-width: min(360px, calc(100vw - 32px));
-        }
         .fillo-options__toc {
           position: relative;
           border: 1px solid var(--mantine-color-gray-3);
@@ -1743,25 +1497,6 @@ export default function App() {
               <Text c="dimmed">{t('options.description')}</Text>
             </Stack>
 
-            <Group gap="sm" align="center">
-              <Badge variant="light" color={progressColor} radius="xl">
-                {progressBadgeLabel}
-              </Badge>
-              <Button
-                variant="default"
-                onClick={handleStartTour}
-              >
-                {t('options.actions.startTour')}
-              </Button>
-              <Button
-                ref={importButtonRef}
-                variant="filled"
-                onClick={handleCreateProfile}
-                disabled={!providerConfigured || busy}
-              >
-                {t('options.actions.importResume')}
-              </Button>
-            </Group>
           </Group>
 
           <Flex gap="xl" align="flex-start" direction={{ base: 'column', md: 'row' }}>
@@ -2066,14 +1801,6 @@ export default function App() {
                   }}
                   formatEntry={formatMemoryEntry}
                 />
-                <Group gap="sm">
-                  <Button variant="subtle" size="xs" onClick={handleResetOnboarding}>
-                    {t('options.advanced.resetOnboarding')}
-                  </Button>
-                  <Button variant="subtle" size="xs" onClick={handleReplayCelebration}>
-                    {t('options.advanced.replayCelebration')}
-                  </Button>
-                </Group>
               </Stack>
             </Box>
           </Stack>
@@ -2200,71 +1927,6 @@ export default function App() {
               >
                 {t('options.celebration.cta')}
               </Button>
-            </Stack>
-          </Paper>
-        </Box>
-      )}
-      {tourState && currentTourStep && tourRect && tourPopoverStyle && (
-        <Box
-          className="fillo-tour"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="fillo-tour-title"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              handleTourClose();
-            }
-          }}
-        >
-          <Box
-            className="fillo-tour__highlight"
-            style={{
-              top: Math.max(8, tourRect.top),
-              left: Math.max(8, tourRect.left),
-              width: Math.max(1, tourRect.width),
-              height: Math.max(1, tourRect.height),
-            }}
-          />
-          <Paper
-            className="fillo-tour__popover"
-            shadow="xl"
-            radius="lg"
-            p="md"
-            style={tourPopoverStyle}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Stack gap="sm">
-              <Stack gap={4}>
-                <Text fz="xs" c="dimmed">
-                  {t('options.tour.progress', [tourStepNumber.toString(), tourStepCount.toString()])}
-                </Text>
-                <Text fw={600} id="fillo-tour-title">
-                  {currentTourStep.title}
-                </Text>
-                <Text fz="sm" c="dimmed">
-                  {currentTourStep.description}
-                </Text>
-              </Stack>
-              <Group gap="xs" justify="space-between" align="center">
-                <Button variant="subtle" size="xs" onClick={handleTourClose}>
-                  {t('options.tour.close')}
-                </Button>
-                <Group gap="xs">
-                  <Button
-                    variant="subtle"
-                    size="xs"
-                    onClick={handleTourRetreat}
-                    disabled={tourState.index === 0}
-                  >
-                    {t('options.tour.previous')}
-                  </Button>
-                  <Button size="xs" onClick={handleTourAdvance}>
-                    {tourState.index === tourStepCount - 1
-                      ? t('options.tour.done')
-                      : t('options.tour.next')}
-                  </Button>
-                </Group>
-              </Group>
             </Stack>
           </Paper>
         </Box>

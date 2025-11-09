@@ -6,9 +6,6 @@ options:
   loading: Loading settings…
   title: Fillo Settings
   description: Fillo keeps your experience ready to go wherever you apply. Manage your data and adapters here.
-  progress:
-    count: '$1/$2 complete'
-    done: '✓ $1'
   sections:
     gettingStarted: Getting started
     provider: AI provider
@@ -53,8 +50,6 @@ options:
   actions:
     save: Save settings
     saving: Saving…
-    importResume: Import resume
-    startTour: Take a tour
   feedback:
     saved: Settings saved.
   autofill:
@@ -87,37 +82,12 @@ options:
       cta: Configure provider
 
   advanced:
-    description: Export settings, manage memory, and replay onboarding helpers.
-    resetOnboarding: Reset onboarding
-    replayCelebration: Replay celebration
-    resetOnboardingSuccess: Onboarding progress cleared. Save a profile to celebrate again.
-    resetOnboardingError: Unable to reset onboarding state.
+    description: Review and manage saved field memory.
 
   celebration:
     title: 'All set! 🎉'
     message: "You've connected a provider and saved a profile."
     cta: Start autofilling
-
-  tour:
-    import:
-      title: Import resume
-      description: Add a blank profile or upload your resume to get started.
-    provider:
-      title: Choose an AI provider
-      description: Configure on-device, OpenAI, or Gemini models.
-    profiles:
-      title: Manage profiles
-      description: Upload, parse, and review resume data in one place.
-    autofill:
-      title: Tune autofill
-      description: Adjust adapters, behavior, and highlight overlays.
-    unavailable: 'Tour unavailable: nothing to highlight right now.'
-    failed: Could not launch the tour.
-    next: Next
-    previous: Back
-    done: Finish
-    close: Close tour
-    progress: 'Step $1 of $2'
 
   profileForm:
     heading: Profile details

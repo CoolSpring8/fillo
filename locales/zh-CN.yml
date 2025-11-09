@@ -6,9 +6,6 @@ options:
   loading: 正在加载设置…
   title: Fillo 设置
   description: Fillo 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
-  progress:
-    count: '$1/$2 已完成'
-    done: '✓ $1'
   sections:
     gettingStarted: 入门
     provider: AI 提供方
@@ -53,8 +50,6 @@ options:
   actions:
     save: 保存设置
     saving: 正在保存…
-    importResume: 导入简历
-    startTour: 快速导览
   feedback:
     saved: 设置已保存。
   autofill:
@@ -87,37 +82,12 @@ options:
       cta: 前往提供方设置
 
   advanced:
-    description: 导出设置、管理记忆并重复体验引导流程。
-    resetOnboarding: 重置引导状态
-    replayCelebration: 重新播放完成提示
-    resetOnboardingSuccess: 已清除引导进度，保存一个档案即可再次触发。
-    resetOnboardingError: 无法重置引导状态。
+    description: 在此管理字段记忆等高级设置。
 
   celebration:
     title: '全部完成！🎉'
     message: 你已连接提供方并保存了首个档案。
     cta: 开始自动填表
-
-  tour:
-    import:
-      title: 导入简历
-      description: 新建空白档案或上传简历，从这里开始。
-    provider:
-      title: 选择 AI 提供方
-      description: 配置本地模型、OpenAI 或 Gemini。
-    profiles:
-      title: 管理档案
-      description: 上传、解析并核对结构化简历数据。
-    autofill:
-      title: 调整自动填表
-      description: 设置适配器、填表策略和高亮效果。
-    unavailable: 暂时无法启动导览，没有可高亮的元素。
-    failed: 导览启动失败。
-    next: 下一步
-    previous: 上一步
-    done: 完成
-    close: 结束导览
-    progress: '第 $1/$2 步'
 
   profileForm:
     heading: 简历详情
