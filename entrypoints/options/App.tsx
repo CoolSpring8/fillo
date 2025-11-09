@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
   Affix,
   Alert,
@@ -50,7 +50,17 @@ import { getActiveProfileId, setActiveProfileId } from '../../shared/storage/act
 import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.llm.json';
 import { validateResume } from '../../shared/validate';
-import { CheckCircle2, Circle } from 'lucide-react';
+import {
+  CheckCircle2,
+  Circle,
+  Compass,
+  Cpu,
+  IdCard,
+  SlidersHorizontal,
+  Sparkles,
+  WandSparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import type {
   AppSettings,
@@ -111,6 +121,41 @@ interface TourStep {
   description: string;
   side: 'top' | 'bottom' | 'left' | 'right';
   align: 'start' | 'center' | 'end';
+}
+
+type TocNavLink = {
+  id: string;
+  label: string;
+  ref: RefObject<HTMLDivElement | null>;
+  icon: LucideIcon;
+  color: string;
+};
+
+interface SectionHeadingProps {
+  icon: LucideIcon;
+  color: string;
+  title: string;
+  description?: string;
+}
+
+function SectionHeading({ icon: Icon, color, title, description }: SectionHeadingProps) {
+  return (
+    <Stack gap={4}>
+      <Group gap="xs" align="center">
+        <ThemeIcon size={36} radius="xl" variant="light" color={color}>
+          <Icon size={18} strokeWidth={2} />
+        </ThemeIcon>
+        <Text fw={600} fz="xl">
+          {title}
+        </Text>
+      </Group>
+      {description ? (
+        <Text fz="sm" c="dimmed">
+          {description}
+        </Text>
+      ) : null}
+    </Stack>
+  );
 }
 
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
@@ -1168,13 +1213,43 @@ export default function App() {
     [providerConfigured, hasProfiles, t],
   );
 
-  const navLinks = useMemo(
+  const navLinks = useMemo<TocNavLink[]>(
     () => [
-      { id: 'section-getting-started', label: t('options.sections.gettingStarted'), ref: setupSectionRef },
-      { id: 'section-provider', label: t('options.sections.provider'), ref: providerSectionRef },
-      { id: 'section-profiles', label: t('options.sections.profiles'), ref: profilesSectionRef },
-      { id: 'section-autofill', label: t('options.sections.autofill'), ref: autofillSectionRef },
-      { id: 'section-advanced', label: t('options.sections.advanced'), ref: advancedSectionRef },
+      {
+        id: 'section-getting-started',
+        label: t('options.sections.gettingStarted'),
+        ref: setupSectionRef,
+        icon: Sparkles,
+        color: 'orange',
+      },
+      {
+        id: 'section-provider',
+        label: t('options.sections.provider'),
+        ref: providerSectionRef,
+        icon: Cpu,
+        color: 'brand',
+      },
+      {
+        id: 'section-profiles',
+        label: t('options.sections.profiles'),
+        ref: profilesSectionRef,
+        icon: IdCard,
+        color: 'indigo',
+      },
+      {
+        id: 'section-autofill',
+        label: t('options.sections.autofill'),
+        ref: autofillSectionRef,
+        icon: WandSparkles,
+        color: 'teal',
+      },
+      {
+        id: 'section-advanced',
+        label: t('options.sections.advanced'),
+        ref: advancedSectionRef,
+        icon: SlidersHorizontal,
+        color: 'gray',
+      },
     ],
     [t],
   );
@@ -1575,6 +1650,24 @@ export default function App() {
         .fillo-tour__popover {
           max-width: min(360px, calc(100vw - 32px));
         }
+        .fillo-options__toc {
+          position: relative;
+          border: 1px solid var(--mantine-color-gray-3);
+          background-color: var(--mantine-color-body);
+        }
+        .fillo-options__toc-content {
+          position: relative;
+          z-index: 1;
+        }
+        .fillo-options__toc-link {
+          border-radius: 12px;
+          padding-block: 8px;
+          transition: background-color 120ms ease, transform 120ms ease;
+        }
+        .fillo-options__toc-link:hover {
+          background-color: var(--mantine-color-gray-0);
+          transform: translateX(2px);
+        }
         @keyframes fillo-celebration-pop {
           from {
             transform: scale(0.96);
@@ -1629,18 +1722,41 @@ export default function App() {
             p="md"
             w={{ base: '100%', md: 260 }}
             style={{ position: 'sticky', top: rem(32) }}
+            className="fillo-options__toc"
           >
-            <Stack gap="xs">
-              {navLinks.map((link) => (
-                <NavLink
-                  key={link.id}
-                  label={link.label}
-                  component="button"
-                  type="button"
-                  onClick={() => handleScrollTo(link.id)}
-                  style={{ textAlign: 'left' }}
-                />
-              ))}
+            <Stack gap="md" className="fillo-options__toc-content">
+              <Stack gap={4}>
+                <Group gap="xs" align="center">
+                  <ThemeIcon size={32} radius="xl" variant="light" color="brand">
+                    <Compass size={18} strokeWidth={2} />
+                  </ThemeIcon>
+                  <Text fw={600}>{t('options.toc.title')}</Text>
+                </Group>
+                <Text fz="xs" c="dimmed">
+                  {t('options.toc.helper')}
+                </Text>
+              </Stack>
+              <Stack gap="xs">
+                {navLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <NavLink
+                      key={link.id}
+                      label={link.label}
+                      component="button"
+                      type="button"
+                      onClick={() => handleScrollTo(link.id)}
+                      style={{ textAlign: 'left' }}
+                      className="fillo-options__toc-link"
+                      leftSection={
+                        <ThemeIcon size={30} radius="lg" variant="light" color={link.color}>
+                          <Icon size={16} strokeWidth={2} />
+                        </ThemeIcon>
+                      }
+                    />
+                  );
+                })}
+              </Stack>
             </Stack>
           </Paper>
 
@@ -1648,14 +1764,12 @@ export default function App() {
             <Box id="section-getting-started" ref={setupSectionRef}>
               <Paper withBorder radius="lg" p="lg" shadow="sm">
                 <Stack gap="md">
-                  <div>
-                    <Text fw={600} fz="xl">
-                      {t('options.sections.gettingStarted')}
-                    </Text>
-                    <Text fz="sm" c="dimmed">
-                      {t('options.gettingStarted.helper')}
-                    </Text>
-                  </div>
+                  <SectionHeading
+                    icon={Sparkles}
+                    color="orange"
+                    title={t('options.sections.gettingStarted')}
+                    description={t('options.gettingStarted.helper')}
+                  />
                   <Stack gap="md">
                     {setupChecklist.map((item) => (
                       <Group key={item.id} align="flex-start" gap="sm">
@@ -1694,6 +1808,8 @@ export default function App() {
               <ProviderCard
                 title={t('options.sections.provider')}
                 helper={t('options.provider.helper')}
+                headingIcon={Cpu}
+                headingIconColor="brand"
                 providerLabels={providerLabels}
                 selectedProvider={selectedProvider}
                 canUseOnDevice={canUseOnDevice}
@@ -1738,6 +1854,8 @@ export default function App() {
                       emptyLabel={t('onboarding.manage.empty')}
                       deleteLabel={t('onboarding.manage.delete')}
                       errorLabel={profilesErrorLabel}
+                      headingIcon={IdCard}
+                      headingIconColor="indigo"
                       profiles={profilesData}
                       isLoading={profilesState.loading}
                       busy={busy}
@@ -1791,6 +1909,9 @@ export default function App() {
                 ) : (
                   <Paper withBorder radius="lg" p="xl" shadow="sm">
                     <Stack gap="sm" align="center">
+                      <ThemeIcon size={48} radius="xl" variant="light" color="indigo">
+                        <IdCard size={22} strokeWidth={2} />
+                      </ThemeIcon>
                       <Text fw={600} fz="lg" ta="center">
                         {t('options.profiles.gate.title')}
                       </Text>
@@ -1808,14 +1929,12 @@ export default function App() {
 
             <Box id="section-autofill" ref={autofillSectionRef}>
               <Stack gap="md">
-                <div>
-                  <Text fw={600} fz="xl">
-                    {t('options.sections.autofill')}
-                  </Text>
-                  <Text fz="sm" c="dimmed">
-                    {t('options.autofill.description')}
-                  </Text>
-                </div>
+                <SectionHeading
+                  icon={WandSparkles}
+                  color="teal"
+                  title={t('options.sections.autofill')}
+                  description={t('options.autofill.description')}
+                />
                 <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
                   <AdaptersCard
                     title={t('options.adapters.heading')}
@@ -1848,14 +1967,12 @@ export default function App() {
 
             <Box id="section-advanced" ref={advancedSectionRef}>
               <Stack gap="md">
-                <div>
-                  <Text fw={600} fz="xl">
-                    {t('options.sections.advanced')}
-                  </Text>
-                  <Text fz="sm" c="dimmed">
-                    {t('options.advanced.description')}
-                  </Text>
-                </div>
+                <SectionHeading
+                  icon={SlidersHorizontal}
+                  color="gray"
+                  title={t('options.sections.advanced')}
+                  description={t('options.advanced.description')}
+                />
 
                 <MemoryCard
                   title={t('options.memory.heading')}

@@ -15,6 +15,9 @@ options:
     profiles: 档案
     autofill: 自动填表
     advanced: 高级
+  toc:
+    title: 快速导航
+    helper: 点击任意项目即可跳到对应的设置区块。
   gettingStarted:
     helper: 按照下方步骤完成 Fillo 的初始设置。
     tip: '提示：在 manifest 中将 `open_in_tab` 设为 true，可在独立标签页打开设置页面。'
