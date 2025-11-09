@@ -243,6 +243,8 @@ export default function App() {
   const skipNextCelebrationRef = useRef(false);
   const [tourState, setTourState] = useState<{ steps: TourStep[]; index: number } | null>(null);
   const [tourRect, setTourRect] = useState<DOMRect | null>(null);
+  const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
   const setupSectionRef = useRef<HTMLDivElement | null>(null);
   const providerSectionRef = useRef<HTMLDivElement | null>(null);
   const profilesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1327,6 +1329,14 @@ export default function App() {
   }, [tourState]);
 
   useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!tourState) {
       return;
     }
@@ -1341,12 +1351,26 @@ export default function App() {
     };
   }, [tourState]);
 
-  const handleScrollTo = useCallback((id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const triggerSectionHighlight = useCallback((id: string) => {
+    setHighlightedSection(id);
+    if (highlightTimeoutRef.current) {
+      window.clearTimeout(highlightTimeoutRef.current);
     }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedSection((current) => (current === id ? null : current));
+    }, 1600);
   }, []);
+
+  const handleScrollTo = useCallback(
+    (id: string) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        triggerSectionHighlight(id);
+      }
+    },
+    [triggerSectionHighlight],
+  );
 
   useEffect(() => {
     const activeId = statusNotificationId.current;
@@ -1602,6 +1626,13 @@ export default function App() {
   const profilesErrorLabel = profilesState.error
     ? t('onboarding.manage.error', [profilesState.error])
     : undefined;
+  const sectionClassName = useCallback(
+    (id: string) =>
+      highlightedSection === id
+        ? 'fillo-options__section fillo-options__section--highlighted'
+        : 'fillo-options__section',
+    [highlightedSection],
+  );
 
   return (
     <>
@@ -1667,6 +1698,25 @@ export default function App() {
         .fillo-options__toc-link:hover {
           background-color: var(--mantine-color-gray-0);
           transform: translateX(2px);
+        }
+        .fillo-options__section {
+          position: relative;
+          border-radius: 12px;
+          z-index: 0;
+        }
+        .fillo-options__section::after {
+          content: '';
+          position: absolute;
+          inset: -8px;
+          border-radius: 16px;
+          background-color: transparent;
+          box-shadow: none;
+          transition: background-color 200ms ease;
+          pointer-events: none;
+          z-index: -1;
+        }
+        .fillo-options__section--highlighted::after {
+          background-color: var(--mantine-color-brand-0);
         }
         @keyframes fillo-celebration-pop {
           from {
@@ -1761,7 +1811,11 @@ export default function App() {
           </Paper>
 
           <Stack flex={1} gap="xl">
-            <Box id="section-getting-started" ref={setupSectionRef}>
+            <Box
+              id="section-getting-started"
+              ref={setupSectionRef}
+              className={sectionClassName('section-getting-started')}
+            >
               <Paper withBorder radius="lg" p="lg" shadow="sm">
                 <Stack gap="md">
                   <SectionHeading
@@ -1804,7 +1858,11 @@ export default function App() {
               </Paper>
             </Box>
 
-            <Box id="section-provider" ref={providerSectionRef}>
+            <Box
+              id="section-provider"
+              ref={providerSectionRef}
+              className={sectionClassName('section-provider')}
+            >
               <ProviderCard
                 title={t('options.sections.provider')}
                 helper={t('options.provider.helper')}
@@ -1842,7 +1900,11 @@ export default function App() {
               />
             </Box>
 
-            <Box id="section-profiles" ref={profilesSectionRef}>
+            <Box
+              id="section-profiles"
+              ref={profilesSectionRef}
+              className={sectionClassName('section-profiles')}
+            >
               <Stack gap="md">
                 {providerConfigured ? (
                   <Stack gap="xl">
@@ -1927,7 +1989,11 @@ export default function App() {
               </Stack>
             </Box>
 
-            <Box id="section-autofill" ref={autofillSectionRef}>
+            <Box
+              id="section-autofill"
+              ref={autofillSectionRef}
+              className={sectionClassName('section-autofill')}
+            >
               <Stack gap="md">
                 <SectionHeading
                   icon={WandSparkles}
@@ -1965,7 +2031,11 @@ export default function App() {
               </Stack>
             </Box>
 
-            <Box id="section-advanced" ref={advancedSectionRef}>
+            <Box
+              id="section-advanced"
+              ref={advancedSectionRef}
+              className={sectionClassName('section-advanced')}
+            >
               <Stack gap="md">
                 <SectionHeading
                   icon={SlidersHorizontal}
