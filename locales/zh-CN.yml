@@ -6,6 +6,26 @@ options:
   loading: 正在加载设置…
   title: Fillo 设置
   description: Fillo 会让你的求职流程随时准备就绪。所有数据都存储在浏览器本地。
+  sections:
+    gettingStarted: 入门
+    provider: AI 提供方
+    profiles: 档案
+    autofill: 自动填表
+    advanced: 高级
+  toc:
+    title: 快速导航
+    helper: 点击任意项目即可跳到对应的设置区块。
+  gettingStarted:
+    helper: 按照下方步骤完成 Fillo 的初始设置。
+    tip: '提示：将 Fillo 固定到浏览器工具栏，随时一键开启自动填表。'
+  checklist:
+    provider:
+      title: 连接 AI 提供方
+      description: 选择 Chrome 本地、OpenAI 或 Gemini。
+    profile:
+      title: 创建首个档案
+      description: 上传简历并使用提供方进行解析。
+    openSection: 打开区块
   provider:
     heading: 服务提供方
     onDevice: Chrome 本地模型（Prompt API）
@@ -16,6 +36,7 @@ options:
     apiKey: API 密钥
     model: 模型
     apiBaseUrl: API 基础地址
+    helper: 选择 Fillo 用来解析简历并驱动自动填表的模型。
   adapters:
     heading: 字段匹配适配器
     description: 选择 Fillo 需要启用的字段标签适配器。所有匹配均在本地完成。
@@ -53,6 +74,20 @@ options:
     error: 无法加载字段记忆（$1）
     preferredSlot: '首选槽位：$1'
     lastValue: '上次填入：$1'
+
+  profiles:
+    gate:
+      title: 请先连接 AI 提供方
+      description: 完成配置后即可管理档案。
+      cta: 前往提供方设置
+
+  advanced:
+    description: 在此管理字段记忆等高级设置。
+
+  celebration:
+    title: '全部完成！🎉'
+    message: 你已连接提供方并保存了首个档案。
+    cta: 开始自动填表
 
   profileForm:
     heading: 简历详情

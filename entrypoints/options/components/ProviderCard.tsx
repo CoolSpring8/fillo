@@ -1,6 +1,7 @@
-import { Button, Paper, PasswordInput, Progress, Radio, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Group, Paper, PasswordInput, Progress, Radio, Stack, Text, TextInput, ThemeIcon } from '@mantine/core';
+import type { LucideIcon } from 'lucide-react';
 
-interface OnDeviceSupportProps {
+export interface OnDeviceSupportProps {
   note?: string | null;
   actionLabel?: string;
   actionDisabled?: boolean;
@@ -11,6 +12,8 @@ interface OnDeviceSupportProps {
 interface ProviderCardProps {
   title: string;
   helper: string;
+  headingIcon?: LucideIcon;
+  headingIconColor?: string;
   providerLabels: Record<'on-device' | 'openai' | 'gemini', string>;
   selectedProvider: 'on-device' | 'openai' | 'gemini';
   canUseOnDevice: boolean;
@@ -45,6 +48,8 @@ interface ProviderCardProps {
 export function ProviderCard({
   title,
   helper,
+  headingIcon,
+  headingIconColor = 'brand',
   providerLabels,
   selectedProvider,
   canUseOnDevice,
@@ -58,14 +63,22 @@ export function ProviderCard({
     (Boolean(onDeviceSupport.note) ||
       typeof onDeviceSupport.progress === 'number' ||
       Boolean(onDeviceSupport.actionLabel));
+  const HeadingIcon = headingIcon;
 
   return (
     <Paper withBorder radius="lg" p="lg" shadow="sm">
       <Stack gap="md">
         <div>
-          <Text fw={600} fz="lg">
-            {title}
-          </Text>
+          <Group gap="xs" align="center">
+            {HeadingIcon ? (
+              <ThemeIcon size={32} radius="xl" variant="light" color={headingIconColor}>
+                <HeadingIcon size={18} strokeWidth={2} />
+              </ThemeIcon>
+            ) : null}
+            <Text fw={600} fz="lg">
+              {title}
+            </Text>
+          </Group>
           <Text fz="sm" c="dimmed">
             {helper}
           </Text>
