@@ -35,6 +35,11 @@ import {
 import type { ProfilesCardProfile } from '../components/ProfilesCard';
 import type { LanguageModelAvailability } from '../../../shared/llm/chromePrompt';
 import type { GeminiConfigState, OpenAiConfigState, ProviderKind } from './useProviderSettings';
+import {
+  formatProfileParsing,
+  formatProfileSummary,
+  resolveProfileName,
+} from './profileUtils';
 
 export type StatusPhase = 'idle' | 'extracting' | 'parsing' | 'saving' | 'complete' | 'error';
 
@@ -624,72 +629,16 @@ export function useProfilesManager({
     await refreshProfiles(id);
   }, [refreshProfiles, t]);
 
-  const resolveProfileName = useCallback(
-    (profile: ProfileRecord): string => {
-      const resume = profile.resume;
-      if (resume && typeof resume === 'object' && !Array.isArray(resume)) {
-        const basics = (resume as Record<string, unknown>).basics;
-        if (basics && typeof basics === 'object' && !Array.isArray(basics)) {
-          const name = (basics as Record<string, unknown>).name;
-          if (typeof name === 'string' && name.trim().length > 0) {
-            return name.trim();
-          }
-        }
-      }
-      return t('onboarding.manage.unnamed');
-    },
-    [t],
-  );
-
-  const formatProfileSummary = useCallback(
-    (profile: ProfileRecord): string => {
-      const created = formatDateTime(profile.createdAt);
-      const characters = profile.rawText.length.toLocaleString();
-      if (profile.sourceFile?.name) {
-        return t('onboarding.manage.summaryWithFile', [
-          created,
-          profile.sourceFile.name,
-          characters,
-        ]);
-      }
-      return t('onboarding.manage.summary', [created, characters]);
-    },
-    [t],
-  );
-
-  const formatProfileParsing = useCallback(
-    (profile: ProfileRecord): string => {
-      if (!profile.provider) {
-        return t('onboarding.manage.notParsed');
-      }
-      const parsedAt = profile.parsedAt ? formatDateTime(profile.parsedAt) : null;
-      if (profile.provider.kind === 'openai') {
-        return parsedAt
-          ? t('onboarding.manage.parsedOpenAIAt', [profile.provider.model, parsedAt])
-          : t('onboarding.manage.parsedOpenAI', [profile.provider.model]);
-      }
-      if (profile.provider.kind === 'gemini') {
-        return parsedAt
-          ? t('onboarding.manage.parsedGeminiAt', [profile.provider.model, parsedAt])
-          : t('onboarding.manage.parsedGemini', [profile.provider.model]);
-      }
-      return parsedAt
-        ? t('onboarding.manage.parsedOnDeviceAt', [parsedAt])
-        : t('onboarding.manage.parsedOnDevice');
-    },
-    [t],
-  );
-
   const profilesData = useMemo<ProfilesCardProfile[]>(
     () =>
       profiles.map((profile: ProfileRecord) => ({
         id: profile.id,
-        name: resolveProfileName(profile),
-        summary: formatProfileSummary(profile),
-        parsing: formatProfileParsing(profile),
+        name: resolveProfileName(profile, t),
+        summary: formatProfileSummary(profile, t),
+        parsing: formatProfileParsing(profile, t),
         isActive: selectedProfile?.id === profile.id,
       })),
-    [formatProfileParsing, formatProfileSummary, profiles, resolveProfileName, selectedProfile?.id],
+    [profiles, selectedProfile?.id, t],
   );
 
   const fileSummary = useMemo(
@@ -757,15 +706,4 @@ export function useProfilesManager({
     closeParseAgainConfirm,
     handleParseAgain,
   };
-}
-
-function formatDateTime(value: string | undefined): string {
-  if (!value) {
-    return '';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
 }

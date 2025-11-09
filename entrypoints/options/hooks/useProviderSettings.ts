@@ -5,17 +5,11 @@ import {
   type LanguageModelAvailability,
 } from '../../../shared/llm/chromePrompt';
 import { listAvailableAdapters } from '../../../shared/apply/adapters';
-import {
-  createGeminiProvider,
-  createOpenAIProvider,
-  getSettings,
-  saveSettings,
-  OPENAI_DEFAULT_BASE_URL,
-  GEMINI_DEFAULT_MODEL,
-} from '../../../shared/storage/settings';
+import { getSettings, saveSettings, OPENAI_DEFAULT_BASE_URL, GEMINI_DEFAULT_MODEL } from '../../../shared/storage/settings';
 import type { AppSettings } from '../../../shared/types';
 import type { AdapterItem } from '../components/AdaptersCard';
 import type { OnDeviceSupportProps } from '../components/ProviderCard';
+import { buildAppSettings, deriveOnDeviceSupport } from './providerUtils';
 
 export type ProviderKind = 'on-device' | 'openai' | 'gemini';
 
@@ -143,41 +137,6 @@ export function useProviderSettings({
     });
   }, [defaultAdapterIds]);
 
-  const buildSettings = useCallback(
-    (
-      kind: ProviderKind,
-      openAi: OpenAiConfigState,
-      gemini: GeminiConfigState,
-      adaptersList: string[],
-      autoFallbackValue: AppSettings['autoFallback'],
-      highlightOverlayValue: boolean,
-    ): AppSettings => {
-      if (kind === 'openai') {
-        return {
-          provider: createOpenAIProvider(openAi.apiKey, openAi.model, openAi.apiBaseUrl),
-          adapters: adaptersList,
-          autoFallback: autoFallbackValue,
-          highlightOverlay: highlightOverlayValue,
-        };
-      }
-      if (kind === 'gemini') {
-        return {
-          provider: createGeminiProvider(gemini.apiKey, gemini.model),
-          adapters: adaptersList,
-          autoFallback: autoFallbackValue,
-          highlightOverlay: highlightOverlayValue,
-        };
-      }
-      return {
-        provider: { kind: 'on-device' },
-        adapters: adaptersList,
-        autoFallback: autoFallbackValue,
-        highlightOverlay: highlightOverlayValue,
-      };
-    },
-    [],
-  );
-
   const handleDownloadOnDevice = useCallback(async () => {
     if (onDeviceDownloadState.phase === 'downloading') {
       return;
@@ -239,7 +198,7 @@ export function useProviderSettings({
         if (nextOpenAi !== openAiConfig) {
           setOpenAiConfig(nextOpenAi);
         }
-        const next = buildSettings(
+        const next = buildAppSettings(
           'openai',
           nextOpenAi,
           geminiConfig,
@@ -251,7 +210,7 @@ export function useProviderSettings({
         return;
       }
       if (value === 'gemini') {
-        const next = buildSettings(
+        const next = buildAppSettings(
           'gemini',
           openAiConfig,
           geminiConfig,
@@ -262,7 +221,7 @@ export function useProviderSettings({
         await saveSettings(next);
         return;
       }
-      const next = buildSettings(
+    const next = buildAppSettings(
         'on-device',
         openAiConfig,
         geminiConfig,
@@ -276,7 +235,6 @@ export function useProviderSettings({
       activeAdapters,
       adaptersToUse,
       autoFallback,
-      buildSettings,
       geminiConfig,
       highlightOverlay,
       openAiConfig,
@@ -292,10 +250,10 @@ export function useProviderSettings({
       fallbackValue: AppSettings['autoFallback'],
       highlightValue: boolean,
     ) => {
-      const next = buildSettings(kind, openAi, gemini, adaptersList, fallbackValue, highlightValue);
+      const next = buildAppSettings(kind, openAi, gemini, adaptersList, fallbackValue, highlightValue);
       void saveSettings(next);
     },
-    [buildSettings],
+    [],
   );
 
   const handleOpenAiApiKeyChange = useCallback(
@@ -457,7 +415,7 @@ export function useProviderSettings({
           openAiConfig.apiBaseUrl.trim().length > 0
             ? openAiConfig
             : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
-        const nextSettings = buildSettings(
+        const nextSettings = buildAppSettings(
           selectedProvider,
           openAiForSettings,
           geminiConfig,
@@ -472,7 +430,6 @@ export function useProviderSettings({
     [
       adaptersToUse,
       autoFallback,
-      buildSettings,
       geminiConfig,
       highlightOverlay,
       openAiConfig,
@@ -488,7 +445,7 @@ export function useProviderSettings({
         openAiConfig.apiBaseUrl.trim().length > 0
           ? openAiConfig
           : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
-      const nextSettings = buildSettings(
+      const nextSettings = buildAppSettings(
         selectedProvider,
         openAiForSettings,
         geminiConfig,
@@ -501,7 +458,6 @@ export function useProviderSettings({
     [
       activeAdapters,
       adaptersToUse,
-      buildSettings,
       geminiConfig,
       highlightOverlay,
       openAiConfig,
@@ -517,7 +473,7 @@ export function useProviderSettings({
         openAiConfig.apiBaseUrl.trim().length > 0
           ? openAiConfig
           : { ...openAiConfig, apiBaseUrl: OPENAI_DEFAULT_BASE_URL };
-      const nextSettings = buildSettings(
+      const nextSettings = buildAppSettings(
         selectedProvider,
         openAiForSettings,
         geminiConfig,
@@ -531,7 +487,6 @@ export function useProviderSettings({
       activeAdapters,
       adaptersToUse,
       autoFallback,
-      buildSettings,
       geminiConfig,
       openAiConfig,
       selectedProvider,
@@ -549,52 +504,17 @@ export function useProviderSettings({
     [activeAdapters, adapters, t],
   );
 
-  const onDeviceSupport = useMemo<OnDeviceSupportProps | undefined>(() => {
-    if (availability === 'unavailable') {
-      return {
-        note: t('onboarding.provider.onDevice.unavailable'),
-      };
-    }
-
-    if (onDeviceDownloadState.phase === 'error') {
-      const reason =
-        onDeviceDownloadState.error && onDeviceDownloadState.error.trim().length > 0
-          ? onDeviceDownloadState.error
-          : translate('onboarding.provider.onDevice.downloadFailedUnknown');
-      return {
-        note: translate('onboarding.provider.onDevice.downloadFailed', [reason]),
-        actionLabel: translate('onboarding.provider.onDevice.retry'),
-        onAction: handleDownloadOnDevice,
-      };
-    }
-
-    if (availability === 'available' || onDeviceDownloadState.phase === 'complete') {
-      return {
-        note: translate('onboarding.provider.onDevice.available'),
-      };
-    }
-
-    if (onDeviceDownloadState.phase === 'downloading' || availability === 'downloading') {
-      const progressValue =
-        onDeviceDownloadState.phase === 'downloading' ? onDeviceDownloadState.progress : 0;
-      const progressPercent = Math.round(progressValue * 100);
-      return {
-        note:
-          progressValue > 0
-            ? translate('onboarding.provider.onDevice.progress', [progressPercent.toString()])
-            : t('onboarding.provider.onDevice.downloading'),
-        progress: Math.max(0, Math.min(100, progressValue * 100)),
-        actionLabel: translate('onboarding.provider.onDevice.download'),
-        actionDisabled: true,
-      };
-    }
-
-    return {
-      note: t('onboarding.provider.onDevice.downloadable'),
-      actionLabel: translate('onboarding.provider.onDevice.download'),
-      onAction: handleDownloadOnDevice,
-    };
-  }, [availability, handleDownloadOnDevice, onDeviceDownloadState, t, translate]);
+  const onDeviceSupport = useMemo<OnDeviceSupportProps | undefined>(
+    () =>
+      deriveOnDeviceSupport({
+        availability,
+        downloadState: onDeviceDownloadState,
+        t,
+        translate,
+        onDownload: handleDownloadOnDevice,
+      }),
+    [availability, handleDownloadOnDevice, onDeviceDownloadState, t, translate],
+  );
 
   const providerConfigured = useMemo(() => {
     if (selectedProvider === 'on-device') {
