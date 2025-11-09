@@ -20,7 +20,7 @@ options:
     helper: 点击任意项目即可跳到对应的设置区块。
   gettingStarted:
     helper: 按照下方步骤完成 Fillo 的初始设置。
-    tip: '提示：在 manifest 中将 `open_in_tab` 设为 true，可在独立标签页打开设置页面。'
+    tip: '提示：将 Fillo 固定到浏览器工具栏，随时一键开启自动填表。'
   checklist:
     provider:
       title: 连接 AI 提供方

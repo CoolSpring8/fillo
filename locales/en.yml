@@ -20,7 +20,7 @@ options:
     helper: Jump to any settings section without losing your place.
   gettingStarted:
     helper: Follow the checklist to finish setting up Fillo.
-    tip: 'Tip: set `open_in_tab: true` in your manifest to open settings in a full browser tab.'
+    tip: 'Tip: Pin Fillo in your browser toolbar so you can launch autofill faster.'
   checklist:
     provider:
       title: Connect an AI provider
