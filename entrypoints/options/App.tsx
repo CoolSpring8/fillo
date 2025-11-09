@@ -13,7 +13,6 @@ import {
   Text,
   ThemeIcon,
   Title,
-  rem,
 } from '@mantine/core';
 import { useForm } from 'react-hook-form';
 import {
@@ -67,6 +66,7 @@ import { FileUploadModal } from './components/FileUploadModal';
 import { ParseAgainModal } from './components/ParseAgainModal';
 import { CopyHelperAffix } from './components/CopyHelperAffix';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
+import './App.css';
 import {
   ProfileForm,
   createEmptyResumeFormValues,
@@ -1319,94 +1319,10 @@ export default function App() {
 
   return (
     <>
-      <style>{`
-        .fillo-celebration {
-          position: fixed;
-          inset: 0;
-          display: grid;
-          place-items: center;
-          background-color: rgba(0, 0, 0, 0.55);
-          z-index: 2000;
-          padding: 24px;
-        }
-        .fillo-celebration__confetti {
-          position: absolute;
-          inset: 0;
-          overflow: hidden;
-          pointer-events: none;
-        }
-        .fillo-confetto {
-          position: absolute;
-          top: -10px;
-          width: 8px;
-          height: 14px;
-          border-radius: 2px;
-          animation: fillo-confetti-fall 1.8s linear forwards;
-        }
-        .fillo-celebration__card {
-          position: relative;
-          width: min(320px, 90vw);
-          text-align: center;
-          animation: fillo-celebration-pop 0.18s ease-out;
-        }
-        .fillo-options__toc {
-          position: relative;
-          border: 1px solid var(--mantine-color-gray-3);
-          background-color: var(--mantine-color-body);
-        }
-        .fillo-options__toc-content {
-          position: relative;
-          z-index: 1;
-        }
-        .fillo-options__toc-link {
-          border-radius: 12px;
-          padding-block: 8px;
-          transition: background-color 120ms ease, transform 120ms ease;
-        }
-        .fillo-options__toc-link:hover {
-          background-color: var(--mantine-color-gray-0);
-          transform: translateX(2px);
-        }
-        .fillo-options__section {
-          position: relative;
-          border-radius: 12px;
-          z-index: 0;
-        }
-        .fillo-options__section::after {
-          content: '';
-          position: absolute;
-          inset: -8px;
-          border-radius: 16px;
-          background-color: transparent;
-          box-shadow: none;
-          transition: background-color 200ms ease;
-          pointer-events: none;
-          z-index: -1;
-        }
-        .fillo-options__section--highlighted::after {
-          background-color: var(--mantine-color-brand-0);
-        }
-        @keyframes fillo-celebration-pop {
-          from {
-            transform: scale(0.96);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        @keyframes fillo-confetti-fall {
-          to {
-            transform: translate3d(var(--tx, 0px), 110vh, 0) rotate(540deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
-      <Container size="xl" py="xl" style={{ minHeight: '100vh' }}>
+      <Container size="xl" py="xl" className="fillo-options__container">
         <Stack gap="xl">
           <Group align="flex-start" justify="space-between" gap="xl" wrap="wrap">
-            <Stack gap={4} style={{ flex: '1 1 320px', minWidth: 240 }}>
+            <Stack gap={4} className="fillo-options__intro">
               <Title order={1}>{t('options.title')}</Title>
               <Text c="dimmed">{t('options.description')}</Text>
             </Stack>
@@ -1415,8 +1331,7 @@ export default function App() {
 
           <Flex gap="xl" align="flex-start" direction={{ base: 'column', md: 'row' }}>
           <OptionsNavigationCard
-            className="fillo-options__toc"
-            style={{ position: 'sticky', top: rem(32) }}
+            className="fillo-options__toc fillo-options__toc-sticky"
             title={t('options.toc.title')}
             helper={t('options.toc.helper')}
             links={navLinks}
