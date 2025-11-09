@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Affix,
   Alert,
   Box,
   Button,
   Container,
-  CopyButton,
   Flex,
   Group,
   List,
-  Modal,
-  NavLink,
   Paper,
   SimpleGrid,
   Stack,
   Text,
-  Textarea,
   ThemeIcon,
   Title,
   rem,
@@ -49,17 +44,7 @@ import { getActiveProfileId, setActiveProfileId } from '../../shared/storage/act
 import { listAvailableAdapters } from '../../shared/apply/adapters';
 import resumeSchema from '../../shared/schema/jsonresume-v1.llm.json';
 import { validateResume } from '../../shared/validate';
-import {
-  CheckCircle2,
-  Circle,
-  Compass,
-  Cpu,
-  IdCard,
-  SlidersHorizontal,
-  Sparkles,
-  WandSparkles,
-  type LucideIcon,
-} from 'lucide-react';
+import { Cpu, IdCard, SlidersHorizontal, Sparkles, WandSparkles } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import type {
   AppSettings,
@@ -75,6 +60,13 @@ import { AdaptersCard, type AdapterItem } from './components/AdaptersCard';
 import { AutofillCard } from './components/AutofillCard';
 import { OverlayCard } from './components/OverlayCard';
 import { MemoryCard, type MemoryEntry } from './components/MemoryCard';
+import { SectionHeading } from './components/SectionHeading';
+import { OptionsNavigationCard, type TocNavLink } from './components/OptionsNavigationCard';
+import { GettingStartedSection, type SetupChecklistItem } from './components/GettingStartedSection';
+import { FileUploadModal } from './components/FileUploadModal';
+import { ParseAgainModal } from './components/ParseAgainModal';
+import { CopyHelperAffix } from './components/CopyHelperAffix';
+import { CelebrationOverlay } from './components/CelebrationOverlay';
 import {
   ProfileForm,
   createEmptyResumeFormValues,
@@ -104,49 +96,6 @@ interface OnDeviceDownloadState {
   phase: OnDeviceDownloadPhase;
   progress: number;
   error?: string;
-}
-
-interface ConfettiPiece {
-  id: number;
-  left: number;
-  tx: number;
-  delay: number;
-  color: string;
-}
-
-type TocNavLink = {
-  id: string;
-  label: string;
-  ref: RefObject<HTMLDivElement | null>;
-  icon: LucideIcon;
-  color: string;
-};
-
-interface SectionHeadingProps {
-  icon: LucideIcon;
-  color: string;
-  title: string;
-  description?: string;
-}
-
-function SectionHeading({ icon: Icon, color, title, description }: SectionHeadingProps) {
-  return (
-    <Stack gap={4}>
-      <Group gap="xs" align="center">
-        <ThemeIcon size={36} radius="xl" variant="light" color={color}>
-          <Icon size={18} strokeWidth={2} />
-        </ThemeIcon>
-        <Text fw={600} fz="xl">
-          {title}
-        </Text>
-      </Group>
-      {description ? (
-        <Text fz="sm" c="dimmed">
-          {description}
-        </Text>
-      ) : null}
-    </Stack>
-  );
 }
 
 function buildOpenAIProvider(apiKey: string, model: string, apiBaseUrl: string): ProviderConfig {
@@ -228,7 +177,6 @@ export default function App() {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationVersion, setCelebrationVersion] = useState(0);
-  const celebrationButtonRef = useRef<HTMLButtonElement | null>(null);
   const statusNotificationId = useRef<string | null>(null);
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
@@ -1151,7 +1099,7 @@ export default function App() {
 
   const profileCountLabel = profiles.length.toLocaleString();
   const hasProfiles = profiles.length > 0;
-  const setupChecklist = useMemo(
+  const setupChecklist = useMemo<SetupChecklistItem[]>(
     () => [
       {
         id: 'provider',
@@ -1176,54 +1124,36 @@ export default function App() {
       {
         id: 'section-getting-started',
         label: t('options.sections.gettingStarted'),
-        ref: setupSectionRef,
         icon: Sparkles,
         color: 'orange',
       },
       {
         id: 'section-provider',
         label: t('options.sections.provider'),
-        ref: providerSectionRef,
         icon: Cpu,
         color: 'brand',
       },
       {
         id: 'section-profiles',
         label: t('options.sections.profiles'),
-        ref: profilesSectionRef,
         icon: IdCard,
         color: 'indigo',
       },
       {
         id: 'section-autofill',
         label: t('options.sections.autofill'),
-        ref: autofillSectionRef,
         icon: WandSparkles,
         color: 'teal',
       },
       {
         id: 'section-advanced',
         label: t('options.sections.advanced'),
-        ref: advancedSectionRef,
         icon: SlidersHorizontal,
         color: 'gray',
       },
     ],
     [t],
   );
-
-  const confettiPieces = useMemo<ConfettiPiece[]>(() => {
-    if (!celebrationOpen) {
-      return [];
-    }
-    return Array.from({ length: 80 }, (_, index) => ({
-      id: index,
-      left: Math.random() * 100,
-      tx: Math.random() * 100 - 50,
-      delay: Math.random() * 0.2,
-      color: `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`,
-    }));
-  }, [celebrationOpen, celebrationVersion]);
 
   useEffect(() => {
     if (!providerConfigured || !hasProfiles || onboardingCompleted === null) {
@@ -1238,22 +1168,6 @@ export default function App() {
       });
     }
   }, [providerConfigured, hasProfiles, onboardingCompleted]);
-
-  useEffect(() => {
-    if (!celebrationOpen) {
-      return;
-    }
-    celebrationButtonRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setCelebrationOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [celebrationOpen]);
 
   useEffect(() => {
     return () => {
@@ -1500,50 +1414,14 @@ export default function App() {
           </Group>
 
           <Flex gap="xl" align="flex-start" direction={{ base: 'column', md: 'row' }}>
-          <Paper
-            withBorder
-            radius="lg"
-            shadow="sm"
-            p="md"
-            w={{ base: '100%', md: 260 }}
-            style={{ position: 'sticky', top: rem(32) }}
+          <OptionsNavigationCard
             className="fillo-options__toc"
-          >
-            <Stack gap="md" className="fillo-options__toc-content">
-              <Stack gap={4}>
-                <Group gap="xs" align="center">
-                  <ThemeIcon size={32} radius="xl" variant="light" color="brand">
-                    <Compass size={18} strokeWidth={2} />
-                  </ThemeIcon>
-                  <Text fw={600}>{t('options.toc.title')}</Text>
-                </Group>
-                <Text fz="xs" c="dimmed">
-                  {t('options.toc.helper')}
-                </Text>
-              </Stack>
-              <Stack gap="xs">
-                {navLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <NavLink
-                      key={link.id}
-                      label={link.label}
-                      component="button"
-                      type="button"
-                      onClick={() => handleScrollTo(link.id)}
-                      style={{ textAlign: 'left' }}
-                      className="fillo-options__toc-link"
-                      leftSection={
-                        <ThemeIcon size={30} radius="lg" variant="light" color={link.color}>
-                          <Icon size={16} strokeWidth={2} />
-                        </ThemeIcon>
-                      }
-                    />
-                  );
-                })}
-              </Stack>
-            </Stack>
-          </Paper>
+            style={{ position: 'sticky', top: rem(32) }}
+            title={t('options.toc.title')}
+            helper={t('options.toc.helper')}
+            links={navLinks}
+            onNavigate={handleScrollTo}
+          />
 
           <Stack flex={1} gap="xl">
             <Box
@@ -1551,46 +1429,16 @@ export default function App() {
               ref={setupSectionRef}
               className={sectionClassName('section-getting-started')}
             >
-              <Paper withBorder radius="lg" p="lg" shadow="sm">
-                <Stack gap="md">
-                  <SectionHeading
-                    icon={Sparkles}
-                    color="orange"
-                    title={t('options.sections.gettingStarted')}
-                    description={t('options.gettingStarted.helper')}
-                  />
-                  <Stack gap="md">
-                    {setupChecklist.map((item) => (
-                      <Group key={item.id} align="flex-start" gap="sm">
-                        <ThemeIcon
-                          size={32}
-                          variant="light"
-                          color={item.complete ? 'teal' : 'gray'}
-                          radius="xl"
-                        >
-                          {item.complete ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                        </ThemeIcon>
-                        <Stack gap={4} style={{ flex: 1 }}>
-                          <Text fw={600}>{item.title}</Text>
-                          <Text fz="sm" c="dimmed">
-                            {item.description}
-                          </Text>
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            onClick={() => handleScrollTo(item.target)}
-                          >
-                            {t('options.checklist.openSection')}
-                          </Button>
-                        </Stack>
-                      </Group>
-                    ))}
-                  </Stack>
-                  <Text fz="sm" c="dimmed">
-                    {t('options.gettingStarted.tip')}
-                  </Text>
-                </Stack>
-              </Paper>
+              <GettingStartedSection
+                headingIcon={Sparkles}
+                headingColor="orange"
+                headingTitle={t('options.sections.gettingStarted')}
+                headingDescription={t('options.gettingStarted.helper')}
+                checklist={setupChecklist}
+                openSectionLabel={t('options.checklist.openSection')}
+                tip={t('options.gettingStarted.tip')}
+                onNavigate={handleScrollTo}
+              />
             </Box>
 
             <Box
@@ -1807,130 +1655,50 @@ export default function App() {
         </Flex>
       </Stack>
 
-      <Modal
-          opened={filePromptOpen}
-          onClose={closeFilePrompt}
-          title={t('options.profileForm.upload.modalTitle')}
-          centered
-        >
-          <Stack gap="md">
-            <Text>{t('options.profileForm.upload.modalDescription')}</Text>
-            <Stack gap="sm">
-              <Button
-                onClick={() => handleFileAction('parse')}
-                disabled={busy}
-              >
-                {t('options.profileForm.upload.parseAction')}
-              </Button>
-              <Button
-                variant="default"
-                onClick={() => handleFileAction('store')}
-                disabled={busy}
-              >
-                {t('options.profileForm.upload.storeAction')}
-              </Button>
-            </Stack>
-          </Stack>
-        </Modal>
+      <FileUploadModal
+        opened={filePromptOpen}
+        onClose={closeFilePrompt}
+        title={t('options.profileForm.upload.modalTitle')}
+        description={t('options.profileForm.upload.modalDescription')}
+        parseLabel={t('options.profileForm.upload.parseAction')}
+        storeLabel={t('options.profileForm.upload.storeAction')}
+        busy={busy}
+        onParse={() => handleFileAction('parse')}
+        onStore={() => handleFileAction('store')}
+      />
 
-      <Modal
+      <ParseAgainModal
         opened={parseAgainConfirmOpen}
         onClose={closeParseAgainConfirm}
         title={translate('options.profileForm.upload.parseAgainConfirmTitle')}
-        centered
-        >
-          <Stack gap="md">
-            <Text>{translate('options.profileForm.upload.parseAgainConfirmDescription')}</Text>
-            <Group justify="flex-end" gap="sm">
-              <Button variant="default" onClick={closeParseAgainConfirm} disabled={busy}>
-                {translate('options.profileForm.upload.parseAgainConfirmCancel')}
-              </Button>
-              <Button onClick={handleParseAgain} disabled={busy}>
-                {translate('options.profileForm.upload.parseAgainConfirmConfirm')}
-              </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        description={translate('options.profileForm.upload.parseAgainConfirmDescription')}
+        cancelLabel={translate('options.profileForm.upload.parseAgainConfirmCancel')}
+        confirmLabel={translate('options.profileForm.upload.parseAgainConfirmConfirm')}
+        busy={busy}
+        onConfirm={handleParseAgain}
+      />
 
-      {showCopyHelper && (
-        <Affix position={{ bottom: 24, right: 24 }}>
-          <Paper shadow="lg" radius="md" p="md" style={{ width: 280 }}>
-            <Stack gap="sm">
-              <Text fw={600}>{t('options.profileForm.copyHelper.heading')}</Text>
-              <Text fz="sm" c="dimmed">
-                {t('options.profileForm.copyHelper.description')}
-              </Text>
-              <Textarea
-                value={rawText}
-                readOnly
-                autosize
-                minRows={6}
-                maxRows={12}
-                spellCheck={false}
-              />
-              <CopyButton value={rawText}>
-                {({ copied, copy }) => (
-                  <Button onClick={copy} fullWidth variant={copied ? 'light' : 'filled'} color={copied ? 'green' : 'brand'}>
-                    {copied
-                      ? t('options.profileForm.copyHelper.copied')
-                      : t('options.profileForm.copyHelper.copy')}
-                  </Button>
-                )}
-              </CopyButton>
-            </Stack>
-          </Paper>
-        </Affix>
-      )}
+      <CopyHelperAffix
+        visible={showCopyHelper}
+        rawText={rawText}
+        heading={t('options.profileForm.copyHelper.heading')}
+        description={t('options.profileForm.copyHelper.description')}
+        copyLabel={t('options.profileForm.copyHelper.copy')}
+        copiedLabel={t('options.profileForm.copyHelper.copied')}
+      />
     </Container>
-      {celebrationOpen && (
-        <Box
-          className="fillo-celebration"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="fillo-celebration-title"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setCelebrationOpen(false);
-            }
-          }}
-        >
-          <Box className="fillo-celebration__confetti">
-            {confettiPieces.map((piece) => (
-              <Box
-                key={piece.id}
-                className="fillo-confetto"
-                style={
-                  {
-                    left: `${piece.left}%`,
-                    animationDelay: `${piece.delay}s`,
-                    backgroundColor: piece.color,
-                    '--tx': `${piece.tx}px`,
-                  } as CSSProperties & { '--tx': string }
-                }
-              />
-            ))}
-          </Box>
-          <Paper className="fillo-celebration__card" shadow="xl" radius="lg" p="xl">
-            <Stack gap="sm" align="center">
-              <Title id="fillo-celebration-title" order={3}>
-                {t('options.celebration.title')}
-              </Title>
-              <Text fz="sm" c="dimmed">
-                {t('options.celebration.message')}
-              </Text>
-              <Button
-                ref={celebrationButtonRef}
-                onClick={() => {
-                  setCelebrationOpen(false);
-                  handleScrollTo('section-autofill');
-                }}
-              >
-                {t('options.celebration.cta')}
-              </Button>
-            </Stack>
-          </Paper>
-        </Box>
-      )}
+      <CelebrationOverlay
+        open={celebrationOpen}
+        version={celebrationVersion}
+        title={t('options.celebration.title')}
+        message={t('options.celebration.message')}
+        ctaLabel={t('options.celebration.cta')}
+        onClose={() => setCelebrationOpen(false)}
+        onCta={() => {
+          setCelebrationOpen(false);
+          handleScrollTo('section-autofill');
+        }}
+      />
     </>
   );
 }
