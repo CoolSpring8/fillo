@@ -85,6 +85,7 @@ const popupOverlayTabs = new Set<number>();
 const pendingPromptAi = new Map<string, AbortController>();
 const overlayAdapterIds = getAllAdapterIds();
 let activeProfileId: string | null = null;
+let activeProfileReady: Promise<void> | null = null;
 
 async function openSidePanelForTab(tabId: number): Promise<void> {
   try {
@@ -151,8 +152,14 @@ export default defineBackground(() => {
     if (message.kind === 'POPUP_PROMPT_OVERLAY_GET') {
       const tabId = typeof message.tabId === 'number' ? message.tabId : null;
       const enabled = tabId !== null && popupOverlayTabs.has(tabId);
-      sendResponse({ status: 'ok', enabled, profileId: activeProfileId });
-      return false;
+      ensureActiveProfileLoaded()
+        .then(() => {
+          sendResponse({ status: 'ok', enabled, profileId: activeProfileId });
+        })
+        .catch(() => {
+          sendResponse({ status: 'ok', enabled, profileId: null });
+        });
+      return true;
     }
     if (message.kind === 'POPUP_PROMPT_OVERLAY_SET') {
       const tabId = typeof message.tabId === 'number' ? message.tabId : null;
@@ -167,12 +174,25 @@ export default defineBackground(() => {
         popupOverlayTabs.delete(tabId);
         clearOverlayForTab(tabId);
       }
-      sendResponse({ status: 'ok', enabled: popupOverlayTabs.has(tabId), profileId: activeProfileId });
-      return false;
+      const isEnabled = popupOverlayTabs.has(tabId);
+      ensureActiveProfileLoaded()
+        .then(() => {
+          sendResponse({ status: 'ok', enabled: isEnabled, profileId: activeProfileId });
+        })
+        .catch(() => {
+          sendResponse({ status: 'ok', enabled: isEnabled, profileId: null });
+        });
+      return true;
     }
     if (message.kind === 'POPUP_ACTIVE_PROFILE_GET') {
-      sendResponse({ status: 'ok', profileId: activeProfileId });
-      return false;
+      ensureActiveProfileLoaded()
+        .then(() => {
+          sendResponse({ status: 'ok', profileId: activeProfileId });
+        })
+        .catch(() => {
+          sendResponse({ status: 'ok', profileId: null });
+        });
+      return true;
     }
     if (message.kind === 'POPUP_ACTIVE_PROFILE_SET') {
       const raw = typeof message.profileId === 'string' ? message.profileId.trim() : '';
@@ -236,7 +256,7 @@ export default defineBackground(() => {
     return undefined;
   });
 
-  void loadActiveProfilePreference();
+  void ensureActiveProfileLoaded();
 
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') {
@@ -859,6 +879,8 @@ async function maybeShowPopupPromptOverlay(
     return;
   }
 
+  await ensureActiveProfileLoaded();
+
   const fallbackLabel = resolveFieldLabel(field);
   const previewId = typeof crypto?.randomUUID === 'function'
     ? `popup:${crypto.randomUUID()}`
@@ -948,6 +970,13 @@ function clearOverlayForTab(tabId: number): void {
   for (const port of frames.values()) {
     safePostMessage(port, { kind: 'CLEAR_OVERLAY' });
   }
+}
+
+function ensureActiveProfileLoaded(): Promise<void> {
+  if (!activeProfileReady) {
+    activeProfileReady = loadActiveProfilePreference();
+  }
+  return activeProfileReady!;
 }
 
 async function loadActiveProfilePreference(): Promise<void> {

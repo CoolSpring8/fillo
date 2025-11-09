@@ -98,13 +98,13 @@ export default function App() {
   }, [refresh, syncActiveProfile]);
 
   useEffect(() => {
-    if (!activeProfileId) {
+    if (!activeProfileId || !hasLoadedProfiles) {
       return;
     }
     if (!profiles.some((profile) => profile.id === activeProfileId)) {
       void handleProfileSelect(null);
     }
-  }, [activeProfileId, profiles, handleProfileSelect]);
+  }, [activeProfileId, profiles, hasLoadedProfiles, handleProfileSelect]);
 
   const openSidePanel = async () => {
     try {
