@@ -1,7 +1,7 @@
 import { Button, Group, Paper, PasswordInput, Progress, Radio, Stack, Text, TextInput, ThemeIcon } from '@mantine/core';
 import type { LucideIcon } from 'lucide-react';
 
-interface OnDeviceSupportProps {
+export interface OnDeviceSupportProps {
   note?: string | null;
   actionLabel?: string;
   actionDisabled?: boolean;
