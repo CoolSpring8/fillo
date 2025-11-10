@@ -106,6 +106,23 @@ options:
       parseAgainConfirmDescription: Running the parser again will overwrite any fields that receive new values. Existing inputs without new data will be kept.
       parseAgainConfirmConfirm: Parse again
       parseAgainConfirmCancel: Cancel
+    preview:
+      heading: Resume preview
+      helper: Keep the imported PDF handy while filling out the structured form.
+      empty: No PDF yet. Use the upload control to add one.
+      noProfile: Select a profile to load its stored PDF.
+      loading: Loading PDF preview…
+      error: Unable to load the stored PDF. Upload it again to refresh.
+      refresh: Refresh preview
+      replacePdf: Replace PDF
+      download: Download PDF
+      openModal: Open large preview
+      modalTitle: Resume PDF preview
+      iframeTitle: Resume PDF frame
+      tabs:
+        pdf: PDF
+        text: Raw text
+      noText: No extracted text yet.
     sections:
       basics: Basics
       work: Work

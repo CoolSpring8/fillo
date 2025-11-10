@@ -318,6 +318,7 @@ interface ProfileFormProps {
   parseAgainDisabled?: boolean;
   fileSummary?: string | null;
   rawSummary?: string | null;
+  uploadInputId?: string;
 }
 
 export function ProfileForm({
@@ -331,6 +332,7 @@ export function ProfileForm({
   parseAgainDisabled = false,
   fileSummary,
   rawSummary,
+  uploadInputId = 'profile-form-upload',
 }: ProfileFormProps) {
   const { t } = i18n;
   const translate = t as unknown as (key: string, substitutions?: unknown) => string;
@@ -354,6 +356,7 @@ export function ProfileForm({
             <Text fw={600}>{t('options.profileForm.upload.heading')}</Text>
             <Group gap="sm" align="flex-end">
               <FileInput
+                id={uploadInputId}
                 radius="md"
                 size="md"
                 accept="application/pdf"

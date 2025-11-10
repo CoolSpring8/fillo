@@ -5,6 +5,7 @@ import {
   Button,
   Container,
   Flex,
+  Grid,
   Group,
   List,
   Paper,
@@ -30,6 +31,7 @@ import { FileUploadModal } from './components/FileUploadModal';
 import { ParseAgainModal } from './components/ParseAgainModal';
 import { CopyHelperAffix } from './components/CopyHelperAffix';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
+import { ResumePreviewPane } from './components/ResumePreviewPane';
 import './App.css';
 import {
   ProfileForm,
@@ -44,6 +46,7 @@ export default function App() {
   const form = useForm<ResumeFormValues>({
     defaultValues: createEmptyResumeFormValues(),
   });
+  const uploadInputId = 'profile-form-upload';
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationVersion, setCelebrationVersion] = useState(0);
@@ -439,18 +442,33 @@ export default function App() {
 
                     <Stack gap="md">
                       {selectedProfile ? (
-                        <ProfileForm
-                          form={form}
-                          onSubmit={handleSaveForm}
-                          onReset={handleResetForm}
-                          disabled={busy}
-                          saving={formSaving}
-                          onFileSelect={handleFileSelect}
-                          onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
-                          parseAgainDisabled={!canParseAgain}
-                          fileSummary={fileSummary}
-                          rawSummary={rawSummary}
-                        />
+                        <Grid gutter="md" align="stretch">
+                          <Grid.Col span={{ base: 12, xl: 8 }}>
+                            <ProfileForm
+                              form={form}
+                              onSubmit={handleSaveForm}
+                              onReset={handleResetForm}
+                              disabled={busy}
+                              saving={formSaving}
+                              onFileSelect={handleFileSelect}
+                              onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
+                              parseAgainDisabled={!canParseAgain}
+                              fileSummary={fileSummary}
+                              rawSummary={rawSummary}
+                              uploadInputId={uploadInputId}
+                            />
+                          </Grid.Col>
+                          <Grid.Col span={{ base: 12, xl: 4 }}>
+                            <ResumePreviewPane
+                              profileId={selectedProfile.id}
+                              file={selectedProfile.sourceFile}
+                              fileSummary={fileSummary}
+                              rawSummary={rawSummary}
+                              rawText={rawText}
+                              uploadInputId={uploadInputId}
+                            />
+                          </Grid.Col>
+                        </Grid>
                       ) : (
                         <Paper withBorder radius="lg" p="lg" shadow="sm">
                           <Stack gap="sm">
