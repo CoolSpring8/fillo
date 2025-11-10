@@ -8,7 +8,9 @@ import {
   Grid,
   Group,
   List,
+  Modal,
   Paper,
+  ScrollArea,
   SimpleGrid,
   Stack,
   Text,
@@ -50,6 +52,7 @@ export default function App() {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationVersion, setCelebrationVersion] = useState(0);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const statusNotificationId = useRef<string | null>(null);
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
@@ -126,6 +129,48 @@ export default function App() {
   });
   const { memoryItems, memoryState, refreshMemory, clearMemory, deleteMemory, formatMemoryEntry } =
     useMemoryStore({ t });
+  useEffect(() => {
+    if (!selectedProfile) {
+      setWorkspaceOpen(false);
+    }
+  }, [selectedProfile]);
+  const handleOpenWorkspace = useCallback(() => {
+    if (!selectedProfile) {
+      return;
+    }
+    setWorkspaceOpen(true);
+  }, [selectedProfile]);
+  const handleCloseWorkspace = useCallback(() => {
+    setWorkspaceOpen(false);
+  }, []);
+  const profileFormProps = useMemo(
+    () => ({
+      form,
+      onSubmit: handleSaveForm,
+      onReset: handleResetForm,
+      disabled: busy,
+      saving: formSaving,
+      onFileSelect: handleFileSelect,
+      onParseAgain: canParseAgain ? openParseAgainConfirm : undefined,
+      parseAgainDisabled: !canParseAgain,
+      fileSummary,
+      rawSummary,
+      uploadInputId,
+    }),
+    [
+      form,
+      handleSaveForm,
+      handleResetForm,
+      busy,
+      formSaving,
+      handleFileSelect,
+      canParseAgain,
+      openParseAgainConfirm,
+      fileSummary,
+      rawSummary,
+      uploadInputId,
+    ],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -442,33 +487,24 @@ export default function App() {
 
                     <Stack gap="md">
                       {selectedProfile ? (
-                        <Grid gutter="md" align="stretch">
-                          <Grid.Col span={{ base: 12, xl: 8 }}>
-                            <ProfileForm
-                              form={form}
-                              onSubmit={handleSaveForm}
-                              onReset={handleResetForm}
-                              disabled={busy}
-                              saving={formSaving}
-                              onFileSelect={handleFileSelect}
-                              onParseAgain={canParseAgain ? openParseAgainConfirm : undefined}
-                              parseAgainDisabled={!canParseAgain}
-                              fileSummary={fileSummary}
-                              rawSummary={rawSummary}
-                              uploadInputId={uploadInputId}
-                            />
-                          </Grid.Col>
-                          <Grid.Col span={{ base: 12, xl: 4 }}>
-                            <ResumePreviewPane
-                              profileId={selectedProfile.id}
-                              file={selectedProfile.sourceFile}
-                              fileSummary={fileSummary}
-                              rawSummary={rawSummary}
-                              rawText={rawText}
-                              uploadInputId={uploadInputId}
-                            />
-                          </Grid.Col>
-                        </Grid>
+                        workspaceOpen ? null : (
+                          <Grid gutter="md" align="stretch">
+                            <Grid.Col span={{ base: 12, md: 7, xl: 8 }}>
+                              <ProfileForm {...profileFormProps} />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 5, xl: 4 }}>
+                              <ResumePreviewPane
+                                profileId={selectedProfile.id}
+                                file={selectedProfile.sourceFile}
+                                fileSummary={fileSummary}
+                                rawSummary={rawSummary}
+                                rawText={rawText}
+                                uploadInputId={uploadInputId}
+                                onOpenWorkspace={handleOpenWorkspace}
+                              />
+                            </Grid.Col>
+                          </Grid>
+                        )
                       ) : (
                         <Paper withBorder radius="lg" p="lg" shadow="sm">
                           <Stack gap="sm">
@@ -632,6 +668,68 @@ export default function App() {
         copyLabel={t('options.profileForm.copyHelper.copy')}
         copiedLabel={t('options.profileForm.copyHelper.copied')}
       />
+
+      <Modal
+        opened={workspaceOpen}
+        onClose={handleCloseWorkspace}
+        title={t('options.profileForm.preview.workspaceTitle')}
+        fullScreen
+        radius={0}
+        padding={0}
+        styles={{
+          content: {
+            padding: 0,
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+          header: {
+            padding: 'var(--mantine-spacing-md) var(--mantine-spacing-xl)',
+            flexShrink: 0,
+          },
+          body: {
+            padding: 'var(--mantine-spacing-xl)',
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
+      >
+        {workspaceOpen && selectedProfile ? (
+          <Box className="fillo-workspace">
+            <Box className="fillo-workspace__layout">
+              <Box className="fillo-workspace__form">
+                <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
+                  <ProfileForm {...profileFormProps} />
+                </ScrollArea>
+              </Box>
+              <Box className="fillo-workspace__preview">
+                <ResumePreviewPane
+                  profileId={selectedProfile.id}
+                  file={selectedProfile.sourceFile}
+                  fileSummary={fileSummary}
+                  rawSummary={rawSummary}
+                  rawText={rawText}
+                  uploadInputId={uploadInputId}
+                  variant="modal"
+                />
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          <Stack gap="sm">
+            <Text fw={600}>{t('options.profileForm.preview.noProfile')}</Text>
+            <Text fz="sm" c="dimmed">
+              {t('options.profileForm.preview.workspaceDescription')}
+            </Text>
+            <Button variant="light" onClick={handleCloseWorkspace}>
+              {t('options.profileForm.preview.close')}
+            </Button>
+          </Stack>
+        )}
+      </Modal>
     </Container>
       <CelebrationOverlay
         open={celebrationOpen}

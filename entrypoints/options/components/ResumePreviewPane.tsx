@@ -7,7 +7,6 @@ import {
   Center,
   Group,
   Loader,
-  Modal,
   Paper,
   ScrollArea,
   Stack,
@@ -15,7 +14,7 @@ import {
   Text,
   Tooltip,
 } from '@mantine/core';
-import { FileWarning, RefreshCw, UploadCloud } from 'lucide-react';
+import { FileWarning, PanelsTopLeft, RefreshCw, UploadCloud } from 'lucide-react';
 import type { StoredFileReference } from '@/shared/types';
 import { getFileBuffer } from '@/shared/storage/profiles';
 
@@ -26,6 +25,8 @@ interface ResumePreviewPaneProps {
   rawSummary?: string | null;
   rawText: string;
   uploadInputId?: string;
+  variant?: 'sidebar' | 'modal';
+  onOpenWorkspace?: () => void;
 }
 
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -37,11 +38,12 @@ export function ResumePreviewPane({
   rawSummary,
   rawText,
   uploadInputId,
+  variant = 'sidebar',
+  onOpenWorkspace,
 }: ResumePreviewPaneProps) {
   const { t } = i18n;
   const [status, setStatus] = useState<PreviewStatus>('idle');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [activeTab, setActiveTab] = useState<'pdf' | 'text'>(file ? 'pdf' : 'text');
 
@@ -96,6 +98,8 @@ export function ResumePreviewPane({
   }, [file, profileId, reloadKey]);
 
   const hasRawText = rawText.trim().length > 0;
+  const previewHeight = variant === 'modal' ? 520 : 360;
+  const stateHeight = variant === 'modal' ? 360 : 240;
 
   const handleTriggerUpload = () => {
     if (!uploadInputId || typeof document === 'undefined') {
@@ -117,14 +121,32 @@ export function ResumePreviewPane({
     document.body.removeChild(link);
   };
 
-  const modalContent = previewUrl ? (
-    <Box
-      component="iframe"
-      src={previewUrl}
-      title={t('options.profileForm.preview.iframeTitle')}
-      style={{ width: '100%', height: '80vh', border: 'none', borderRadius: 12 }}
-    />
-  ) : null;
+  const headerActions =
+    variant === 'modal' ? (
+      <Group gap={4}>
+        <Tooltip label={t('options.profileForm.preview.replacePdf')} withArrow>
+          <ActionIcon
+            variant="light"
+            color="gray"
+            onClick={handleTriggerUpload}
+            aria-label={t('options.profileForm.preview.replacePdf')}
+          >
+            <UploadCloud size={16} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label={t('options.profileForm.preview.refresh')} withArrow>
+          <ActionIcon
+            variant="light"
+            color="gray"
+            onClick={() => setReloadKey((value) => value + 1)}
+            aria-label={t('options.profileForm.preview.refresh')}
+            disabled={!file}
+          >
+            <RefreshCw size={16} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+    ) : null;
 
   const renderPdfPanel = () => {
     if (!profileId) {
@@ -132,6 +154,7 @@ export function ResumePreviewPane({
         <StateMessage
           icon={<FileWarning size={20} />}
           message={t('options.profileForm.preview.noProfile')}
+          minHeight={stateHeight}
         />
       );
     }
@@ -142,6 +165,7 @@ export function ResumePreviewPane({
           message={t('options.profileForm.preview.empty')}
           actionLabel={t('options.profileForm.preview.replacePdf')}
           onAction={handleTriggerUpload}
+          minHeight={stateHeight}
         />
       );
     }
@@ -150,6 +174,7 @@ export function ResumePreviewPane({
         <StateMessage
           icon={<Loader size="sm" />}
           message={t('options.profileForm.preview.loading')}
+          minHeight={stateHeight}
         />
       );
     }
@@ -177,6 +202,7 @@ export function ResumePreviewPane({
               </Button>
             </Group>
           }
+          minHeight={stateHeight}
         />
       );
     }
@@ -188,17 +214,14 @@ export function ResumePreviewPane({
           title={t('options.profileForm.preview.iframeTitle')}
           style={{
             width: '100%',
-            height: 360,
+            height: previewHeight,
             border: 'none',
             borderRadius: 12,
             backgroundColor: 'var(--mantine-color-gray-0)',
           }}
         />
-        <Group justify="space-between" align="center">
-          <Button size="xs" variant="light" onClick={() => setModalOpen(true)}>
-            {t('options.profileForm.preview.openModal')}
-          </Button>
-          <Button size="xs" variant="subtle" onClick={handleDownload}>
+        <Group justify="flex-end" align="center">
+          <Button size="xs" variant="subtle" onClick={handleDownload} disabled={!previewUrl}>
             {t('options.profileForm.preview.download')}
           </Button>
         </Group>
@@ -212,11 +235,12 @@ export function ResumePreviewPane({
         <StateMessage
           icon={<FileWarning size={20} />}
           message={t('options.profileForm.preview.noText')}
+          minHeight={stateHeight}
         />
       );
     }
     return (
-      <ScrollArea style={{ maxHeight: 360 }}>
+      <ScrollArea style={{ maxHeight: previewHeight }}>
         <Text component="pre" fz="sm" style={{ whiteSpace: 'pre-wrap' }}>
           {rawText}
         </Text>
@@ -238,9 +262,13 @@ export function ResumePreviewPane({
         radius="lg"
         p="lg"
         shadow="sm"
-        style={{ position: 'sticky', top: 16 }}
+        style={
+          variant === 'sidebar'
+            ? { position: 'sticky', top: 16 }
+            : { height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }
+        }
       >
-        <Stack gap="md">
+        <Stack gap="md" style={variant === 'modal' ? { height: '100%' } : undefined}>
           <Group justify="space-between" align="flex-start">
             <Stack gap={2} style={{ flex: 1 }}>
               <Text fw={600}>{t('options.profileForm.preview.heading')}</Text>
@@ -253,30 +281,18 @@ export function ResumePreviewPane({
                 </Text>
               )}
             </Stack>
-            <Group gap={4}>
-              <Tooltip label={t('options.profileForm.preview.replacePdf')} withArrow>
-                <ActionIcon
-                  variant="light"
-                  color="gray"
-                  onClick={handleTriggerUpload}
-                  aria-label={t('options.profileForm.preview.replacePdf')}
-                >
-                  <UploadCloud size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t('options.profileForm.preview.refresh')} withArrow>
-                <ActionIcon
-                  variant="light"
-                  color="gray"
-                  onClick={() => setReloadKey((value) => value + 1)}
-                  aria-label={t('options.profileForm.preview.refresh')}
-                  disabled={!file}
-                >
-                  <RefreshCw size={16} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
+            {headerActions}
           </Group>
+          {variant === 'sidebar' && onOpenWorkspace ? (
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<PanelsTopLeft size={14} />}
+              onClick={onOpenWorkspace}
+            >
+              {t('options.profileForm.preview.openFullscreen')}
+            </Button>
+          ) : null}
 
           <Tabs value={activeTab} onChange={(value) => setActiveTab((value as 'pdf' | 'text') ?? 'pdf')}>
             <Tabs.List>
@@ -293,15 +309,6 @@ export function ResumePreviewPane({
         </Stack>
       </Paper>
 
-      <Modal
-        opened={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={t('options.profileForm.preview.modalTitle')}
-        size="90%"
-        fullScreen={false}
-      >
-        {modalContent}
-      </Modal>
     </>
   );
 }
@@ -312,11 +319,17 @@ interface StateMessageProps {
   actionLabel?: string;
   onAction?: () => void;
   actions?: JSX.Element;
+  minHeight?: number;
 }
 
-function StateMessage({ icon, message, actionLabel, onAction, actions }: StateMessageProps) {
+function StateMessage({ icon, message, actionLabel, onAction, actions, minHeight }: StateMessageProps) {
   return (
-    <Stack gap="sm" align="center" justify="center" style={{ minHeight: 240, textAlign: 'center' }}>
+    <Stack
+      gap="sm"
+      align="center"
+      justify="center"
+      style={{ minHeight: minHeight ?? 240, textAlign: 'center' }}
+    >
       <Center
         style={{
           width: 48,

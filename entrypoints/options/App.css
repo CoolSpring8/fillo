@@ -89,6 +89,39 @@
   background-color: var(--mantine-color-brand-0);
 }
 
+.fillo-workspace {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.fillo-workspace__layout {
+  display: flex;
+  flex-direction: row;
+  gap: var(--mantine-spacing-xl);
+  height: 100%;
+  width: 100%;
+  align-items: stretch;
+}
+
+.fillo-workspace__form,
+.fillo-workspace__preview {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.fillo-workspace__form {
+  flex: 0 0 540px;
+  max-width: 600px;
+  min-width: 360px;
+}
+
+.fillo-workspace__preview {
+  flex: 1 1 0;
+}
+
 @keyframes fillo-celebration-pop {
   from {
     transform: scale(0.96);

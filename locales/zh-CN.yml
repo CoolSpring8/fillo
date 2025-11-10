@@ -116,13 +116,16 @@ options:
       refresh: 刷新预览
       replacePdf: 替换 PDF
       download: 下载 PDF
-      openModal: 放大预览
+      openFullscreen: 全屏查看
       modalTitle: 简历 PDF 预览
       iframeTitle: 简历 PDF 预览
       tabs:
         pdf: PDF
         text: 原始文本
       noText: 暂无提取文本。
+      workspaceTitle: 全屏工作区
+      workspaceDescription: 在整页视图中同时查看 PDF 与结构化表单。
+      close: 关闭工作区
     sections:
       basics: 基础信息
       work: 工作经历
