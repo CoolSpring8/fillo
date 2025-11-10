@@ -221,6 +221,7 @@ export default defineContentScript({
     let lastGuidedId: string | null = null;
     let domAccessAllowed = false;
     let overlayAccessAllowed = false;
+    let focusListenersAttached = false;
 
     const port = browser.runtime.connect({ name: 'content' });
 
@@ -237,6 +238,7 @@ export default defineContentScript({
 
     const setOverlayAccessAllowed = (allowed: boolean) => {
       overlayAccessAllowed = allowed;
+      syncFocusListeners();
       if (!allowed) {
         clearOverlay();
         ignoreCaptures.clear();
@@ -244,7 +246,7 @@ export default defineContentScript({
       }
     };
 
-    const handleFocusIn = () => {
+    function handleFocusIn(): void {
       if (!overlayAccessAllowed) {
         return;
       }
@@ -257,9 +259,9 @@ export default defineContentScript({
         return;
       }
       emitGuidedCandidate(field, 'focus');
-    };
+    }
 
-    const handleFocusOut = (event: FocusEvent) => {
+    function handleFocusOut(event: FocusEvent): void {
       if (!overlayAccessAllowed) {
         return;
       }
@@ -283,10 +285,33 @@ export default defineContentScript({
         return;
       }
       emitGuidedInputCapture(field, value);
-    };
+    }
 
-    document.addEventListener('focusin', handleFocusIn, true);
-    document.addEventListener('focusout', handleFocusOut, true);
+    function attachFocusListeners(): void {
+      if (focusListenersAttached) {
+        return;
+      }
+      document.addEventListener('focusin', handleFocusIn, true);
+      document.addEventListener('focusout', handleFocusOut, true);
+      focusListenersAttached = true;
+    }
+
+    function detachFocusListeners(): void {
+      if (!focusListenersAttached) {
+        return;
+      }
+      document.removeEventListener('focusin', handleFocusIn, true);
+      document.removeEventListener('focusout', handleFocusOut, true);
+      focusListenersAttached = false;
+    }
+
+    function syncFocusListeners(): void {
+      if (overlayAccessAllowed) {
+        attachFocusListeners();
+      } else {
+        detachFocusListeners();
+      }
+    }
 
     port.onMessage.addListener((message: ContentInboundMessage) => {
       switch (message.kind) {
@@ -332,8 +357,7 @@ export default defineContentScript({
       fieldMetadata.clear();
       ignoreCaptures.clear();
       lastGuidedId = null;
-      document.removeEventListener('focusin', handleFocusIn, true);
-      document.removeEventListener('focusout', handleFocusOut, true);
+      detachFocusListeners();
     });
 
     function send(message: ContentOutboundMessage): void {
@@ -632,7 +656,7 @@ export default defineContentScript({
     }
 
     function handlePromptPreview(message: Extract<ContentInboundMessage, { kind: 'PROMPT_PREVIEW' }>): void {
-      if (!domAccessAllowed && !overlayAccessAllowed) {
+      if (!overlayAccessAllowed) {
         return;
       }
       const meta = fieldMetadata.get(message.fieldId);
