@@ -399,6 +399,13 @@ sidepanel:
     searchAria: 搜索简历数据
     searchPrevious: 上一个匹配项
     searchNext: 下一个匹配项
+    preview:
+      heading: PDF 预览
+      noFile: 请先在工作区上传 PDF，随后即可在此查看。
+      error: 无法读取已保存的 PDF，请稍后重试。
+      openTab: 在新标签页打开
+      inlineHint: 若需要更大视图，可使用弹出按钮。
+      iframeTitle: 已保存 PDF 预览
   buttons:
     copy: 复制
     copyAll: 全部复制

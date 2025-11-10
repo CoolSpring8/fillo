@@ -16,7 +16,7 @@ import {
 } from '@mantine/core';
 import { FileWarning, PanelsTopLeft, RefreshCw, UploadCloud } from 'lucide-react';
 import type { StoredFileReference } from '@/shared/types';
-import { getFileBuffer } from '@/shared/storage/profiles';
+import { useProfilePreview } from '@/shared/hooks/useProfilePreview';
 
 interface ResumePreviewPaneProps {
   profileId: string | null;
@@ -29,8 +29,6 @@ interface ResumePreviewPaneProps {
   onOpenWorkspace?: () => void;
 }
 
-type PreviewStatus = 'idle' | 'loading' | 'ready' | 'error';
-
 export function ResumePreviewPane({
   profileId,
   file,
@@ -42,9 +40,7 @@ export function ResumePreviewPane({
   onOpenWorkspace,
 }: ResumePreviewPaneProps) {
   const { t } = i18n;
-  const [status, setStatus] = useState<PreviewStatus>('idle');
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const { status, previewUrl, reload } = useProfilePreview({ profileId, file });
   const [activeTab, setActiveTab] = useState<'pdf' | 'text'>(file ? 'pdf' : 'text');
 
   useEffect(() => {
@@ -52,50 +48,6 @@ export function ResumePreviewPane({
       setActiveTab('text');
     }
   }, [file, activeTab]);
-
-  useEffect(() => {
-    let mounted = true;
-    let objectUrl: string | null = null;
-
-    if (!profileId || !file) {
-      setPreviewUrl(null);
-      setStatus('idle');
-      return () => {
-        mounted = false;
-      };
-    }
-
-    setStatus('loading');
-    getFileBuffer(profileId)
-      .then((buffer) => {
-        if (!mounted) {
-          return;
-        }
-        if (!buffer) {
-          setStatus('error');
-          setPreviewUrl(null);
-          return;
-        }
-        const blob = new Blob([buffer], { type: file.type || 'application/pdf' });
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
-        setStatus('ready');
-      })
-      .catch((error) => {
-        console.warn('Unable to load PDF preview', error);
-        if (mounted) {
-          setStatus('error');
-          setPreviewUrl(null);
-        }
-      });
-
-    return () => {
-      mounted = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [file, profileId, reloadKey]);
 
   const hasRawText = rawText.trim().length > 0;
   const previewHeight = variant === 'modal' ? 520 : 360;
@@ -138,7 +90,7 @@ export function ResumePreviewPane({
           <ActionIcon
             variant="light"
             color="gray"
-            onClick={() => setReloadKey((value) => value + 1)}
+            onClick={reload}
             aria-label={t('options.profileForm.preview.refresh')}
             disabled={!file}
           >
@@ -188,7 +140,7 @@ export function ResumePreviewPane({
               <Button
                 size="xs"
                 leftSection={<RefreshCw size={14} />}
-                onClick={() => setReloadKey((value) => value + 1)}
+                onClick={reload}
               >
                 {t('options.profileForm.preview.refresh')}
               </Button>

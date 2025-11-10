@@ -398,6 +398,13 @@ sidepanel:
     searchAria: Search stored resume data
     searchPrevious: Previous match
     searchNext: Next match
+    preview:
+      heading: PDF preview
+      noFile: Upload a PDF in the workspace to preview it here.
+      error: Unable to load the stored PDF.
+      openTab: Open in new tab
+      inlineHint: Use the pop-out button if you need a larger view.
+      iframeTitle: Stored PDF preview
   buttons:
     copy: Copy
     copyAll: Copy all
