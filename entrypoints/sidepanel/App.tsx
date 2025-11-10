@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Group,
-  NativeSelect,
   Paper,
   Select,
   Stack,
@@ -888,14 +887,6 @@ export default function App() {
     [profiles],
   );
 
-  const selectOptions = useMemo(
-    () => [
-      { value: '', label: t('sidepanel.states.noProfilesOption') },
-      ...profileOptions,
-    ],
-    [profileOptions, t],
-  );
-
   const fillDisabled =
     fields.length === 0 ||
     fields.every(
@@ -989,11 +980,19 @@ export default function App() {
         <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
           <Paper px="md" py="sm" withBorder={false} style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
             <Group gap="xs" wrap="nowrap" align="flex-end">
-              <NativeSelect
+              <Select
                 label={t('popup.title')}
-                value={selectedProfileId ?? ''}
-                onChange={(event) => setSelectedProfileId(event.currentTarget.value || null)}
-                data={selectOptions}
+                placeholder={t('popup.overlay.profileSelectPlaceholder')}
+                description={
+                  profiles.length > 0
+                    ? t('popup.overlay.profileSelectDescription')
+                    : t('popup.overlay.profileSelectEmpty')
+                }
+                data={profileOptions}
+                value={selectedProfileId}
+                onChange={(value) => setSelectedProfileId(value ?? null)}
+                clearable
+                disabled={profiles.length === 0}
                 size="sm"
                 style={{ flex: 1 }}
               />
