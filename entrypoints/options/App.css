@@ -94,6 +94,7 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .fillo-workspace__layout {
@@ -110,16 +111,39 @@
   display: flex;
   min-height: 0;
   min-width: 0;
+  height: 100%;
 }
 
 .fillo-workspace__form {
-  flex: 0 0 540px;
+  flex: 0 1 560px;
   max-width: 600px;
-  min-width: 360px;
+  min-width: 320px;
+  width: 100%;
 }
 
 .fillo-workspace__preview {
   flex: 1 1 0;
+}
+
+.fillo-workspace__layout--single {
+  flex-direction: column;
+}
+
+.fillo-workspace--compact .fillo-workspace__form {
+  flex: 1 1 auto;
+  max-width: none;
+  min-width: 0;
+}
+
+.fillo-workspace__preview-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  width: auto;
+  padding: 0;
+  z-index: 2;
 }
 
 @keyframes fillo-celebration-pop {

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionIcon,
   Alert,
   Box,
   Button,
   Container,
+  Drawer,
   Flex,
   Grid,
   Group,
@@ -16,9 +18,11 @@ import {
   Text,
   ThemeIcon,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import { useForm } from 'react-hook-form';
-import { Cpu, IdCard, SlidersHorizontal, Sparkles, WandSparkles } from 'lucide-react';
+import { useMediaQuery } from '@mantine/hooks';
+import { Cpu, IdCard, PanelRightOpen, SlidersHorizontal, Sparkles, WandSparkles } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { ProfilesCard } from './components/ProfilesCard';
 import { ProviderCard } from './components/ProviderCard';
@@ -49,10 +53,12 @@ export default function App() {
     defaultValues: createEmptyResumeFormValues(),
   });
   const uploadInputId = 'profile-form-upload';
+  const isWideWorkspace = useMediaQuery('(min-width: 1100px)');
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationVersion, setCelebrationVersion] = useState(0);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
   const statusNotificationId = useRef<string | null>(null);
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
@@ -132,6 +138,7 @@ export default function App() {
   useEffect(() => {
     if (!selectedProfile) {
       setWorkspaceOpen(false);
+      setPreviewDrawerOpen(false);
     }
   }, [selectedProfile]);
   const handleOpenWorkspace = useCallback(() => {
@@ -143,6 +150,16 @@ export default function App() {
   const handleCloseWorkspace = useCallback(() => {
     setWorkspaceOpen(false);
   }, []);
+  useEffect(() => {
+    if (isWideWorkspace) {
+      setPreviewDrawerOpen(false);
+    }
+  }, [isWideWorkspace]);
+  useEffect(() => {
+    if (!workspaceOpen) {
+      setPreviewDrawerOpen(false);
+    }
+  }, [workspaceOpen]);
   const profileFormProps = useMemo(
     () => ({
       form,
@@ -698,24 +715,42 @@ export default function App() {
         }}
       >
         {workspaceOpen && selectedProfile ? (
-          <Box className="fillo-workspace">
-            <Box className="fillo-workspace__layout">
+          <Box className={`fillo-workspace${isWideWorkspace ? '' : ' fillo-workspace--compact'}`}>
+            {!isWideWorkspace && (
+              <Box className="fillo-workspace__preview-toggle">
+                <Tooltip label={t('options.profileForm.preview.openPreviewDrawer')} withArrow>
+                  <ActionIcon
+                    variant="light"
+                    color="gray"
+                    onClick={() => setPreviewDrawerOpen(true)}
+                    aria-label={t('options.profileForm.preview.openPreviewDrawer')}
+                  >
+                    <PanelRightOpen size={18} />
+                  </ActionIcon>
+                </Tooltip>
+              </Box>
+            )}
+            <Box
+              className={`fillo-workspace__layout${isWideWorkspace ? '' : ' fillo-workspace__layout--single'}`}
+            >
               <Box className="fillo-workspace__form">
                 <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
                   <ProfileForm {...profileFormProps} />
                 </ScrollArea>
               </Box>
-              <Box className="fillo-workspace__preview">
-                <ResumePreviewPane
-                  profileId={selectedProfile.id}
-                  file={selectedProfile.sourceFile}
-                  fileSummary={fileSummary}
-                  rawSummary={rawSummary}
-                  rawText={rawText}
-                  uploadInputId={uploadInputId}
-                  variant="modal"
-                />
-              </Box>
+              {isWideWorkspace ? (
+                <Box className="fillo-workspace__preview">
+                  <ResumePreviewPane
+                    profileId={selectedProfile.id}
+                    file={selectedProfile.sourceFile}
+                    fileSummary={fileSummary}
+                    rawSummary={rawSummary}
+                    rawText={rawText}
+                    uploadInputId={uploadInputId}
+                    variant="modal"
+                  />
+                </Box>
+              ) : null}
             </Box>
           </Box>
         ) : (
@@ -730,6 +765,47 @@ export default function App() {
           </Stack>
         )}
       </Modal>
+      <Drawer
+        opened={previewDrawerOpen && !isWideWorkspace}
+        onClose={() => setPreviewDrawerOpen(false)}
+        title={t('options.profileForm.preview.drawerTitle')}
+        position="right"
+        size="lg"
+        padding="lg"
+        styles={{
+          content: {
+            overflow: 'hidden',
+          },
+          body: {
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 'var(--mantine-spacing-lg)',
+            overflow: 'hidden',
+          },
+        }}
+      >
+        {selectedProfile ? (
+          <Box style={{ flex: 1, minHeight: 0 }}>
+            <ResumePreviewPane
+              profileId={selectedProfile.id}
+              file={selectedProfile.sourceFile}
+              fileSummary={fileSummary}
+              rawSummary={rawSummary}
+              rawText={rawText}
+              uploadInputId={uploadInputId}
+              variant="modal"
+            />
+          </Box>
+        ) : (
+          <Stack gap="sm">
+            <Text fw={600}>{t('options.profileForm.preview.noProfile')}</Text>
+            <Button variant="light" onClick={() => setPreviewDrawerOpen(false)}>
+              {t('options.profileForm.preview.close')}
+            </Button>
+          </Stack>
+        )}
+      </Drawer>
     </Container>
       <CelebrationOverlay
         open={celebrationOpen}

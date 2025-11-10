@@ -117,6 +117,7 @@ options:
       replacePdf: Replace PDF
       download: Download PDF
       openFullscreen: Open full-screen view
+      openPreviewDrawer: Open preview panel
       modalTitle: Resume PDF preview
       iframeTitle: Resume PDF frame
       tabs:
@@ -126,6 +127,7 @@ options:
       workspaceTitle: Full-screen PDF workspace
       workspaceDescription: Use the full browser window to edit the form while referencing your uploaded PDF.
       close: Close workspace
+      drawerTitle: Resume preview
     sections:
       basics: Basics
       work: Work
