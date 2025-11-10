@@ -688,7 +688,7 @@ export default function App() {
         kind: 'HIGHLIGHT_FIELD',
         fieldId: entry.field.id,
         frameId: entry.field.frameId,
-        label: entry.field.label,
+        label: '',
         scrollIntoView: shouldScroll,
       });
 
@@ -878,6 +878,11 @@ export default function App() {
     setPermissionGranted(true);
   }, []);
 
+  const handlePermissionRevoke = useCallback(() => {
+    sendMessage({ kind: 'CLEAR_OVERLAY' });
+    setPermissionGranted(false);
+  }, [sendMessage]);
+
   const profileOptions = useMemo(
     () =>
       profiles.map((profile) => ({
@@ -965,11 +970,22 @@ export default function App() {
             icon: <Eraser size={iconSize} />,
           })}
         </Group>
-        {statusBadge && (
-          <Badge color={statusBadge.color} variant="light" size="sm">
-            {statusBadge.label}
-          </Badge>
-        )}
+        <Group gap="xs" align="center">
+          {statusBadge && (
+            <Badge color={statusBadge.color} variant="light" size="sm">
+              {statusBadge.label}
+            </Badge>
+          )}
+          <Button
+            variant="subtle"
+            color="gray"
+            size="xs"
+            onClick={handlePermissionRevoke}
+            aria-label={tLoose('sidepanel.permission.revoke')}
+          >
+            {tLoose('sidepanel.permission.revoke')}
+          </Button>
+        </Group>
       </Group>
     );
   };

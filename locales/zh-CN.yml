@@ -369,6 +369,7 @@ sidepanel:
     body: Fillo 会扫描当前页面以识别申请表单字段，并在提供建议前将其匹配到你的简历信息。
     note: 只有在你批准后我们才会读取页面内容；若暂时不想授权，请关闭侧边栏。
     allow: 允许扫描
+    revoke: 停止扫描
   toolbar:
     scanning: 正在扫描…
     rescan: 重新扫描页面
