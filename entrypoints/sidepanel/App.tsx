@@ -15,12 +15,9 @@ import {
   Text,
   Textarea,
   TextInput,
-  Title,
   Tooltip,
-  useComputedColorScheme,
-  useMantineTheme,
 } from '@mantine/core';
-import { CheckCircle2, Eraser, RefreshCcw, Sparkles, Users, Wand2 } from 'lucide-react';
+import { Eraser, RefreshCcw, Sparkles, Users, Wand2 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { browser } from 'wxt/browser';
 import { listProfiles } from '../../shared/storage/profiles';
@@ -58,29 +55,6 @@ function isFieldSlotValue(slot: PromptOptionSlot | null | undefined): slot is Fi
   return typeof slot === 'string' && !slot.startsWith('profile.');
 }
 
-function hexToRgba(color: string | undefined, alpha: number): string {
-  if (!color) {
-    return `rgba(0, 0, 0, ${alpha})`;
-  }
-  let hex = color.trim();
-  if (hex.startsWith('#')) {
-    hex = hex.slice(1);
-  }
-  if (hex.length === 3) {
-    hex = hex
-      .split('')
-      .map((char) => char + char)
-      .join('');
-  }
-  if (hex.length !== 6 || Number.isNaN(Number.parseInt(hex, 16))) {
-    return `rgba(0, 0, 0, ${alpha})`;
-  }
-  const r = Number.parseInt(hex.slice(0, 2), 16);
-  const g = Number.parseInt(hex.slice(2, 4), 16);
-  const b = Number.parseInt(hex.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 type PanelMode = 'dom' | 'manual';
 
 type RuntimePort = ReturnType<typeof browser.runtime.connect>;
@@ -100,22 +74,9 @@ export default function App() {
   const [activeAdapterIds, setActiveAdapterIds] = useState<string[]>(defaultAdapterIds);
   const { t } = i18n;
   const tLoose = i18n.t as unknown as (key: string, params?: unknown[]) => string;
-  const theme = useMantineTheme();
-  const colorScheme = useComputedColorScheme('light');
-  const primaryPalette = theme.colors[theme.primaryColor] ?? theme.colors.blue ?? [];
-  const accentPalette = theme.colors.teal ?? theme.colors.cyan ?? primaryPalette;
-  const softPalette = theme.colors.pink ?? theme.colors.violet ?? primaryPalette;
-  const neutralPalette = theme.colors.gray ?? [];
-  const surfaceBaseHex = colorScheme === 'dark' ? theme.colors.dark?.[8] ?? '#0b1020' : theme.white ?? '#ffffff';
-  const surfaceElevatedHex =
-    colorScheme === 'dark' ? theme.colors.dark?.[6] ?? '#161b2a' : neutralPalette?.[0] ?? '#f8f9fa';
-  const brandPrimaryHex = primaryPalette?.[colorScheme === 'dark' ? 4 : 6] ?? '#3345a2';
-  const brandBrightHex = primaryPalette?.[colorScheme === 'dark' ? 5 : 4] ?? '#4c6ef5';
-  const accentHex = accentPalette?.[colorScheme === 'dark' ? 5 : 2] ?? '#15aabf';
-  const softHex = softPalette?.[colorScheme === 'dark' ? 4 : 1] ?? '#ffd6e8';
-  const neutralTextHex = neutralPalette?.[colorScheme === 'dark' ? 2 : 7] ?? '#495057';
 
   const portRef = useRef<RuntimePort | null>(null);
+  const permissionRef = useRef(permissionGranted);
   const slotValuesRef = useRef<SlotValueMap>({});
   const scanRequestIdRef = useRef<string | null>(null);
   const descriptorsRef = useRef<FieldDescriptor[]>([]);
@@ -163,6 +124,22 @@ export default function App() {
     adapterIdsRef.current = activeAdapterIds.length > 0 ? activeAdapterIds : defaultAdapterIds;
   }, [activeAdapterIds, defaultAdapterIds]);
 
+  useEffect(() => {
+    permissionRef.current = permissionGranted;
+  }, [permissionGranted]);
+
+  const sendDomAccessUpdate = useCallback((allowed: boolean) => {
+    const port = portRef.current;
+    if (!port) {
+      return;
+    }
+    try {
+      port.postMessage({ kind: 'SET_DOM_ACCESS', allowed });
+    } catch (error) {
+      console.warn('Failed to update DOM access state.', error);
+    }
+  }, []);
+
   const formatFillReason = (reason: string): string => {
     const map: Record<string, string> = {
       'frame-unavailable': t('sidepanel.reason.frameUnavailable'),
@@ -174,6 +151,7 @@ export default function App() {
       'click-failed': t('sidepanel.reason.clickFailed'),
       'no-selection': t('sidepanel.reason.noSelection'),
       'empty-value': t('sidepanel.reason.emptyValue'),
+      'no-permission': t('sidepanel.reason.noPermission'),
       'auto-no-model': t('sidepanel.reason.autoNoModel'),
       'auto-no-keys': t('sidepanel.reason.autoNoKeys'),
       'auto-no-decision': t('sidepanel.reason.autoNoDecision'),
@@ -257,27 +235,19 @@ export default function App() {
   }, [defaultAdapterIds]);
 
   useEffect(() => {
-    const styleId = 'fillo-permission-gradient';
-    if (document.getElementById(styleId)) {
-      return;
+    sendDomAccessUpdate(permissionGranted);
+    if (!permissionGranted) {
+      setFields([]);
+      fieldsRef.current = [];
+      descriptorsRef.current = [];
+      setSelectedFieldId(null);
+      selectedFieldRef.current = null;
+      setScanRequestId(null);
+      scanRequestIdRef.current = null;
+      setScanning(false);
+      fillResolversRef.current.clear();
     }
-    const styleElement = document.createElement('style');
-    styleElement.id = styleId;
-    styleElement.textContent = `
-      @keyframes fillo-permission-gradient {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-    `;
-    document.head.appendChild(styleElement);
-    return () => {
-      const existing = document.getElementById(styleId);
-      if (existing) {
-        existing.remove();
-      }
-    };
-  }, []);
+  }, [permissionGranted, sendDomAccessUpdate]);
 
   useEffect(() => {
     const port = browser.runtime.connect({ name: 'sidepanel' });
@@ -285,6 +255,13 @@ export default function App() {
 
     const handleMessage = (message: unknown) => {
       if (!isRecord(message)) {
+        return;
+      }
+      const permissionEnabled = permissionRef.current;
+      if (
+        !permissionEnabled &&
+        (message.kind === 'GUIDED_CANDIDATE' || message.kind === 'GUIDED_INPUT_CAPTURE' || message.kind === 'FIELDS')
+      ) {
         return;
       }
 
@@ -366,12 +343,19 @@ export default function App() {
       setPermissionGranted(false);
     });
 
+    sendDomAccessUpdate(permissionRef.current);
+
     return () => {
       port.onMessage.removeListener(handleMessage);
+      try {
+        port.postMessage({ kind: 'SET_DOM_ACCESS', allowed: false });
+      } catch {
+        // ignore, port likely disconnected
+      }
       port.disconnect();
       portRef.current = null;
     };
-  }, []);
+  }, [sendDomAccessUpdate]);
 
   const sendMessage = useCallback(
     (payload: Record<string, unknown>) => {
@@ -482,38 +466,6 @@ export default function App() {
   }, [fields, notify, selectedProfile, sendMessage, t]);
 
   // Auto mode flow removed
-
-  const overlayGradient = useMemo(
-    () =>
-      `linear-gradient(140deg,
-        ${hexToRgba(surfaceBaseHex, colorScheme === 'dark' ? 0.94 : 0.96)} 0%,
-        ${hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.42 : 0.24)} 30%,
-        ${hexToRgba(accentHex, colorScheme === 'dark' ? 0.32 : 0.22)} 60%,
-        ${hexToRgba(softHex, colorScheme === 'dark' ? 0.36 : 0.22)} 100%)`,
-    [accentHex, brandBrightHex, colorScheme, softHex, surfaceBaseHex],
-  );
-
-  const permissionCardStyles = useMemo(
-    () => ({
-      position: 'relative' as const,
-      borderRadius: 24,
-      padding: '2.25rem',
-      background: hexToRgba(surfaceElevatedHex, colorScheme === 'dark' ? 0.88 : 0.94),
-      border: `1px solid ${hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.34 : 0.18)}`,
-      boxShadow:
-        colorScheme === 'dark'
-          ? '0 32px 70px rgba(5, 10, 25, 0.55)'
-          : '0 32px 70px rgba(15, 23, 42, 0.14)',
-      backdropFilter: `blur(${colorScheme === 'dark' ? 12 : 18}px)`,
-    }),
-    [brandBrightHex, colorScheme, surfaceElevatedHex],
-  );
-
-  const permissionTitleColor = colorScheme === 'dark' ? theme.white : brandPrimaryHex;
-  const permissionBodyColor = hexToRgba(neutralTextHex, colorScheme === 'dark' ? 0.86 : 0.92);
-  const permissionNoteBackground = hexToRgba(softHex, colorScheme === 'dark' ? 0.2 : 0.3);
-  const permissionNoteBorder = hexToRgba(brandBrightHex, colorScheme === 'dark' ? 0.38 : 0.24);
-  const permissionNoteText = hexToRgba(neutralTextHex, colorScheme === 'dark' ? 0.78 : 0.82);
 
   const requestScan = useCallback(() => {
     if (!permissionGranted) {
@@ -959,7 +911,7 @@ export default function App() {
 
   const renderDomToolbar = () => {
     const iconSize = 18;
-    const baseDisabled = viewState.loadingProfiles || !selectedProfile;
+    const baseDisabled = viewState.loadingProfiles || !selectedProfile || !permissionGranted;
     const statusBadge = scanning
       ? { color: 'brand' as const, label: t('sidepanel.toolbar.scanning') }
       : classifying
@@ -1031,72 +983,6 @@ export default function App() {
     );
   };
 
-  const permissionOverlay = !permissionGranted ? (
-    <Box
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2.5rem 1.5rem',
-        overflow: 'hidden',
-      }}
-    >
-      <Box
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 0,
-          pointerEvents: 'none',
-          background: overlayGradient,
-          backgroundSize: '280% 280%',
-          animation: 'fillo-permission-gradient 24s ease infinite',
-          backdropFilter: `blur(${colorScheme === 'dark' ? 16 : 20}px)`,
-        }}
-      />
-      <Box style={{ position: 'relative', width: '100%', maxWidth: 460, zIndex: 1 }}>
-        <Box style={permissionCardStyles}>
-          <Stack gap="lg" align="center">
-            <Title order={2} ta="center" style={{ color: permissionTitleColor }}>
-              {t('sidepanel.permission.title')}
-            </Title>
-            <Text fz="sm" ta="center" style={{ color: permissionBodyColor }}>
-              {t('sidepanel.permission.body')}
-            </Text>
-            <Paper
-              radius="lg"
-              withBorder={false}
-              px="md"
-              py="sm"
-              style={{
-                width: '100%',
-                background: permissionNoteBackground,
-                border: `1px solid ${permissionNoteBorder}`,
-              }}
-            >
-              <Text fz="xs" ta="center" style={{ color: permissionNoteText }}>
-                {t('sidepanel.permission.note')}
-              </Text>
-            </Paper>
-            <Group gap="sm" justify="center" wrap="wrap">
-              <Button
-                size="md"
-                radius="lg"
-                color={theme.primaryColor}
-                onClick={handlePermissionAccept}
-                leftSection={<CheckCircle2 size={16} />}
-              >
-                {t('sidepanel.permission.allow')}
-              </Button>
-            </Group>
-          </Stack>
-        </Box>
-      </Box>
-    </Box>
-  ) : null;
-
   return (
     <Box style={{ position: 'relative', height: '100vh' }}>
       <Stack gap={0} style={{ height: '100%' }}>
@@ -1145,6 +1031,8 @@ export default function App() {
               <FieldReviewMode
                 viewState={viewState}
                 selectedProfile={selectedProfile}
+                permissionGranted={permissionGranted}
+                onAllowPermission={handlePermissionAccept}
                 scanning={scanning}
                 fields={fields}
                 selectedFieldId={selectedFieldId}
@@ -1166,7 +1054,6 @@ export default function App() {
           </Tabs>
         </Stack>
       </Stack>
-      {permissionOverlay}
     </Box>
   );
 

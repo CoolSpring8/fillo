@@ -474,6 +474,7 @@ sidepanel:
     clickFailed: 点击失败
     noSelection: 未选择任何值
     emptyValue: 值为空
+    noPermission: 需要先授权
     autoNoModel: 本地 AI 不可用
     autoNoKeys: 没有可用的简历字段
     autoNoDecision: 模型未能选择值

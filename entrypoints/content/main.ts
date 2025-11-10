@@ -23,6 +23,14 @@ type ContentInboundMessage =
       kind: 'SCAN_FIELDS';
       requestId: string;
     }
+  | {
+      kind: 'SET_DOM_ACCESS';
+      allowed: boolean;
+    }
+  | {
+      kind: 'SET_OVERLAY_ACCESS';
+      allowed: boolean;
+    }
   | ({ kind: 'PROMPT_FILL'; scrollIntoView?: boolean } & PromptFillRequest)
   | ({ kind: 'PROMPT_PREVIEW'; scrollIntoView?: boolean } & PromptPreviewRequest)
   | {
@@ -211,10 +219,35 @@ export default defineContentScript({
     >();
     const ignoreCaptures = new Set<string>();
     let lastGuidedId: string | null = null;
+    let domAccessAllowed = false;
+    let overlayAccessAllowed = false;
 
     const port = browser.runtime.connect({ name: 'content' });
 
+    const setDomAccessAllowed = (allowed: boolean) => {
+      domAccessAllowed = allowed;
+      if (!allowed) {
+        clearOverlay();
+        clearRegistry();
+        fieldMetadata.clear();
+        ignoreCaptures.clear();
+        lastGuidedId = null;
+      }
+    };
+
+    const setOverlayAccessAllowed = (allowed: boolean) => {
+      overlayAccessAllowed = allowed;
+      if (!allowed) {
+        clearOverlay();
+        ignoreCaptures.clear();
+        lastGuidedId = null;
+      }
+    };
+
     const handleFocusIn = () => {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       const active = deepActiveElement();
       if (!active) {
         return;
@@ -227,6 +260,9 @@ export default defineContentScript({
     };
 
     const handleFocusOut = (event: FocusEvent) => {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       const target = event.target;
       if (!(target instanceof Element)) {
         return;
@@ -256,6 +292,12 @@ export default defineContentScript({
       switch (message.kind) {
         case 'SCAN_FIELDS':
           handleScan(message.requestId);
+          break;
+        case 'SET_DOM_ACCESS':
+          setDomAccessAllowed(Boolean(message.allowed));
+          break;
+        case 'SET_OVERLAY_ACCESS':
+          setOverlayAccessAllowed(Boolean(message.allowed));
           break;
         case 'PROMPT_FILL':
           handlePromptFill(message);
@@ -309,6 +351,9 @@ export default defineContentScript({
     }
 
     function emitGuidedCandidate(field: InternalField, origin: 'focus' | 'step' | 'request'): void {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       if (origin !== 'request' && lastGuidedId === field.id) {
         return;
       }
@@ -323,6 +368,9 @@ export default defineContentScript({
     }
 
     function emitGuidedInputCapture(field: InternalField, value: string): void {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       rememberField(field);
       send({
         kind: 'GUIDED_INPUT_CAPTURE',
@@ -374,6 +422,15 @@ export default defineContentScript({
     }
 
     function handleScan(requestId: string): void {
+      if (!domAccessAllowed) {
+        send({
+          kind: 'FIELDS',
+          requestId,
+          fields: [],
+          frameUrl: window.location.href,
+        });
+        return;
+      }
       const fields = scanFields();
       fieldMetadata.clear();
       fields.forEach(rememberField);
@@ -387,6 +444,16 @@ export default defineContentScript({
     }
 
     function handlePromptFill(message: Extract<ContentInboundMessage, { kind: 'PROMPT_FILL' }>): void {
+      if (!domAccessAllowed && !overlayAccessAllowed) {
+        send({
+          kind: 'FILL_RESULT',
+          requestId: message.requestId,
+          fieldId: message.fieldId,
+          status: 'failed',
+          reason: 'no-permission',
+        });
+        return;
+      }
       const meta = fieldMetadata.get(message.fieldId);
       if (!meta) {
         send({
@@ -565,6 +632,9 @@ export default defineContentScript({
     }
 
     function handlePromptPreview(message: Extract<ContentInboundMessage, { kind: 'PROMPT_PREVIEW' }>): void {
+      if (!domAccessAllowed && !overlayAccessAllowed) {
+        return;
+      }
       const meta = fieldMetadata.get(message.fieldId);
       const element = getElement(message.fieldId);
       if (!element || !(element instanceof HTMLElement)) {
@@ -651,6 +721,9 @@ export default defineContentScript({
     }
 
     function handleHighlight(fieldId: string, label: string, scrollIntoView: boolean | undefined): void {
+      if (!domAccessAllowed) {
+        return;
+      }
       const target = getElement(fieldId);
       if (!target) {
         clearOverlay();
@@ -660,6 +733,9 @@ export default defineContentScript({
     }
 
     function handleFocus(fieldId: string, scrollIntoView: boolean | undefined): void {
+      if (!domAccessAllowed) {
+        return;
+      }
       const target = getElement(fieldId);
       if (!target || !(target instanceof HTMLElement)) {
         return;
@@ -683,6 +759,9 @@ export default defineContentScript({
     }
 
     function handleGuidedStep(direction?: number, wrap?: boolean): void {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       const dir: 1 | -1 = direction === -1 ? -1 : 1;
       const next = focusStep({ direction: dir, wrap: wrap !== false });
       if (!next) {
@@ -696,10 +775,16 @@ export default defineContentScript({
     }
 
     function handleGuidedReset(): void {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       lastGuidedId = null;
     }
 
     function handleGuidedRequestCurrent(): void {
+      if (!overlayAccessAllowed) {
+        return;
+      }
       const active = deepActiveElement();
       if (!active) {
         return;

@@ -83,6 +83,7 @@ const pendingScans = new Map<string, PendingScan>();
 const pendingFills = new Map<string, PendingFill>();
 const popupOverlayTabs = new Set<number>();
 const pendingPromptAi = new Map<string, AbortController>();
+const domAccessPermissions = new Map<number, RuntimePort>();
 const overlayAdapterIds = getAllAdapterIds();
 let activeProfileId: string | null = null;
 let activeProfileReady: Promise<void> | null = null;
@@ -172,9 +173,9 @@ export default defineBackground(() => {
         popupOverlayTabs.add(tabId);
       } else {
         popupOverlayTabs.delete(tabId);
-        clearOverlayForTab(tabId);
       }
       const isEnabled = popupOverlayTabs.has(tabId);
+      broadcastOverlayAccess(tabId, isEnabled);
       ensureActiveProfileLoaded()
         .then(() => {
           sendResponse({ status: 'ok', enabled: isEnabled, profileId: activeProfileId });
@@ -278,6 +279,9 @@ export default defineBackground(() => {
 
   browser.tabs.onRemoved.addListener((tabId) => {
     if (popupOverlayTabs.delete(tabId)) {
+      broadcastOverlayAccess(tabId, false);
+    }
+    if (domAccessPermissions.delete(tabId)) {
       clearOverlayForTab(tabId);
     }
   });
@@ -297,6 +301,9 @@ function registerContentPort(port: RuntimePort): void {
     contentPorts.set(tabId, frames);
   }
   frames.set(frameId, port);
+
+  safePostMessage(port, { kind: 'SET_DOM_ACCESS', allowed: domAccessPermissions.has(tabId) });
+  safePostMessage(port, { kind: 'SET_OVERLAY_ACCESS', allowed: popupOverlayTabs.has(tabId) });
 
   port.onMessage.addListener((message: unknown) => handleContentMessage(tabId, frameId, message));
   port.onDisconnect.addListener(() => {
@@ -341,6 +348,16 @@ function registerSidePanelPort(port: RuntimePort): void {
         pendingFills.delete(requestId);
       }
     }
+    const affectedTabs: number[] = [];
+    for (const [tabId, owner] of domAccessPermissions.entries()) {
+      if (owner === port) {
+        affectedTabs.push(tabId);
+        domAccessPermissions.delete(tabId);
+      }
+    }
+    for (const tabId of affectedTabs) {
+      broadcastDomAccess(tabId, false);
+    }
   });
 }
 
@@ -376,6 +393,9 @@ async function handleSidePanelMessage(port: RuntimePort, raw: unknown): Promise<
       break;
     case 'PROMPT_PREVIEW':
       await handlePromptPreview(port, message);
+      break;
+    case 'SET_DOM_ACCESS':
+      await handleDomAccessUpdate(port, message);
       break;
   }
 }
@@ -687,6 +707,20 @@ async function handlePromptPreview(_: RuntimePort, payload: Record<string, unkno
   framePort.postMessage(outbound);
 }
 
+async function handleDomAccessUpdate(port: RuntimePort, payload: Record<string, unknown>): Promise<void> {
+  const allowed = Boolean(payload.allowed);
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return;
+  }
+  if (allowed) {
+    domAccessPermissions.set(tab.id, port);
+  } else if (domAccessPermissions.get(tab.id) === port) {
+    domAccessPermissions.delete(tab.id);
+  }
+  broadcastDomAccess(tab.id, allowed);
+}
+
 async function handlePromptAiSuggestMessage(
   raw: Record<string, unknown>,
   controller: AbortController | null,
@@ -969,6 +1003,30 @@ function clearOverlayForTab(tabId: number): void {
   }
   for (const port of frames.values()) {
     safePostMessage(port, { kind: 'CLEAR_OVERLAY' });
+  }
+}
+
+function broadcastDomAccess(tabId: number, allowed: boolean): void {
+  const frames = contentPorts.get(tabId);
+  if (frames) {
+    for (const framePort of frames.values()) {
+      safePostMessage(framePort, { kind: 'SET_DOM_ACCESS', allowed });
+    }
+  }
+  if (!allowed) {
+    clearOverlayForTab(tabId);
+  }
+}
+
+function broadcastOverlayAccess(tabId: number, allowed: boolean): void {
+  const frames = contentPorts.get(tabId);
+  if (frames) {
+    for (const framePort of frames.values()) {
+      safePostMessage(framePort, { kind: 'SET_OVERLAY_ACCESS', allowed });
+    }
+  }
+  if (!allowed) {
+    clearOverlayForTab(tabId);
   }
 }
 

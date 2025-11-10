@@ -473,6 +473,7 @@ sidepanel:
     clickFailed: Click failed
     noSelection: No selection made
     emptyValue: Value was empty
+    noPermission: Permission required
     autoNoModel: On-device AI unavailable
     autoNoKeys: No resume keys left to use
     autoNoDecision: Model could not choose a value

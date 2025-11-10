@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
-import { Paper, Stack } from '@mantine/core';
+import { Button, Paper, Stack, Text, Title } from '@mantine/core';
+import { CheckCircle2 } from 'lucide-react';
 
 import type { ProfileRecord } from '../../../shared/types';
 import type { FieldEntry, ViewState } from '../types';
@@ -10,6 +11,8 @@ type TranslateFn = (key: string, params?: unknown[]) => string;
 interface FieldReviewModeProps {
   viewState: ViewState;
   selectedProfile: ProfileRecord | null;
+  permissionGranted: boolean;
+  onAllowPermission: () => void;
   scanning: boolean;
   fields: FieldEntry[];
   selectedFieldId: string | null;
@@ -22,6 +25,8 @@ interface FieldReviewModeProps {
 export function FieldReviewMode({
   viewState,
   selectedProfile,
+  permissionGranted,
+  onAllowPermission,
   scanning,
   fields,
   selectedFieldId,
@@ -31,6 +36,35 @@ export function FieldReviewMode({
   t,
 }: FieldReviewModeProps): JSX.Element {
   const content = (() => {
+    if (!permissionGranted) {
+      return (
+        <Stack align="center" justify="center" style={{ minHeight: 280 }}>
+          <Paper radius={0} withBorder={false} p="xl" style={{ width: '100%', maxWidth: 460 }}>
+            <Stack gap="md" align="center">
+              <Title order={3} ta="center">
+                {t('sidepanel.permission.title')}
+              </Title>
+              <Text ta="center" c="dimmed">
+                {t('sidepanel.permission.body')}
+              </Text>
+              <Paper px="md" py="sm" radius="lg" withBorder style={{ width: '100%' }}>
+                <Text fz="sm" ta="center">
+                  {t('sidepanel.permission.note')}
+                </Text>
+              </Paper>
+              <Button
+                size="md"
+                radius="lg"
+                leftSection={<CheckCircle2 size={16} />}
+                onClick={onAllowPermission}
+              >
+                {t('sidepanel.permission.allow')}
+              </Button>
+            </Stack>
+          </Paper>
+        </Stack>
+      );
+    }
     if (viewState.loadingProfiles) {
       return <StateAlert message={t('sidepanel.states.loadingProfiles')} tone="brand" />;
     }
@@ -57,25 +91,29 @@ export function FieldReviewMode({
 
   return (
     <Stack gap={0} style={{ height: '100%', overflow: 'hidden' }}>
-      <Paper
-        px="md"
-        py="sm"
-        withBorder
-        shadow="xs"
-        style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-      >
-        {toolbar}
-      </Paper>
+      {permissionGranted && (
+        <Paper
+          px="md"
+          py="sm"
+          withBorder
+          shadow="xs"
+          style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+        >
+          {toolbar}
+        </Paper>
+      )}
       <ModePanel>{content}</ModePanel>
-      <Paper
-        px="md"
-        py="sm"
-        withBorder
-        shadow="sm"
-        style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
-      >
-        {footer}
-      </Paper>
+      {permissionGranted && (
+        <Paper
+          px="md"
+          py="sm"
+          withBorder
+          shadow="sm"
+          style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}
+        >
+          {footer}
+        </Paper>
+      )}
     </Stack>
   );
 }
